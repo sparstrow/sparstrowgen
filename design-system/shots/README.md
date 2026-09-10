@@ -10,4 +10,4 @@ Read the earlier rounds before writing new prompts. A direction already rejected
 generated again, and a preference stated twice belongs in `DESIGN.md` as doctrine rather than
 being rediscovered every round.
 
-Produced by the `design-shotgun` skill. See [`docs/Decisions.md`](../../docs/Decisions.md) D-012.
+Produced by the `design-shots` skill. See [`docs/Decisions.md`](../../docs/Decisions.md) D-012.

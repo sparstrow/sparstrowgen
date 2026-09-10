@@ -1,5 +1,5 @@
 ---
-name: design-shotgun
+name: design-shots
 description: >-
   Generates 2-4 rendered images of genuinely different design directions for a
   screen or feature — using codex's built-in image generation — and shows them
@@ -35,6 +35,11 @@ credits, and a side-by-side board rather than a scroll of images. What was left:
 its external artifact directory, its JSON handshake files, polling loops, and a
 taste profile with weekly-decaying confidence scores. This repo has one reason to
 exist and it is shipping — see `AGENTS.md` rule zero.
+
+**Named `design-shots`, not `design-shotgun`, deliberately.** gstack's skill is installed on the
+owner's machine at `~/.claude/skills/design-shotgun`, and a project skill sharing that name
+resolves to theirs — which would silently run their `~/.gstack` machinery instead of this. Do not
+rename this back.
 
 ## What an image can and cannot decide
 

@@ -185,7 +185,7 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | Only a human can do it — dashboard, DNS, secrets | [`docs/runbooks/`](docs/runbooks/) |
 
 Skills carry procedure so this file doesn't: `design-driven-feature`, `writing-specs`,
-`design-shotgun`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,
+`design-shots`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,
 `design-brief`, `design-system`.
 
 When he says "park it", "later", or "just an idea", write it down in the same turn. Chat is not read

@@ -116,7 +116,7 @@ workflow:
   loop_principle: "each step is cheaper than the one after it, so the expensive step only runs on something already wanted"
   feasibility_gate: docs/Capabilities.md
   documents: "a spec the owner approves; no plan document"
-  skills: [design-driven-feature, writing-specs, design-shotgun]
+  skills: [design-driven-feature, writing-specs, design-shots]
   agent_instructions: "AGENTS.md and CLAUDE.md are identical — edit one, copy to the other"
 
 mcp_servers: [context7, shadcn]
@@ -133,7 +133,7 @@ build_tools:
     verified_note: "2026-09-09 from an agent shell: produced a clean UI mockup in ~2 min, ~88k input tokens (mostly cached preamble)"
     output_path: "~/.codex/generated_images/<thread>/<exec>.png — name an absolute destination in the prompt and it copies the file there"
     scoping: "do NOT pass --ignore-user-config here; it risks stripping the skill. The mandatory-scoping rule is for the daemon's runtime adapter only."
-    used_by: design-shotgun
+    used_by: design-shots
     caveats:
       - "one image per run — asking for several returns one image and prose about the rest"
       - "prompts regress to the category mean; name the product-specific elements or you get a stock design"

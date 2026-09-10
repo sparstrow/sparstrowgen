@@ -86,7 +86,7 @@ If the design needs something not in `Capabilities.md`, pick one — never
 
 ## Shots — pick a direction from pictures, in minutes
 
-**Invoke `design-shotgun`.** It generates 2–4 directions as images via codex,
+**Invoke `design-shots`.** It generates 2–4 directions as images via codex,
 shows them side by side, and records why the loser lost.
 
 An image settles composition, hierarchy, density and mood. It settles nothing

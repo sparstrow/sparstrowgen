@@ -1,0 +1,5 @@
+Reading additional input from stdin...
+{"type":"thread.started","thread_id":"01a08958-7291-7851-b90e-57065c8ac8b1"}
+{"type":"turn.started"}
+2026-09-10T03:24:30.723152Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer error=\"invalid_request\", error_description=\"No access token was provided in this request\", resource_metadata=\"https://mcp.supabase.com/.well-known/oauth-protected-resource/mcp?project_ref=pnymngoqseltgigcfevq&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching\"" })
+2026-09-10T03:24:30.751393Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer error=\"invalid_request\", error_description=\"No access token was provided in this request\", resource_metadata=\"https://api.githubcopilot.com/.well-known/oauth-protected-resource/mcp/\"" })

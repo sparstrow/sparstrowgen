@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft |
+| **Status** | Approved 2026-09-09 |
 | **Created** | 2026-09-09 |
 | **Trigger** | "when I am building an app, I am juping between different desktop app chat window. I want one chat window where I can have the chat conversation to be stored, when I runout of limit on one I want to switch the conversation and continue with another provider and model" |
 | **Design** | not designed yet |
