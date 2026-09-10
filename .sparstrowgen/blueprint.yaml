@@ -1,0 +1,84 @@
+# blueprint.yaml — the single place stack and command facts live.
+# AGENTS.md, CLAUDE.md, and skills reference this instead of restating it.
+# When the stack changes, change it here first.
+
+project:
+  name: sparstrowgen
+  type: "web + local daemon"
+  summary: >-
+    One chat window across every coding-agent CLI installed on the machine.
+    Conversations persist in our database, so a conversation can move to a
+    different provider when one hits its usage limit.
+
+# Nothing is scaffolded yet. Every entry below is a locked decision, not an
+# observation of code that exists. Remove this block once apps/web and
+# server/ actually build.
+status: pre-scaffold
+
+stack:
+  frontend:
+    framework: "Next.js (App Router)"
+    styling: "Tailwind CSS v4"
+    ui: "shadcn/ui via packages/ui"
+    state: "TanStack Query for server state, Zustand for client state"
+  server:
+    language: "Go"
+    module: "github.com/sparstrow/sparstrowgen/server"
+    router: "Chi"
+    transport: "WebSocket hub + HTTP"
+  daemon:
+    language: "Go"
+    note: "Same Go module as the server so wire-protocol drift is a compile error"
+  protocol:
+    format: "Protobuf"
+    codegen: "buf — generates Go structs and TypeScript types from proto/"
+  database:
+    engine: "PostgreSQL (self-hosted in Coolify)"
+    access: "sqlc + pgx"
+    migrations: "goose"
+    vector: "pgvector"
+  embeddings:
+    placement: "separate HTTP service — never in-process"
+    candidates: ["Ollama", "text-embeddings-inference"]
+  infra:
+    host: "Coolify on a Hostinger VPS"
+    package_manager: "pnpm"
+    monorepo: "Turborepo"
+  desktop:
+    shell: "Electron"
+    status: "not started"
+  mobile:
+    framework: "Expo / React Native"
+    status: "not started"
+
+# Agent CLIs this app drives. It does not ship them; they must be installed
+# and authenticated on the machine running the daemon.
+agent_clis:
+  - name: claude
+    print: "-p --output-format stream-json --include-partial-messages"
+    resume: "--resume <uuid> / --session-id <uuid>"
+    model_flag: "--model"
+  - name: codex
+    print: "codex exec --json"
+    resume: "codex exec resume <session-id> <prompt>"
+    model_flag: "-m"
+  - name: agy
+    print: "-p --output-format stream-json"
+    resume: "--conversation <id>"
+    model_flag: "--model"
+    model_list: "agy models"
+  - name: gemini
+    status: "installed, adapter not written"
+
+commands:
+  install: "pnpm install"
+  dev: "turbo run dev"
+  build: "turbo run build"
+  test: "turbo run test"
+  typecheck: "turbo run typecheck"
+  go_test: "cd server && go test ./..."
+  proto: "buf generate"
+
+mcp_servers: [context7, shadcn]
+
+cli_tools: [gh, docker, pnpm]
