@@ -75,32 +75,6 @@ feature: switching provider mid-conversation is user-initiated and works regardl
 - **Clears when:** a provider is used enough to actually hit a limit — capture the stream when it
   happens, it is the only cheap opportunity — or provider documentation describes the payload.
 
-## G-5 — `claude`'s incremental streaming is unverified
-
-**Kind:** unproved
-**Raised:** 2026-09-09, split from G-4 once codex and agy were verified.
-
-`agy` streams (93 delta chunks for a 400-word answer) and `codex` provably does not (no delta event
-type exists in `--json`). `claude` sits between them unverified: plain `stream-json` gives one
-message per turn, and `--include-partial-messages` has never been captured — the flag is already in
-`blueprint.yaml`'s `print` string on the strength of documentation alone.
-
-**Two captures were run on 2026-09-10 and neither settles it.** Both used
-`--include-partial-messages` and both returned **zero** `stream_event` /
-`content_block_delta` entries — but both also 401'd ten times and never authenticated (G-9), so the
-request never got far enough to stream anything. Absence of deltas from a turn that never reached
-the API is not evidence about streaming.
-
-The adapter therefore reads deltas if they appear and never depends on them, and the surface reports
-`streams: false` for claude so it does not promise motion it may not deliver.
-
-- **If wrong:** claude renders per-message like codex instead of per-token. A polish downgrade, not
-  a broken feature — and the design already has to tolerate a non-streaming provider because of
-  codex, so nothing designed against this assumption gets thrown away.
-- **Clears when:** G-9 is fixed and one capture with `--include-partial-messages` completes a turn
-  whose `is_error` is false — then count the `content_block_delta` entries. Until claude can
-  authenticate, this cannot be answered at all.
-
 ## G-7 — Conversation search runs in memory over everything loaded
 
 **Kind:** caveat
@@ -157,34 +131,6 @@ is account-dependent (`"not supported when using Codex with a ChatGPT account"`)
 - **Clears when:** the daemon asks `claude` and `agy` at runtime and treats an unknown-model error
   as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
   this way and stays curated.
-
-## G-9 — `claude` cannot authenticate from a spawned process
-
-**Kind:** caveat
-**Raised:** 2026-09-10, first end-to-end turn through the daemon.
-
-The daemon runs `claude` as a plain child process. It reads
-`~/.claude/.credentials.json`, finds an expired OAuth access token, and has no
-way to refresh it — that is the desktop app's job. Ten retries of
-`401 authentication_failed`, then:
-
-> `"OAuth access token has expired. Re-authenticate to continue."`
-
-**The failure disguises itself.** The final `result` event carries
-`"subtype":"success"` with `"is_error":true`. Reading only the subtype — which
-is what I did on the first pass, and reported to the owner as "OAuth works" —
-turns a total failure into an apparent success. Anything checking claude's
-outcome must read `is_error`.
-
-`codex` and `agy` authenticate fine from the same spawned context, so this is
-specific to claude.
-
-- **If wrong:** nothing. It is reproduced on demand and blocks one provider of
-  three; the other two work end to end.
-- **Clears when:** the owner runs `claude setup-token` and sets
-  `CLAUDE_CODE_OAUTH_TOKEN` — [`runbooks/claude-headless-auth.md`](runbooks/claude-headless-auth.md).
-  The adapter already exempts that variable from env scrubbing, so the fix needs
-  no code change. Confirm with a real claude turn whose `is_error` is false.
 
 ## G-10 — Provider headroom is never populated
 

@@ -70,11 +70,11 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 |---|---|---|---|
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
-| Incremental text streaming | *(unverified — needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
-| Config isolation | `--strict-mcp-config --setting-sources project` *(verified 2026-09-10 — 0 MCP servers, 72 skills down to 17, OAuth still works. **NOT `--bare`**: it never reads OAuth)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
+| Incremental text streaming | **yes** *(verified 2026-09-10 — 89 `content_block_delta` events averaging 8.1 chars for a four-sentence answer, the finest-grained of the three; needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
+| Config isolation | `--strict-mcp-config --setting-sources project` *(verified 2026-09-10 — 0 MCP servers, 72 skills down to 17. **NOT `--bare`**: it never reads OAuth)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
 | Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
 | Per-turn USD cost | **verified** — `total_cost_usd`, real dollar figure | no — tokens only | no — tokens only |
-| Rate-limit signal | **verified** — `rate_limit_event`, see below | not observed in this capture | not observed in this capture |
+| Rate-limit signal | **verified** — `rate_limit_event`, see below. NOT parsed by the adapter yet (G-10) | not observed in this capture | not observed in this capture |
 | Resume a session | `--resume <uuid>` *(verified flag)* | `codex exec resume <id>` *(verified flag)* | `--conversation <id>` *(verified flag)* |
 | We choose the session id | `--session-id <uuid>` *(verified flag)* | no | no |
 | Model override | `--model` *(verified)* | `-m` *(verified)* | `--model` *(verified)* |
@@ -238,3 +238,23 @@ When a design asks for something not listed here, there are three legitimate ans
 2. **Design around it.** Change the design so it needs only what's deliverable.
 3. **Record it as a gap.** If the design genuinely needs it and it isn't deliverable yet, that goes
    to [`Later.md`](Later.md) with a trigger, and the design ships without that piece.
+
+## Authentication, per provider (2026-09-10)
+
+Learned the hard way, by running all three from a spawned process rather than a terminal.
+
+| | How it authenticates from a spawned process |
+|---|---|
+| `claude` | **`CLAUDE_CODE_OAUTH_TOKEN`**, from `claude setup-token`. The credentials in `~/.claude/.credentials.json` hold an access token that only the desktop app refreshes, so a plain child process eventually meets *"OAuth access token has expired"* and cannot recover. The variable is exempted from the daemon's env scrubbing on purpose. |
+| `codex` | `CODEX_HOME` credentials, which `--ignore-user-config` deliberately keeps using. Nothing extra needed. |
+| `agy` | Its own stored login. Nothing extra needed. |
+
+**Read `is_error`, never `subtype`.** A failed claude turn reports
+`"subtype":"success"` alongside `"is_error":true`. Checking the subtype turns a
+total authentication failure into an apparent success — which is exactly the
+mistake made on the first pass here, and it cost a wrong claim to the owner.
+
+**Environment changes need a new process.** A token set through the Windows
+Environment Variables dialog is not inherited by anything already running. If
+claude fails to authenticate while codex and agy work, check that first: it is
+far more likely than a bad token.

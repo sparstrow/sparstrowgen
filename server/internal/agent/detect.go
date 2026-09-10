@@ -49,9 +49,10 @@ func detectClaude(ctx context.Context) protocol.Provider {
 		Availability: protocol.Available,
 		// The only one of the three that states a real dollar figure.
 		ReportsUsd: true,
-		// No capture has produced a text delta yet, so the surface must not
-		// promise one. The adapter still reads them if they appear.
-		Streams: false,
+		// VERIFIED 2026-09-10 once auth worked: 89 content_block_delta events
+		// averaging 8.1 characters for a four-sentence answer — finer-grained
+		// than agy. Needs --include-partial-messages, which is in the args.
+		Streams: true,
 		Routes:  false,
 	}
 	if len(models) > 0 {

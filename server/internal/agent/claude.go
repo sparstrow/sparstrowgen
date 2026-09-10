@@ -86,9 +86,9 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 					retries++
 				}
 			case "stream_event":
-				// Only present when the CLI actually emits partial messages. No
-				// capture has yet produced one, so this path is written but
-				// unproven — see docs/KnownGaps.md G-5.
+				// Verified: ~89 deltas of ~8 characters for a four-sentence
+				// answer. Finer-grained than agy's 25-35, so this is the
+				// chattiest of the three by some margin.
 				if ev.Event.Type == "content_block_delta" && ev.Event.Delta.Text != "" {
 					full.WriteString(ev.Event.Delta.Text)
 					messages <- Message{Type: MessageDelta, Text: ev.Event.Delta.Text}
@@ -105,12 +105,15 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 				if ev.TotalCostUSD > 0 {
 					spendTicks = protocol.USDToTicks(ev.TotalCostUSD)
 				}
+				// Read is_error, NOT subtype. A failed turn reports
+				// subtype:"success" with is_error:true, which is how this was
+				// first misread as working — see docs/KnownGaps.md G-9.
 				if ev.IsError {
 					close(messages)
 					result <- Result{
 						Text:      full.String(),
 						SessionID: sessionID,
-						Err:       fmt.Errorf("claude reported an error after %d retries", retries),
+						Err:       claudeError(ev.Result, retries),
 					}
 					_ = cmd.Wait()
 					return
@@ -135,11 +138,32 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 	return &Session{Messages: messages, Result: result}, nil
 }
 
+// claudeError turns the CLI's own words into something worth showing.
+//
+// An expired OAuth token is the one failure with a known, specific remedy, and
+// the raw 401 does not say what to do about it. Everything else is passed
+// through unchanged — the CLI's wording is usually better than ours.
+func claudeError(result string, retries int) error {
+	if strings.Contains(result, "OAuth") || strings.Contains(result, "authenticate") {
+		return fmt.Errorf(
+			"claude is not authenticated (%d retries). Its stored token has expired and only the "+
+				"desktop app refreshes it. Run `claude setup-token`, set CLAUDE_CODE_OAUTH_TOKEN, "+
+				"and restart the daemon from a NEW terminal so it inherits the variable — "+
+				"see docs/runbooks/claude-headless-auth.md", retries)
+	}
+	if result != "" {
+		return fmt.Errorf("claude: %s", result)
+	}
+	return fmt.Errorf("claude reported an error after %d retries", retries)
+}
+
 type claudeEvent struct {
 	Type      string `json:"type"`
 	Subtype   string `json:"subtype"`
 	SessionID string `json:"session_id"`
 	IsError   bool   `json:"is_error"`
+	// The human-readable outcome. On failure this is where the reason lives.
+	Result string `json:"result"`
 	Event     struct {
 		Type  string `json:"type"`
 		Delta struct {

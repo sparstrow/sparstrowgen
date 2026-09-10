@@ -77,9 +77,9 @@ agent_clis:
       event_type: "rate_limit_event"
       fields: [status, resetsAt, rateLimitType, overageStatus, overageDisabledReason, isUsingOverage]
       note: "only status=allowed observed; the blocked/exceeded shape is unverified — see docs/KnownGaps.md G-4"
-    incremental_streaming: unverified
-    streaming_note: "Two captures with --include-partial-messages on 2026-09-10 returned ZERO deltas — but both turns 401'd and never reached the API, so this proves nothing either way. The adapter reads deltas if present and never depends on them. See docs/KnownGaps.md G-5"
-    auth: "BLOCKED from a spawned process — the stored OAuth access token is expired and only the desktop app refreshes it. Fix is `claude setup-token` + CLAUDE_CODE_OAUTH_TOKEN (exempted from env scrubbing). See docs/runbooks/claude-headless-auth.md and KnownGaps G-9. NOTE: the failing result event says subtype:success with is_error:true — read is_error."
+    incremental_streaming: true
+    streaming_note: "VERIFIED 2026-09-10 once auth worked — 89 content_block_delta events averaging 8.1 chars for a four-sentence answer, the finest-grained of the three (agy is 25-35). REQUIRES --include-partial-messages. Earlier captures showed zero deltas only because the turns were 401ing before reaching the API."
+    auth: "WORKS via CLAUDE_CODE_OAUTH_TOKEN (set at User scope on this machine). Without it, blocked from a spawned process — the stored OAuth access token is expired and only the desktop app refreshes it. Fix is `claude setup-token` + CLAUDE_CODE_OAUTH_TOKEN (exempted from env scrubbing). See docs/runbooks/claude-headless-auth.md and KnownGaps G-9. NOTE: the failing result event says subtype:success with is_error:true — read is_error."
   - name: codex
     availability: available
     print: "codex exec --json --ignore-user-config --skip-git-repo-check"
