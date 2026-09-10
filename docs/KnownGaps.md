@@ -56,26 +56,34 @@ to it" are different situations and the reader needs to know which.>
 ## G-1 — What `claude` actually emits in print mode is still unverified
 
 **Kind:** unproved
-**Raised:** 2026-09-09, while writing [`Capabilities.md`](Capabilities.md). **Narrowed:** 2026-09-10.
+**Raised:** 2026-09-09, while writing [`Capabilities.md`](Capabilities.md). **Narrowed:**
+2026-09-10, twice.
 
 Originally covered all three live providers. `codex` and `agy` are now closed — both were run for
 real, their streams captured, and `Capabilities.md`'s table reflects actual field names, not
 assumed ones.
 
-**`claude` remains open**, and for a specific reason: capturing it from this coding session failed.
-`claude -p` hung and returned no output (`exit 124` on a 20s timeout) when run from this session's
-Bash tool, and a `--verbose --output-format stream-json` attempt logged repeated
-`api_retry` / `authentication_failed` (401) events before being stopped. `codex` and `agy` ran
-clean from the identical shell. The most likely explanation is that this session's Bash tool is
-itself a nested Claude Code process, and doesn't carry the `claude` CLI's own stored OAuth session
-the way a real terminal or the production daemon would — but that is a hypothesis, not confirmed.
+**`claude` remains open, but the sandbox hypothesis is now confirmed rather than guessed.**
+Capturing it from this coding session failed: `claude -p` hung with no output (`exit 124` on a 20s
+timeout) from this session's Bash tool, and a `--verbose --output-format stream-json` attempt
+logged repeated `api_retry` / `authentication_failed` (401) events before being stopped. `codex`
+and `agy` ran clean from the identical shell.
 
-- **If wrong** (i.e., if `claude` actually fails the same way from the real daemon): any
-  claude-specific field in a chat design is undeliverable, discovered at the backend step instead
-  of the design step — the exact waste the design-driven workflow exists to prevent.
-- **Clears when:** `claude -p --output-format stream-json --verbose` is run once from a real
-  terminal (the owner's, not a nested agent session) or from the actual daemon once it exists, the
-  stream is captured, and `Capabilities.md`'s claude column is rewritten as verified.
+The owner then ran `claude` interactively from a real PowerShell terminal on the same machine —
+authenticated instantly, v2.1.90, normal model picker. So the account and the CLI are both fine;
+the failure is specific to this session's Bash tool being a nested Claude Code process without
+`claude`'s own stored OAuth session. **What is still missing is not "does claude work" but the
+actual `-p --output-format stream-json --verbose` event stream** — the interactive run doesn't
+produce that, only print mode does.
+
+- **If wrong** (i.e., print mode fails the same way even from a real terminal): any claude-specific
+  field in a chat design is undeliverable, discovered at the backend step instead of the design
+  step — the exact waste the design-driven workflow exists to prevent. Now unlikely, given the
+  interactive session worked cleanly, but not yet ruled out for print mode specifically.
+- **Clears when:** the owner runs
+  `claude -p "Reply with exactly: OK" --output-format stream-json --verbose --session-id <any-uuid>`
+  from that same real terminal and shares the output, or the daemon does this once it exists.
+  `Capabilities.md`'s claude column gets rewritten as verified from whatever that shows.
 
 ## G-2 — `codex exec` loads the owner's global MCP config
 
