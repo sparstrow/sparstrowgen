@@ -103,3 +103,29 @@ would add workspace wiring before anything works. The move is mechanical when it
 
 **Unblocks when:** a second consumer exists — `apps/desktop` (L-2) or `packages/views` gaining a
 view that the web app and something else both render.
+
+## L-8 — Stop a turn that is already running
+
+**Status:** idea **Raised:** 2026-09-10
+
+Once a message is sent there is no way to call it back. An agent that misreads the question runs to
+completion — and on a real task that is minutes, not seconds, plus whatever it spends getting there.
+The daemon already holds a cancellable context per turn, so the mechanism exists; what is missing is
+a way to ask for it and a decision about what the transcript should then say.
+
+**Unblocks when:** the owner sends something he wants to take back, or a turn runs long enough that
+waiting it out is worse than losing it.
+
+## L-9 — Name conversations automatically
+
+**Status:** idea **Raised:** 2026-09-10
+
+Every conversation is "Untitled conversation" until renamed by hand, so the sidebar is a column of
+identical rows distinguished only by folder and age. Search partly rescues this — it looks inside
+message bodies precisely because titles are unreliable — but a list you cannot scan is still a list
+you cannot scan.
+
+The obvious approach costs a model call per conversation. The cheap one is the first line of the
+first message, truncated, which is free and right most of the time.
+
+**Unblocks when:** the sidebar holds enough conversations that finding one by eye stops working.
