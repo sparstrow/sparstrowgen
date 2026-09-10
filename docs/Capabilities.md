@@ -71,14 +71,14 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
 | Incremental text streaming | *(unverified — needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
-| Config isolation | **unsolved** — `--bare` disables OAuth and cannot authenticate a subscription account *(verified 2026-09-10; see G-3)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
+| Config isolation | `--strict-mcp-config --setting-sources project` *(verified 2026-09-10 — 0 MCP servers, 72 skills down to 17, OAuth still works. **NOT `--bare`**: it never reads OAuth)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
 | Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
 | Per-turn USD cost | **verified** — `total_cost_usd`, real dollar figure | no — tokens only | no — tokens only |
 | Rate-limit signal | **verified** — `rate_limit_event`, see below | not observed in this capture | not observed in this capture |
 | Resume a session | `--resume <uuid>` *(verified flag)* | `codex exec resume <id>` *(verified flag)* | `--conversation <id>` *(verified flag)* |
 | We choose the session id | `--session-id <uuid>` *(verified flag)* | no | no |
 | Model override | `--model` *(verified)* | `-m` *(verified)* | `--model` *(verified)* |
-| List available models | **no** — `--model` documents aliases only; an invalid model cannot even be rejected because `--bare` fails to authenticate first | **no** — names scraped from the binary, configured one read from `~/.codex/config.toml`; an invalid model returns a 400 naming no alternatives, and the valid set is **account-dependent** (`"not supported when using Codex with a ChatGPT account"`) | `agy models` *(verified, returns id + label)* |
+| List available models | **yes, on a new enough CLI** — a `list_models` **control request** over stream-json, no user message and nothing billed. Our 2.1.90 answers `Unsupported control request subtype` in ~2s; Multica has it working on 2.1.223+. Aliases resolve today by reading `model` back out of `system.init` | **no** — names scraped from the binary, configured one read from `~/.codex/config.toml`; an invalid model returns a 400 naming no alternatives, and the valid set is **account-dependent** (`"not supported when using Codex with a ChatGPT account"`) | `agy models` *(verified, returns id + label)* |
 | Model carries reasoning effort | not observed | `model_reasoning_effort` in config, separate from the model | **in the model id** *(verified — `gemini-3.1-pro-high` and `-low` are distinct models, not one model with a setting)* |
 
 **All three real providers report usage; `claude` also reports real dollar cost.** This overturns
@@ -160,18 +160,32 @@ the design from the first draft, not retrofitted when codex is wired up.
   MCP servers unrelated to this app. `codex exec --json --ignore-user-config` was re-captured
   2026-09-09 and produced **zero** MCP noise while still authenticating (the flag skips
   `config.toml` but keeps using `CODEX_HOME` for auth). **The daemon's `codex` adapter passes
-  `--ignore-user-config`** — codex's equivalent of `claude --bare`. Not optional, for the same
-  scope-leak reason as G-3.
-- **`claude -p` inherits the entire personal Claude Code environment, and the tools actually work.**
-  Two captures confirm this, and the second is worse than the first: from a real terminal, the
-  `system.init` payload showed `clockify`, `square`, and `shadcn` MCP servers all
-  `"status":"connected"` — not merely listed, genuinely reachable. A conversation that only asked
-  for `"OK"` had *working* access to the owner's time-tracking and invoicing tools. **This is not
-  a performance concern, it is a scope leak.** **The fix first recorded here was wrong:** `--bare`
-  never reads OAuth or the keychain (its own `--help` says so), and this account signs in with a
-  subscription rather than an API key, so `claude --bare -p` returns `Not logged in` — verified
-  2026-09-10. The leak is real and currently **unfixed**; `--strict-mcp-config` is the untested
-  candidate. See [`KnownGaps.md`](KnownGaps.md) G-3.
+  `--ignore-user-config`** — codex's equivalent of scoping claude. Not optional, for the same
+  scope-leak reason.
+- **`claude -p` inherits the entire personal Claude Code environment, and the tools actually work
+  — SOLVED 2026-09-10.** Unscoped, the `system.init` payload showed `clockify`, `square`, and
+  `shadcn` MCP servers all `"status":"connected"` — not merely listed, genuinely reachable. A
+  conversation that only asked for `"OK"` had *working* access to the owner's time-tracking and
+  invoicing tools. That is a scope leak, not a performance concern.
+
+  **`--bare` is the wrong fix and was recorded here in error.** It never reads OAuth or the keychain
+  (its own `--help` says so), and this account signs in with a subscription rather than an API key,
+  so `claude --bare -p` returns `Not logged in`. The working recipe, captured 2026-09-10 with every
+  `CLAUDE_*` and `ANTHROPIC_*` variable scrubbed from the environment:
+
+  ```
+  claude -p --output-format stream-json --verbose --strict-mcp-config --setting-sources project
+  ```
+
+  `"apiKeySource":"none"` and the turn still ran, so OAuth works. `"mcp_servers":[]` — zero
+  connected servers. `--setting-sources project` additionally cuts inherited skills from 72 to 17.
+  This is what [Multica](../Reference/multica-main) does (`server/pkg/agent/claude.go`), which is
+  what prompted the recheck.
+- **A nested `CLAUDE_*` environment makes `claude -p` hang.** Two runs from an agent shell were
+  killed at 120s with stdin both attached and closed. The same command with `CLAUDE_*` and
+  `ANTHROPIC_*` scrubbed returns in seconds. `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDECODE=1` and
+  friends are inherited by any child process. **The daemon must scrub its environment before
+  spawning any agent CLI**, or it will hang the moment anyone runs it from inside a Claude session.
 - **`agy`'s tool list is large** — browser control, subagents, image generation, scheduling, and
   more are all available by default (`init.tools`, real capture). It is closer to a full autonomous
   agent than a text generator. Any chat surface that shows "what the agent can do" needs to reflect

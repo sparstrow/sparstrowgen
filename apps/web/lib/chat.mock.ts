@@ -10,9 +10,13 @@
 
 import type { Conversation, Model, Provider } from "./chat-types";
 
+/* Resolved by running each documented alias and reading the id back out of the
+   `system.init` line — `claude -p --model opus` reports `claude-opus-4-6`. Not
+   from memory: an earlier version of this list said "Opus 5" / "Sonnet 5",
+   which this machine's CLI does not offer. */
 const claudeModels: Model[] = [
-  { id: "claude-opus-5", label: "Opus 5" },
-  { id: "claude-sonnet-5", label: "Sonnet 5" },
+  { id: "claude-opus-4-6", label: "Opus 4.6" },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
 ];
 

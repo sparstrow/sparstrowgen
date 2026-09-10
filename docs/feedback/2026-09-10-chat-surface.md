@@ -112,10 +112,19 @@ sentence is answered under its outcome below.
 
 ## Outcomes
 
-**1 — done, and it found more than a wrong list.** `agy models` is the only one of the three that
-enumerates; `codex` has no list command (names read from the shipped binary and its config, and the
-valid set turns out to be *account*-dependent); `claude` has none either. Recorded as G-8. Two
-things fell out of the real data and changed the design rather than just the content:
+**1 — done, and it found more than a wrong list.** `agy models` enumerates directly. `codex` has no
+list command (names read from the shipped binary and its config, and the valid set turns out to be
+*account*-dependent). `claude` has a `list_models` control request that costs nothing, but our 2.1.90
+is too old to answer it — so its three aliases were resolved by running each once and reading the id
+back out of `system.init`: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`.
+Recorded as G-8.
+
+**My first pass at this list was wrong too**, and in the way this round is about: I wrote
+`claude-opus-5` / `claude-sonnet-5` from my own knowledge rather than from the machine, which does
+not offer them. Two independent sources here — claude's own `system.init` and agy's roster — say
+4.6.
+
+Two things fell out of the real data and changed the design rather than just the content:
 
 - A model needs an **id and a label** — `gemini-3.1-pro-high` next to "Gemini 3.1 Pro (High)".
   Neither is derivable from the other. `Model` is now a type, and a transcript stores the whole
@@ -160,8 +169,22 @@ would have missed it completely.
 - **`claude --bare` cannot authenticate this account.** It was recorded in the blueprint as
   MANDATORY scoping; its own `--help` says OAuth and the keychain are never read, and the owner
   signs in with a subscription. `claude --bare -p "hi"` → `Not logged in`. Shipping that adapter
-  would have made claude unusable. G-3 is rewritten: the scope leak is real, the fix is **unsolved**,
-  `--strict-mcp-config` is the untested candidate.
+  would have made claude unusable.
+
+  **I reported this as unsolved, and the owner corrected it in one question:** *"then how does the
+  multica able to use my claude code in this desktop... check what multica is doing."* Multica
+  drives claude on this same machine, so a working answer already existed in a checkout we have
+  read access to. It uses `--strict-mcp-config`. Verified here the same day —
+  0 MCP servers, OAuth intact, and `--setting-sources project` cuts inherited skills 72 → 17. G-3 is
+  **deleted, closed**; the recipe is in `Capabilities.md` and D-016. Two further findings came free
+  from the same look: the daemon must scrub `CLAUDE_*`/`ANTHROPIC_*` or a nested `claude -p` hangs,
+  and claude *can* enumerate its models via a `list_models` control request (unsupported on our
+  2.1.90, working on 2.1.223+).
+
+  **The lesson is about where I looked.** `Reference/multica-main` is a working implementation of
+  this exact problem, and `AGENTS.md` §3 already says to consult it before inventing patterns. I
+  read a `--help` string and concluded "unsolved" while a production answer sat unread in the repo.
+  Read the reference before declaring a capability boundary.
 - **B-1**, a real bug found in the browser: agy's 14-model menu rendered 175px below the fold
   because a `max-h-80` of mine overrode the popup's own `max-h-(--available-height)`. Fixed and
   re-verified at three viewport heights.

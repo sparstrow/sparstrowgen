@@ -262,3 +262,37 @@ Two consequences that are not cosmetic:
 Also settled here: **a provider is the CLI we drive, never the vendor of the model.** `agy` serves
 Gemini, Claude *and* GPT models, so `Provider.routes` marks the distinction rather than letting the
 provider's colour imply an owner.
+
+## D-016 — `claude` is scoped with `--strict-mcp-config --setting-sources project`, and the daemon scrubs its environment
+
+**2026-09-10.** Rejected: `--bare`, which this file and the blueprint both recorded as mandatory
+until it was actually run.
+
+`--bare` sounds like the scoping flag and is not one. Its own `--help`: *"Anthropic auth is strictly
+`ANTHROPIC_API_KEY` or `apiKeyHelper` via `--settings` (OAuth and keychain are never read)."* The
+owner signs in with a subscription, so `claude --bare -p` returns `Not logged in` in under a second.
+Shipping that would have made claude unusable — a worse outcome than the leak it was meant to close.
+
+The owner caught this by asking the obvious question: **Multica drives his Claude Code on this same
+machine, so it must be possible.** It uses `--strict-mcp-config` (`server/pkg/agent/claude.go`).
+Verified here 2026-09-10 with every `CLAUDE_*` and `ANTHROPIC_*` variable scrubbed:
+
+| | Result |
+|---|---|
+| `"apiKeySource"` | `"none"` — and the turn ran, so OAuth was used |
+| `"mcp_servers"` | `[]` — zero connected, against `clockify`/`square`/`shadcn` unscoped |
+| `skills` | 72 by default, **17** with `--setting-sources project` |
+
+**The environment must be scrubbed too, and this is the part that would have been missed.** Any
+process spawned from inside a Claude Code session inherits `CLAUDECODE=1`,
+`CLAUDE_CODE_MESSAGING_SOCKET` and friends, and a nested `claude -p` then hangs indefinitely — two
+runs killed at 120s, with stdin both attached and closed. Scrubbed, the same command returns in
+seconds. The daemon is exactly the kind of process someone will start from a terminal inside an
+agent session, so this is not hypothetical.
+
+**Where we differ from Multica deliberately:** it passes `--strict-mcp-config` only when an
+agent-level MCP config exists, letting a task inherit the user's servers otherwise, and it denies
+individual skills through a task-local `--settings` file. That suits a system where an agent is
+configured per task. Ours is one chat window over whatever is installed, with no per-conversation
+tool configuration to express intent — so scoping is unconditional, and inheriting the owner's
+personal MCP servers is never the default.

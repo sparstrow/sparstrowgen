@@ -53,49 +53,6 @@ to it" are different situations and the reader needs to know which.>
 
 ---
 
-## G-3 — `claude -p` inherits the entire personal Claude Code environment, with working tool access
-
-**Kind:** caveat
-**Raised:** 2026-09-09, sandboxed capture attempt. **Escalated:** 2026-09-09, real-terminal capture.
-
-Two captures, same finding, worse the second time. The sandboxed attempt showed a `system.init`
-payload listing 60+ personal skills and MCP servers in `"pending"` status. The real-terminal
-capture — a genuine account, a genuine turn — showed `clockify`, `square`, and `shadcn` all
-`"status":"connected"`. **Not merely listed: reachable.** A conversation whose only prompt was
-"reply with exactly: OK" had working access to the owner's time-tracking and invoicing tools for
-the length of that turn.
-
-This is not a performance or noise concern. It is a scope leak: an unscoped `claude -p` call gives
-the model real tool access unrelated to the conversation it's actually in, and the model deciding
-not to use it this time is not a boundary — it's luck.
-
-**The fix we recorded does not work.** `--bare` was written into `blueprint.yaml` as MANDATORY
-scoping on the strength of its name. Its own `--help` says why that was wrong:
-
-> Anthropic auth is strictly `ANTHROPIC_API_KEY` or `apiKeyHelper` via `--settings`
-> (**OAuth and keychain are never read**).
-
-The owner signs in with a subscription, not an API key, so `claude --bare -p "hi"` returns
-`Not logged in · Please run /login` in under a second — verified 2026-09-10. Scoping the adapter
-that way would make claude unusable for him entirely, which is worse than the leak it was meant to
-close.
-
-So this gap now has a **verified problem and no verified fix**. The untried candidate is
-`--strict-mcp-config` ("Only use MCP servers from `--mcp-config`, ignoring all other MCP
-configurations") with an empty config, plus `--setting-sources` to bound settings loading. Both
-leave the OAuth path alone. Neither has been captured.
-
-Noticed alongside it: plain `claude -p` from an agent shell hangs — two runs killed at 120s, with
-stdin attached and closed. Consistent with G-1; capture needs the owner's real terminal.
-
-- **If wrong:** every claude-driven chat turn in production has functional access to whatever MCP
-  servers happen to be configured on the machine, not just visibility into them. A future prompt
-  or an unexpected model decision could act on that access.
-- **Clears when:** the daemon's `claude` adapter scopes with `--strict-mcp-config` (or another flag
-  that does not disable OAuth) and one capture from a real terminal confirms both a minimal
-  `system.init` payload and zero connected MCP servers — *while still authenticating*. Both halves,
-  or it isn't closed.
-
 ## G-4 — What a *hit* rate limit looks like, on any provider
 
 **Kind:** unproved
@@ -191,15 +148,30 @@ of evidence:
 | Provider | How the list was obtained | Grade |
 |---|---|---|
 | `agy` | `agy models` — prints ids and labels | **verified**, re-runnable |
+| `claude` | Each documented alias run once, reading `model` back out of `system.init`: `opus` → `claude-opus-4-6`, `sonnet` → `claude-sonnet-4-6`, `haiku` → `claude-haiku-4-5-20251001` | **verified for the three aliases**; whether other ids exist is unknown |
 | `codex` | No list command. Names scraped from the shipped binary's string table, cross-checked against `model = "gpt-5.6-sol"` in `~/.codex/config.toml` | **partial** — the configured one is certain, the siblings are inferred |
-| `claude` | No list command. `--model` documents aliases and "a model's full name"; the example in its own help is already a generation stale | **documentation only** |
 
-An invalid model does not produce a list on either: `codex` returns a 400 from the API (`"not
-supported when using Codex with a ChatGPT account"` — so the valid set is account-dependent), and
-`claude --bare` cannot get far enough to answer (G-3).
+**`claude` does have a real discovery mechanism — our CLI is just too old for it.** A `list_models`
+**control request** over the stream-json control protocol returns the catalogue without sending a
+user message, so nothing is billed:
+
+```
+echo '{"type":"control_request","request_id":"x","request":{"subtype":"list_models"}}' \
+  | claude --print --verbose --input-format stream-json --output-format stream-json --strict-mcp-config
+```
+
+On `claude` 2.1.90 that answers `Unsupported control request subtype: list_models` in about two
+seconds and exits 0. [Multica](../Reference/multica-main) uses it in production against 2.1.223 and
+2.1.258 (`server/pkg/agent/claude_models.go`), which is where this came from. **Build the adapter to
+try the control request and fall back to a static catalogue** — that is Multica's shape, it needs no
+version gate because an old CLI answers rather than hangs, and it upgrades itself the day the owner
+updates his CLI.
+
+`codex` has no equivalent: an invalid model returns a 400 naming no alternatives, and the valid set
+is account-dependent (`"not supported when using Codex with a ChatGPT account"`).
 
 - **If wrong:** a model offered in the picker fails at invocation time with a provider-side error.
   Recoverable and obvious, but it lands on the owner mid-conversation rather than at startup.
-- **Clears when:** the daemon resolves each provider's model list at runtime and treats an
-  unknown-model error as a reason to refresh, rather than shipping a hardcoded list — which is the
-  only version that survives the next release of any of the three.
+- **Clears when:** the daemon asks `claude` and `agy` at runtime and treats an unknown-model error
+  as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
+  this way and stays curated.
