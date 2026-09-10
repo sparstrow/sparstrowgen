@@ -96,7 +96,18 @@ func parseCodex(r io.Reader, out chan<- Message) parsed {
 			}
 		case "item.completed":
 			if ev.Item.Type == "agent_message" && ev.Item.Text != "" {
-				full.WriteString(ev.Item.Text)
+				// One turn can produce several agent_message items, and they are
+				// separate messages rather than pieces of one. Concatenating them
+				// edge-to-edge welds the last line of one to the first line of the
+				// next — and a fence that does not begin a line is not a fence, so
+				// a reply whose preamble and code arrive as two items rendered as
+				// shredded inline code. Verified against a real capture:
+				// "…deletion, and traversal." + "```cpp\n#include…"
+				// (testdata/codex-two-messages.jsonl, docs/Bugs.md B-5).
+				if full.Len() > 0 {
+					full.WriteString("\n\n")
+				}
+				full.WriteString(strings.Trim(ev.Item.Text, "\n"))
 			}
 		case "turn.completed":
 			p.Tokens = ev.Usage.total()

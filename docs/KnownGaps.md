@@ -137,3 +137,34 @@ PowerShell is the likely first, on a Windows machine whose own commands are Powe
   correct, copyable and correctly labelled.
 - **Clears when:** the owner says which languages matter, and `highlight.js` is added with just
   those registered.
+
+## G-14 — What claude does when a turn contains more than one assistant message
+
+**Kind:** unproved
+**Raised:** 2026-09-10, after fixing the same class of bug on codex (B-5)
+
+`parseClaude` handles the `assistant` event by **replacing** everything accumulated so far:
+
+```go
+case "assistant":
+    if text := ev.Message.text(); text != "" {
+        full.Reset()
+        full.WriteString(text)
+    }
+```
+
+That is right for one assistant message per turn, which is every capture we have. It is wrong if a
+turn emits two — text, then a tool call, then more text — because the second event would discard the
+first message entirely rather than follow it. Separately, `claudeMessage.text()` concatenates the
+`content` array's text blocks with no separator, which is the exact join that produced B-5 on codex.
+
+Both are unverified in either direction: every claude capture we hold has a single assistant event
+with a single text block, so neither path has ever been exercised.
+
+- **If wrong:** worse than B-5 was. B-5 mangled the formatting of text that was all still there;
+  this would silently drop whole paragraphs of an answer, with nothing on screen suggesting anything
+  is missing.
+- **Clears when:** claude is run with a prompt that forces a tool call — `claude -p --verbose
+  --output-format stream-json --strict-mcp-config --setting-sources project "read <file> and
+  summarise it"` — and the `assistant` events in the capture are counted. If there is more than one,
+  it becomes a bug entry and the fix follows codex's.

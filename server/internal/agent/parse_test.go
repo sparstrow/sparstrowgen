@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -154,6 +157,40 @@ func TestParseCodex(t *testing.T) {
 		if m.Type == MessageDelta {
 			t.Errorf("codex emitted a delta: %+v — the UI copy assumes it never does", m)
 		}
+	}
+}
+
+// One turn, two agent_message items: a preamble sentence and then the code.
+// Captured 2026-09-10 from `give me code block with dsa tree in c++`. Kept as a
+// file rather than an inline constant only because the second message is 2.4kB
+// of C++ and would swamp this one.
+func TestParseCodexSeparatesMessages(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "codex-two-messages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p, _ := drain(t, func(ch chan<- Message) parsed {
+		return parseCodex(bytes.NewReader(raw), ch)
+	})
+	if p.Err != nil {
+		t.Fatalf("unexpected error: %v", p.Err)
+	}
+
+	// The bug this exists for (docs/Bugs.md B-5): joined with no separator, the
+	// preamble's last line and the opening fence share a line, at which point
+	// CommonMark stops seeing a fence at all and the whole reply renders as
+	// shredded inline code.
+	for i, line := range strings.Split(p.Text, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.Contains(line, "```") && !strings.HasPrefix(trimmed, "```") {
+			t.Fatalf("line %d has a fence that does not start it: %q", i+1, line)
+		}
+	}
+
+	if !strings.Contains(p.Text, "traversal.\n\n```cpp") {
+		t.Errorf("the two messages are not separated by a blank line; text begins:\n%s",
+			p.Text[:min(len(p.Text), 200)])
 	}
 }
 

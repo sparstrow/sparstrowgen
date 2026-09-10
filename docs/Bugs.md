@@ -105,3 +105,38 @@ label and keeps its (still useful) highlighting.
 Verified in the browser against four fences — `go` with a meta string, untagged, `zsh` (no display
 name, shown verbatim), `powershell`: labels correct in both themes, each copy button copying its own
 block. See G-13 for what stays uncoloured.
+
+## B-5 — codex replies with a preamble render as shredded inline code
+
+**Found:** 2026-09-10, owner, asking codex for a C++ tree **Status:** fixed 2026-09-10
+**Repro:** Ask codex `give me code block with dsa tree in c++`. The answer arrives with the prose
+running into `` ```cpp ``, then fragments of the program in small disconnected boxes.
+**Expected / Actual:** one paragraph followed by one code block / the fence is swallowed and the
+program is torn into pieces of inline code.
+
+**Cause, verified against a real capture** (`server/internal/agent/testdata/codex-two-messages.jsonl`):
+one codex turn can complete **two** `agent_message` items — a preamble sentence and then the code —
+and `parseCodex` concatenated them with no separator:
+
+```
+item 1 (78ch)   "I'll use a binary search tree with insertion, search, deletion, and traversal."
+item 2 (2432ch) "```cpp\n#include <iostream>\n…"
+```
+
+Joined edge-to-edge that is `…traversal.```cpp`, and a fence that does not begin a line is not a
+fence at all — CommonMark reads the backticks as an inline code span, which then pairs off with the
+next backtick run and shreds the rest of the reply.
+
+Nothing was wrong with what codex sent. The markdown renderer was innocent too; it rendered exactly
+what it was given.
+
+**Fixed** in `server/internal/agent/codex.go`: separate messages are joined with a blank line.
+Regression test `TestParseCodexSeparatesMessages` asserts no line contains a fence that does not
+start it, and was confirmed to fail on the old code with the exact welded line.
+
+**Found by the Raw view** added the same day — the rendered pane looked like a rendering bug, and
+the raw pane showed the fence sitting mid-line in the stored text, which put the search in the
+backend immediately. Worth remembering the next time something looks like a renderer fault.
+
+**Not repaired retroactively:** transcripts already stored keep the welded text and still render
+badly. Rewriting stored replies is a destructive edit to the record and needs the owner to ask.
