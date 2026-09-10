@@ -92,3 +92,50 @@ from an approved design and so cannot describe a feature nobody asked for.
 
 The two must not overlap: a spec that describes an interface pre-empts the options the owner is
 supposed to choose between, and quietly becomes the design decision.
+
+## D-009 — What we took from Multica, and what we overrode
+
+**2026-09-09.** [Multica](../Reference/multica-main) is a live, working system of the same shape —
+Go server, local daemon driving agent CLIs, Next.js front end. Its conventions were reviewed
+wholesale rather than reinvented.
+
+**Adopted more or less as-is**, because it hit these problems at scale first:
+
+- **Testing discipline** — where tests live, one canonical layer per behaviour, `node` environment
+  for DOM-free tests, shared Go fixtures instead of open-coded inserts, and helpers that never
+  assert a product rule on a test's behalf. `AGENTS.md` §5.
+- **Never letting a default test execute a real agent CLI.** The single most valuable rule they
+  have for us: we drive the same CLIs, and a test that resolves one from `PATH` spends the owner's
+  quota. Fake executable paths by default; real-agent smoke behind a build tag *and* an env var.
+- **Server/client state separation** — TanStack Query owns server state, Zustand owns view state,
+  realtime events never mirror payloads into Zustand. Same stack, same bug class.
+- **Package boundaries** as hard constraints, so the desktop shell stays possible later.
+- **One command for the full pipeline** (`make check`: typecheck → unit → Go → e2e).
+- **Compatibility discipline at the boundary** — enum switches need a default branch, don't pin an
+  affordance to one boolean. Their concern is old desktop clients; ours is an old daemon.
+
+**Overrode, deliberately:**
+
+- **Foreign keys.** Multica bans them outright and resolves every relationship in application
+  code. That earns its place at their scale and with polymorphic assignees; here it would trade a
+  free correctness guarantee for hand-written integrity checks. **We keep foreign keys and ban
+  cascading deletes** — cascades are the actual hazard they were guarding against, and a surprise
+  recursive delete is much worse than a rejected insert.
+- **`CREATE INDEX CONCURRENTLY` on every index, one statement per migration file.** Correct
+  against a live table under load; premature against zero rows, and it forces the migration runner
+  outside a transaction. Revisit when there is production data — until then, ordinary indexes.
+
+**Not taken:** their multi-worktree development-environment registry (`make up`, per-checkout port
+and database allocation), reserved slugs, i18n glossary, and the mobile and desktop rule sets.
+Each solves a problem we do not have yet — several agents on one machine, several locales,
+several shells. The registry in particular is excellent and worth revisiting the day a second
+agent runs here.
+
+## D-010 — Caveats fold into KnownGaps, rather than getting their own file
+
+**2026-09-09.** Rejected: a separate `Caveats.md`.
+
+Something an agent notices in passing and deliberately leaves alone answers the same question as
+an unproved claim: *how much can the next agent take on faith?* `KnownGaps.md` is already the file
+read before relying on an area, so a second register would be another place to look and another
+place to forget. Entries carry a `Kind:` of `unproved` or `caveat` so both stay legible.

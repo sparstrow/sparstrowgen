@@ -100,7 +100,7 @@ Build against `DESIGN.md` and the design system's tokens, with
 own visual language teaches the owner nothing about what the real thing will
 look like.
 
-**Don't run the AGENTS.md §5 options framework on anything you can render.**
+**Don't run the AGENTS.md §6 options framework on anything you can render.**
 That framework is for decisions with no picture — a protocol choice, a
 tradeoff between two libraries. For design, seeing them *is* the comparison.
 Say what each direction is optimising for in a line, then let them look.

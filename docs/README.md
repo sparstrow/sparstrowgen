@@ -79,7 +79,7 @@ lives only in a chat message does not exist to the next session.
 
 ## Open questions carry options
 
-Per [`AGENTS.md` §5](../AGENTS.md): context, a plain user-side scenario, and concrete options —
+Per [`AGENTS.md` §6](../AGENTS.md): context, a plain user-side scenario, and concrete options —
 each with the scenario replayed under it, pros and cons, a score, blast radius, caveats, and a
 recommendation.
 

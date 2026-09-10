@@ -1,7 +1,7 @@
 # Open Questions
 
 Decisions waiting on the owner. Every entry needs full context, a plain user-side scenario, and
-concrete options — the framework is in [`AGENTS.md` §5](../AGENTS.md).
+concrete options — the framework is in [`AGENTS.md` §6](../AGENTS.md).
 
 An open question blocks **only the checklist item that depends on it** — never the whole task,
 never the plan. Mark that item `[~] blocked → OQ-n` and build everything else.
