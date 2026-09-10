@@ -1,6 +1,12 @@
 /* Shapes the chat surface renders. These mirror what the daemon can actually
    report — see docs/Capabilities.md. Anything optional here is optional because
-   some provider genuinely does not emit it, not for convenience. */
+   some provider genuinely does not emit it, not for convenience.
+
+   The SERVER owns these shapes: server/internal/protocol/protocol.go carries
+   json tags that must match this file field for field. Protobuf would have
+   generated both from one source and was deferred (docs/Decisions.md D-017), so
+   until it lands, changing one side without the other is a runtime bug rather
+   than a compile error. Change them in the same commit. */
 
 /** gemini is deliberately absent. It is installed on the machine but has no
  *  account behind it and the owner has ruled it out, so there is no adapter and

@@ -296,3 +296,20 @@ individual skills through a task-local `--settings` file. That suits a system wh
 configured per task. Ours is one chat window over whatever is installed, with no per-conversation
 tool configuration to express intent — so scoping is unconditional, and inheriting the owner's
 personal MCP servers is never the default.
+
+## D-017 — The Protobuf decision (D-003) is deferred, not reversed
+
+**2026-09-10.** D-003 chose Protobuf for the wire protocol and rejected hand-maintained JSON types.
+Reading [Multica](../Reference/multica-main) properly undercut its main support: same architecture,
+same old-daemon problem, and **zero `.proto` files in the repo** — Go structs with JSON tags, and
+TypeScript hand-written to match, with no generation step anywhere.
+
+Part of D-003's reasoning was already covered by D-002: server and daemon are one Go module, so
+Go↔Go drift is a compile error with or without Protobuf. What Protobuf would actually buy is
+Go↔TypeScript safety, and there are lighter ways to get that than adopting a schema language and a
+codegen step before the first message exists.
+
+So `buf` is **not installed** and the protocol starts as Go structs with JSON tags over WebSocket.
+Revisit once real message shapes exist and the cost of hand-maintaining them is observable rather
+than predicted. `sqlc` and `goose` were installed — Multica confirms sqlc; on goose we deliberately
+diverge, since writing our own runner is ~900 lines of infrastructure before anything works.

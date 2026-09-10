@@ -10,10 +10,11 @@ project:
     Conversations persist in our database, so a conversation can move to a
     different provider when one hits its usage limit.
 
-# apps/web builds, runs and has been verified in a browser — but on mock data
-# only. Everything under server/, daemon and protocol below is still a locked
-# decision rather than an observation of code that exists.
-status: web-scaffolded  # apps/web builds and runs on mock data; server/ and daemon not started
+# The full path works end to end on real data: browser -> server -> daemon ->
+# agent CLI -> back. Verified 2026-09-10 by moving one conversation across
+# codex -> agy -> codex with the replay quoted, charged and recorded.
+# claude is built but cannot authenticate from a spawned process (KnownGaps G-9).
+status: working-vertical-slice
 
 stack:
   frontend:
@@ -22,7 +23,7 @@ stack:
     styling: "Tailwind CSS v4"
     ui: "shadcn 4.21 (Base UI, style base-nova, neutral) — currently in apps/web/components/ui"
     ui_note: "NOT yet extracted to packages/ui — one consumer, so extraction would be speculative (AGENTS.md rule 4). Mechanical move when apps/desktop lands; see docs/Later.md L-7"
-    state: "TanStack Query for server state, Zustand for client state — NEITHER INSTALLED YET, the chat surface uses local useState on mock data"
+    state: "TanStack Query for server state, Zustand for client state — NEITHER INSTALLED YET; the surface uses useState and hand-patches websocket events. This breaks the AGENTS.md §3 hard constraint on purpose and is recorded as docs/KnownGaps.md G-11"
   server:
     language: "Go"
     module: "github.com/sparstrow/sparstrowgen/server"
@@ -32,8 +33,8 @@ stack:
     language: "Go"
     note: "Same Go module as the server so wire-protocol drift is a compile error"
   protocol:
-    format: "Protobuf"
-    codegen: "buf — generates Go structs and TypeScript types from proto/"
+    format: "JSON over WebSocket — Go structs with json tags in server/internal/protocol"
+    codegen: "NONE. Protobuf/buf is DEFERRED, not chosen — see docs/Decisions.md D-017. Multica has the same architecture and zero .proto files. Until it lands, protocol.go and apps/web/lib/chat-types.ts are hand-kept in step: change both in one commit."
   database:
     engine: "PostgreSQL (self-hosted in Coolify)"
     access: "sqlc + pgx"
@@ -77,10 +78,12 @@ agent_clis:
       fields: [status, resetsAt, rateLimitType, overageStatus, overageDisabledReason, isUsingOverage]
       note: "only status=allowed observed; the blocked/exceeded shape is unverified — see docs/KnownGaps.md G-4"
     incremental_streaming: unverified
-    streaming_note: "--include-partial-messages is in the print string on documentation alone, never captured — see docs/KnownGaps.md G-5"
+    streaming_note: "Two captures with --include-partial-messages on 2026-09-10 returned ZERO deltas — but both turns 401'd and never reached the API, so this proves nothing either way. The adapter reads deltas if present and never depends on them. See docs/KnownGaps.md G-5"
+    auth: "BLOCKED from a spawned process — the stored OAuth access token is expired and only the desktop app refreshes it. Fix is `claude setup-token` + CLAUDE_CODE_OAUTH_TOKEN (exempted from env scrubbing). See docs/runbooks/claude-headless-auth.md and KnownGaps G-9. NOTE: the failing result event says subtype:success with is_error:true — read is_error."
   - name: codex
     availability: available
-    print: "codex exec --json --ignore-user-config"
+    print: "codex exec --json --ignore-user-config --skip-git-repo-check"
+    stream_events: "thread.started(thread_id) -> turn.started -> item.completed(item.type=agent_message, item.text) -> turn.completed(usage). Captured 2026-09-10."
     resume: "codex exec resume <session-id> <prompt>"
     model_flag: "-m"
     model_list: "NONE — no list command. Names scraped from the shipped binary; configured model read from ~/.codex/config.toml. The valid set is ACCOUNT-DEPENDENT — an unsupported model returns 400 'not supported when using Codex with a ChatGPT account'. See docs/KnownGaps.md G-8"
@@ -92,6 +95,7 @@ agent_clis:
   - name: agy
     availability: available
     print: "-p --output-format stream-json"
+    stream_events: "keys on 'event', NOT 'type': init(conversation_id) -> step_update(text_delta) -> result(status, response, usage). Captured 2026-09-10."
     resume: "--conversation <id>"
     model_flag: "--model"
     model_list: "agy models — VERIFIED, the only one of the three that enumerates. Returns id + label, 14 entries"
@@ -111,7 +115,11 @@ commands:
   lint: "pnpm lint"
   typecheck: "pnpm typecheck"
   go_test: "cd server && go test ./..."
-  proto: "buf generate"
+  db: "docker compose up -d      # postgres on :5433"
+  migrate: "cd server && goose -dir migrations up"
+  server: "cd server && go run ./cmd/server   # :8080"
+  daemon: "cd server && go run ./cmd/daemon   # drives the agent CLIs"
+  check: "make check"
 
 # How features get built. See AGENTS.md §2 — the owner approves a spec, then
 # picks from rendered designs. There is no plan document.

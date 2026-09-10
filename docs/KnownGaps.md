@@ -85,39 +85,21 @@ type exists in `--json`). `claude` sits between them unverified: plain `stream-j
 message per turn, and `--include-partial-messages` has never been captured — the flag is already in
 `blueprint.yaml`'s `print` string on the strength of documentation alone.
 
-Cannot be captured from a sandboxed agent shell; `claude -p` needs the owner's real terminal — this
-is what G-1 established.
+**Two captures were run on 2026-09-10 and neither settles it.** Both used
+`--include-partial-messages` and both returned **zero** `stream_event` /
+`content_block_delta` entries — but both also 401'd ten times and never authenticated (G-9), so the
+request never got far enough to stream anything. Absence of deltas from a turn that never reached
+the API is not evidence about streaming.
+
+The adapter therefore reads deltas if they appear and never depends on them, and the surface reports
+`streams: false` for claude so it does not promise motion it may not deliver.
 
 - **If wrong:** claude renders per-message like codex instead of per-token. A polish downgrade, not
   a broken feature — and the design already has to tolerate a non-streaming provider because of
   codex, so nothing designed against this assumption gets thrown away.
-- **Clears when:** one capture of `claude -p --output-format stream-json --include-partial-messages
-  --verbose` from a real terminal, checked for `stream_event` / `content_block_delta` entries.
-
-## G-6 — The chat surface runs entirely on mock data
-
-**Kind:** unproved
-**Raised:** 2026-09-10, wiring direction A into `apps/web`.
-
-Every behaviour on the chat surface is real UI driven by `apps/web/lib/chat.mock.ts`. Verified in a
-browser: conversation CRUD, provider and model switching, the lazy replay marker, streaming vs
-non-streaming turns, and all four states. **None of it has touched a server, a daemon, or a CLI.**
-
-Two specific things are simulated rather than observed, and both will differ:
-
-1. **Replay cost is estimated at a flat 1300 tokens per message** (`TOKENS_PER_MESSAGE` in
-   `chat-surface.tsx`). The real figure depends on message length and the provider's tokeniser.
-   The number shown to the owner before he commits to a switch must be trustworthy, because the
-   whole point of quoting it is that he decides on it.
-2. **Streaming cadence is faked** — a word-group timer, not real deltas. `agy`'s real chunks are
-   ~25-35 chars; `claude`'s are unverified (G-5); `codex` sends nothing until the end, which is the
-   one case modelled from real observation.
-
-- **If wrong:** the surface looks finished and is not. Anyone reading the route could mistake mock
-  behaviour for working behaviour — in particular the replay estimate, which is currently a
-  plausible-looking number with no backing.
-- **Clears when:** the daemon and server exist, `chat.mock.ts` is deleted, and a grep for `.mock`
-  in `apps/web/app` returns nothing.
+- **Clears when:** G-9 is fixed and one capture with `--include-partial-messages` completes a turn
+  whose `is_error` is false — then count the `content_block_delta` entries. Until claude can
+  authenticate, this cannot be answered at all.
 
 ## G-7 — Conversation search runs in memory over everything loaded
 
@@ -175,3 +157,96 @@ is account-dependent (`"not supported when using Codex with a ChatGPT account"`)
 - **Clears when:** the daemon asks `claude` and `agy` at runtime and treats an unknown-model error
   as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
   this way and stays curated.
+
+## G-9 — `claude` cannot authenticate from a spawned process
+
+**Kind:** caveat
+**Raised:** 2026-09-10, first end-to-end turn through the daemon.
+
+The daemon runs `claude` as a plain child process. It reads
+`~/.claude/.credentials.json`, finds an expired OAuth access token, and has no
+way to refresh it — that is the desktop app's job. Ten retries of
+`401 authentication_failed`, then:
+
+> `"OAuth access token has expired. Re-authenticate to continue."`
+
+**The failure disguises itself.** The final `result` event carries
+`"subtype":"success"` with `"is_error":true`. Reading only the subtype — which
+is what I did on the first pass, and reported to the owner as "OAuth works" —
+turns a total failure into an apparent success. Anything checking claude's
+outcome must read `is_error`.
+
+`codex` and `agy` authenticate fine from the same spawned context, so this is
+specific to claude.
+
+- **If wrong:** nothing. It is reproduced on demand and blocks one provider of
+  three; the other two work end to end.
+- **Clears when:** the owner runs `claude setup-token` and sets
+  `CLAUDE_CODE_OAUTH_TOKEN` — [`runbooks/claude-headless-auth.md`](runbooks/claude-headless-auth.md).
+  The adapter already exempts that variable from env scrubbing, so the fix needs
+  no code change. Confirm with a real claude turn whose `is_error` is false.
+
+## G-10 — Provider headroom is never populated
+
+**Kind:** unproved
+**Raised:** 2026-09-10, wiring the surface to real data.
+
+`Provider.Headroom` is always nil, so the strip shows "no limit data" for all
+three providers. For `codex` and `agy` that is the truth. **For `claude` it is
+not** — it emits a verified `rate_limit_event` with percent and reset time, and
+the adapter simply does not parse it yet.
+
+The design's whole honesty argument was that "no limit data" must be
+distinguishable from "plenty left". That still holds, but claude is currently
+being shown as unknowable when it is merely unparsed, which is its own kind of
+lie.
+
+- **If wrong:** the owner cannot see his claude headroom, which is the one place
+  it exists — and US3 of the spec is about exactly that.
+- **Clears when:** the claude adapter reads `rate_limit_event` and populates
+  Headroom, and the strip shows a real percentage against a real reset time.
+
+## G-11 — Server state is held in `useState`, not TanStack Query
+
+**Kind:** caveat
+**Raised:** 2026-09-10, wiring the surface to real data.
+
+`AGENTS.md` §3 makes this a hard constraint: TanStack Query owns anything from
+the server, Zustand owns view state, and realtime events invalidate or patch the
+Query cache. The surface currently holds conversations and the open transcript
+in `useState` and patches them by hand from websocket events. **Neither library
+is installed.**
+
+It works, and the hand-patching is deliberately written to be the shape a Query
+cache update would take. But the constraint exists to prevent a bug class —
+stale reads, two sources of truth for one fact, refetch-on-focus done ad hoc —
+and this code is inside that class rather than outside it.
+
+- **If wrong:** the failures are the quiet kind. Two tabs disagree; a conversation
+  edited elsewhere shows a stale title until reload; an event that arrives during
+  a fetch loses the race and is silently overwritten.
+- **Clears when:** TanStack Query owns the server state, websocket events patch
+  its cache, and `useState` in `chat-surface.tsx` holds only draft, pending
+  switch and selection.
+
+## G-12 — The Go server and daemon have no tests
+
+**Kind:** unproved
+**Raised:** 2026-09-10, first backend slice.
+
+Everything was verified by running it — a real conversation moved codex → agy →
+codex, with the replay quoted, charged and recorded correctly. That is real
+evidence and it is what the owner cares about. But there is not one `_test.go`
+file, so none of it is protected against the next change.
+
+Multica's rule is the one to adopt when they are written: **no default test may
+execute a real agent CLI.** We drive the same binaries on the same machine, and
+a test that resolves `claude` from PATH spends the owner's quota. Fake
+executable paths by default; real-agent smoke behind a build tag and an env var.
+
+- **If wrong:** a regression in replay, seq allocation or seen_seq lands silently.
+  The seen_seq high-water logic is the sharpest edge — it is the difference
+  between replaying two messages and replaying two hundred.
+- **Clears when:** `go test ./...` covers the store's seq and seen_seq rules, the
+  three stream parsers against captured JSONL fixtures, and the turn lifecycle
+  with a fake backend.

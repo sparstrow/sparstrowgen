@@ -1,0 +1,24 @@
+# Local Postgres for development. Production runs in Coolify (blueprint.yaml).
+# pgvector image rather than plain postgres so the embeddings work later needs
+# no container swap — the extension is not enabled until a migration asks for it.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: sparstrowgen-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sparstrowgen
+      POSTGRES_PASSWORD: sparstrowgen
+      POSTGRES_DB: sparstrowgen
+    ports:
+      - "5433:5432" # 5433 on the host: a local Postgres on 5432 is common
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sparstrowgen -d sparstrowgen"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  db-data:
