@@ -155,3 +155,34 @@ signed in. It is **blocked**, not "not built" — a real, permanent-until-fixed 
 picker UI must show with a reason, the way Multica's `RuntimeUnusableNotice` does, not silently
 omit the way an unbuilt provider is omitted. See [`Capabilities.md`](Capabilities.md) and
 [`Later.md`](Later.md) L-6.
+
+## D-012 — An image round sits between the spec and the prototype
+
+**2026-09-09.** Rejected: going straight from spec to clickable prototypes, which is what the
+workflow did until now.
+
+Coding a prototype is the right way to *decide* a design but the wrong way to *explore* one. It
+costs enough that exploration silently caps at two directions, and the second is usually a
+variation on the first — so the direction that gets built is the first one anybody thought of, not
+one that was chosen. `codex` generates a usable UI mockup in about two minutes (verified
+2026-09-09, ~88k input tokens, mostly cached preamble), which makes four genuinely different
+directions affordable before a line of code exists.
+
+The ordering principle generalises what the workflow already did with the backend: **each step is
+cheaper than the one after it, so the expensive step only ever runs on something already wanted.**
+Shots are to prototypes what prototypes are to the backend.
+
+Two constraints keep it from becoming waste rather than removing it:
+
+- **An image decides a direction, never the design.** It has no interaction, no real data, no four
+  states. The prototype step still makes the decision, and the owner is told that when the images
+  are presented — otherwise the prototype feels like re-opening a settled question.
+- **The feasibility gate applies before the first prompt.** A rendered image of an undeliverable
+  screen is *more* dangerous than a sketch of one, because polish buys approval.
+
+Adapted from [garrytan/gstack's `design-shotgun`](https://github.com/garrytan/gstack/tree/main/design-shotgun):
+took the anti-convergence rule, confirming concepts before spending, and the side-by-side board.
+Left its external artifact tree, JSON handshake files, polling loops, and a taste profile with
+weekly-decaying confidence scores — that is the planning machinery that killed the first attempt.
+Taste is recorded instead as one `README.md` per shot round, holding the owner's stated reasons; a
+preference seen twice gets promoted into `DESIGN.md`.

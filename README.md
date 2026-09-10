@@ -23,10 +23,12 @@ installed but blocked (no account signed in); see [`docs/Capabilities.md`](docs/
 
 ## How it gets built
 
-Design-driven. A feature starts with a short spec — what the owner wants and why, in his words —
-and then two or three *rendered* directions rather than a description of one. He picks one, it
-gets wired into the real app on placeholder data, and only once it's confirmed does the backend
-get built to serve exactly that. There is no plan document.
+Design-driven, and ordered so each step is cheaper than the one after it. A feature starts with a
+short spec — what the owner wants and why, in his words. Then two to four directions are
+*generated as images* (about two minutes each, via codex) and he picks a direction from pictures.
+Only that direction gets built as a clickable prototype, only the confirmed prototype gets wired
+into the real app on placeholder data, and only then does the backend get built to serve exactly
+that. There is no plan document.
 
 The guardrail is [`docs/Capabilities.md`](docs/Capabilities.md): never design something the
 backend can't deliver. Full workflow in [`AGENTS.md` §2](AGENTS.md).

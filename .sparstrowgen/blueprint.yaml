@@ -112,12 +112,29 @@ commands:
 # picks from rendered designs. There is no plan document.
 workflow:
   method: design-driven
-  loop: "spec -> feasibility -> design (he picks) -> wire on mocks (he confirms) -> backend -> verify"
+  loop: "spec -> feasibility -> shots (images, he picks a direction) -> design (clickable prototype, he picks details) -> wire on mocks (he confirms) -> backend -> verify"
+  loop_principle: "each step is cheaper than the one after it, so the expensive step only runs on something already wanted"
   feasibility_gate: docs/Capabilities.md
   documents: "a spec the owner approves; no plan document"
-  skills: [design-driven-feature, writing-specs]
+  skills: [design-driven-feature, writing-specs, design-shotgun]
   agent_instructions: "AGENTS.md and CLAUDE.md are identical — edit one, copy to the other"
 
 mcp_servers: [context7, shadcn]
 
 cli_tools: [gh, docker, pnpm]
+
+# Tools used to BUILD sparstrowgen, as distinct from the agent_clis the product
+# drives at runtime. Same binary, different job — do not apply the daemon's
+# scoping rules here.
+build_tools:
+  image_generation:
+    via: "codex exec --json --skip-git-repo-check, asking it to use its imagegen skill"
+    verified: true
+    verified_note: "2026-09-09 from an agent shell: produced a clean UI mockup in ~2 min, ~88k input tokens (mostly cached preamble)"
+    output_path: "~/.codex/generated_images/<thread>/<exec>.png — name an absolute destination in the prompt and it copies the file there"
+    scoping: "do NOT pass --ignore-user-config here; it risks stripping the skill. The mandatory-scoping rule is for the daemon's runtime adapter only."
+    used_by: design-shotgun
+    caveats:
+      - "one image per run — asking for several returns one image and prose about the rest"
+      - "prompts regress to the category mean; name the product-specific elements or you get a stock design"
+      - "ask for greeked placeholder bars instead of text — generated pseudo-words dominate every reaction"

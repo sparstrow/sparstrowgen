@@ -11,6 +11,11 @@ Mark every claim as **verified** (we ran it and saw real output) or **assumed** 
 documentation or flags, not yet proven). Downgrade nothing silently — if something assumed turns
 out false, fix it here in the same change that discovers it.
 
+**A verified row has a shelf life.** These CLIs ship constantly — `codex` went 0.153.4 → 0.154.0
+and `agy` 1.1.27 → 1.2.0 within a day of first being captured. Keep the version numbers in the
+table current, and when something behaves unlike its row, suspect the version before suspecting
+the row.
+
 ---
 
 ## Shape of the system
@@ -56,7 +61,7 @@ This is the hard ceiling on what a chat UI can show. We drive these CLIs; we don
 they report. Captured 2026-09-09 by running each with a trivial prompt and reading the real
 output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G-4.
 
-| | `claude` 2.1.90 | `codex` 0.153.4 | `agy` 1.1.27 |
+| | `claude` 2.1.90 | `codex` 0.154.0 | `agy` 1.2.0 |
 |---|---|---|---|
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |

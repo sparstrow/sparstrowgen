@@ -31,7 +31,8 @@ Anything visual is decided by looking at it, never by prose.
 ```
 Spec         what he wants and why, in his words. He approves it.
 Feasibility  can the backend actually deliver it?
-Design       2–3 genuinely different directions, rendered. He picks.
+Shots        2–4 directions as generated IMAGES. He picks a direction. ~2 min each.
+Design       the chosen direction, built as a clickable prototype. He picks details.
 Wire         into the real app on mock data. He confirms it there.
 Backend      built to the locked design's contract. Mocks swapped out.
 Verify       frontend-verify, against real data.
@@ -40,6 +41,12 @@ Verify       frontend-verify, against real data.
 Everything up to Wire is cheap and fast. **Backend is the expensive phase and
 it does not start until he has confirmed the design in the app.** That ordering
 is the whole point.
+
+**Shots come before Design for the same reason Design comes before Backend:**
+each step is cheaper than the one after it, so the expensive step only ever runs
+on something already wanted. Coding a prototype caps exploration at two
+directions in practice; images make four affordable, so the prototype gets built
+on a direction he chose rather than the first one anybody thought of.
 
 ## Spec — when there is something to explain
 
@@ -77,11 +84,30 @@ If the design needs something not in `Capabilities.md`, pick one — never
 - **Cut it.** Record it in `Later.md` with a trigger and ship the design
   without that piece.
 
+## Shots — pick a direction from pictures, in minutes
+
+**Invoke `design-shotgun`.** It generates 2–4 directions as images via codex,
+shows them side by side, and records why the loser lost.
+
+An image settles composition, hierarchy, density and mood. It settles nothing
+about interaction, real data, or the four states — so say that when presenting,
+or the next step feels like re-opening a closed question. Images pick a
+direction; the prototype makes the decision.
+
+Skip it for small specific changes, for one more screen in an established
+pattern, and when codex is unavailable — in that last case go straight to two
+prototype directions rather than describing images in prose.
+
 ## Design — show, don't describe
 
-Two or three directions, **genuinely different** — different layout, different
-information hierarchy, different interaction model. Three variations on one
-idea with different spacing is one option, not three.
+The chosen direction, made clickable. Where a shot is ambiguous — and it will be,
+because images have no states — build the ambiguity out rather than resolving it
+silently.
+
+If Shots was skipped, this step carries the exploration instead: two or three
+directions, **genuinely different** — different layout, different information
+hierarchy, different interaction model. Three variations on one idea with
+different spacing is one option, not three.
 
 Two ways to render them, both valid:
 

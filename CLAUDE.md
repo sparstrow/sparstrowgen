@@ -37,11 +37,17 @@ this app now, and the first died of planning. Spend care on engineering, not pap
 ```
 Spec         what he wants and why, in his words. He approves it.
 Feasibility  can the backend actually deliver it?
-Design       2–3 genuinely different directions, rendered. He picks.
+Shots        2–4 directions as generated IMAGES. He picks a direction. ~2 min each.
+Design       the chosen direction, clickable. He picks the details.
 Wire         into the real app on mock data. He confirms it there.
 Backend      built to the locked design's contract. Mocks swapped out.
 Verify       frontend-verify, against real data.
 ```
+
+**Each step is cheaper than the one after it**, so the expensive step only runs on
+something already wanted. Images cost two minutes, so four directions get looked
+at; coding prototypes caps that at two in practice, and the second is usually a
+variation on the first.
 
 **Invoke `design-driven-feature`** for any feature — it carries the procedure.
 
@@ -136,6 +142,9 @@ the rule.
 - **Load `ai-design-slop` before writing UI**, so the tells never go in.
 - **No hardcoded colour, ever.** The doctrine is a theming contract; a literal hue breaks every
   theme but the one you looked at.
+- **Images pick a direction; the prototype makes the decision.** Say so when showing
+  shots — an image has no interaction, no real data, and no states, and if he thinks
+  approving one approved the design, the prototype step feels like re-opening it.
 - **`design-brief` and `design-system` run once**, when real UI work starts — not per feature.
 - **Mock data is `*.mock.ts`.** A feature isn't done while a shipped route imports one.
 
@@ -176,8 +185,8 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | Only a human can do it — dashboard, DNS, secrets | [`docs/runbooks/`](docs/runbooks/) |
 
 Skills carry procedure so this file doesn't: `design-driven-feature`, `writing-specs`,
-`interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`, `design-brief`,
-`design-system`.
+`design-shotgun`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,
+`design-brief`, `design-system`.
 
 When he says "park it", "later", or "just an idea", write it down in the same turn. Chat is not read
 by the next session.
