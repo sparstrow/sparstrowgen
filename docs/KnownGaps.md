@@ -53,23 +53,6 @@ to it" are different situations and the reader needs to know which.>
 
 ---
 
-## G-2 — `codex exec` loads the owner's global MCP config
-
-**Kind:** caveat
-**Raised:** 2026-09-10, while capturing `codex`'s real stream for G-1.
-
-A trivial `codex exec --json "Reply with exactly: OK"` produced `AuthRequired` stderr errors for
-Supabase and GitHub Copilot MCP servers — both configured in the owner's global `CODEX_HOME`,
-neither relevant to this project. Left alone rather than fixed now, because the daemon doesn't
-exist yet to configure.
-
-- **If wrong** (i.e., this is fine to ship as-is): every real `codex` run in production logs noise
-  for integrations the conversation never asked for, and a misconfigured global MCP server could
-  someday do more than log — a tool call landing somewhere unintended.
-- **Clears when:** the daemon's `codex` adapter is built with an isolated or minimal `CODEX_HOME`
-  (or codex's equivalent of `claude --bare`), verified by a capture showing no unrelated MCP
-  activity.
-
 ## G-3 — `claude -p` inherits the entire personal Claude Code environment, with working tool access
 
 **Kind:** caveat
@@ -92,28 +75,43 @@ not to use it this time is not a boundary — it's luck.
 - **Clears when:** the daemon's `claude` adapter passes `--bare` (or equivalent scoping) and a
   capture confirms both a minimal `system.init` payload and zero connected MCP servers.
 
-## G-4 — Two narrower streaming questions left after the real `claude` capture
+## G-4 — What a *hit* rate limit looks like, on any provider
 
 **Kind:** unproved
-**Raised:** 2026-09-10, after closing G-1.
+**Raised:** 2026-09-10, after closing G-1. **Narrowed:** 2026-09-10, streaming half split out to G-5.
 
-The real capture answered the shape of a full turn, but not everything:
+Two related unknowns, neither closable by running anything:
 
-1. **What does a hit rate limit actually look like?** The captured `rate_limit_event` showed only
-   `"status":"allowed"`. We do not know the blocked value, or whether the payload changes shape
-   when a limit is actually exceeded. Cannot be forced in a trivial test.
-2. **Token-by-token deltas are unverified for all three providers.** Every capture so far used the
-   non-partial stream mode — one complete message per turn. The incremental "typing" feel a chat
-   UI wants requires `claude --include-partial-messages` (and codex/agy's equivalents, if they
-   exist) captured separately.
+1. **`claude`'s `rate_limit_event` has only ever been seen as `"status":"allowed"`.** We do not
+   know the blocked value, or whether the payload changes shape when a limit is exceeded.
+2. **`codex` and `agy` emitted no rate-limit signal at all** in any capture. Unknown whether they
+   have one, surface it only as an error or non-zero exit when truly exhausted, or never expose it.
 
-Lower stakes than G-1 was: (1) blocks the "you're over your limit" state specifically, not the
-whole feature, and a design can ship the "approaching your limit" state without it; (2) is a
-rendering smoothness question, not a data-modeling one.
+This is the feasibility boundary under the product's headline feature. It does **not** block the
+feature: switching provider mid-conversation is user-initiated and works regardless. It blocks the
+*automatic* version — "you're out on claude, switch to codex?" — and the "over your limit" UI state.
 
-- **If wrong:** (1) a "provider blocked" UI state gets built against a guess and needs correcting
-  once a real limit is hit. (2) chat text renders per-message rather than per-token until fixed —
-  a downgrade in polish, not a broken feature.
-- **Clears when:** (1) any provider is used enough to actually hit a limit, or provider
-  documentation describes the blocked payload. (2) one more capture with
-  `--include-partial-messages` added.
+- **If wrong:** an "over limit" state gets designed against a guess and needs correcting the first
+  time a real limit is hit. Worse for codex/agy: a design promising limit awareness for all three
+  providers would be undeliverable for two of them.
+- **Clears when:** a provider is used enough to actually hit a limit — capture the stream when it
+  happens, it is the only cheap opportunity — or provider documentation describes the payload.
+
+## G-5 — `claude`'s incremental streaming is unverified
+
+**Kind:** unproved
+**Raised:** 2026-09-10, split from G-4 once codex and agy were verified.
+
+`agy` streams (93 delta chunks for a 400-word answer) and `codex` provably does not (no delta event
+type exists in `--json`). `claude` sits between them unverified: plain `stream-json` gives one
+message per turn, and `--include-partial-messages` has never been captured — the flag is already in
+`blueprint.yaml`'s `print` string on the strength of documentation alone.
+
+Cannot be captured from a sandboxed agent shell; `claude -p` needs the owner's real terminal — this
+is what G-1 established.
+
+- **If wrong:** claude renders per-message like codex instead of per-token. A polish downgrade, not
+  a broken feature — and the design already has to tolerate a non-streaming provider because of
+  codex, so nothing designed against this assumption gets thrown away.
+- **Clears when:** one capture of `claude -p --output-format stream-json --include-partial-messages
+  --verbose` from a real terminal, checked for `stream_event` / `content_block_delta` entries.

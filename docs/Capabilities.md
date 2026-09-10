@@ -60,6 +60,8 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 |---|---|---|---|
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
+| Incremental text streaming | *(unverified — needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
+| Config isolation | `--bare` *(mandatory — G-3)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
 | Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
 | Per-turn USD cost | **verified** — `total_cost_usd`, real dollar figure | no — tokens only | no — tokens only |
 | Rate-limit signal | **verified** — `rate_limit_event`, see below | not observed in this capture | not observed in this capture |
@@ -117,22 +119,39 @@ provider documentation — it cannot be forced in a trivial test.
 arrive on the `state:"ACTIVE"` updates; the final usage total is on `state:"DONE"` and again on
 `result`.
 
-**Token-by-token streaming (deltas) is still unverified for all three.** Every capture so far used
-the non-partial stream mode — each shows one complete message per turn, not incremental text. The
-"typing" feel a chat UI wants needs `claude --include-partial-messages` (and codex/agy's
-equivalents, if any) captured separately. See G-4 — this affects rendering smoothness, not data
-modeling, so it is lower priority than the rate-limit question above.
+### Incremental streaming differs per provider — and the design must absorb it
+
+**Verified 2026-09-10 by capturing a 400-word answer from each.** This is not a uniform capability,
+and a chat design that assumes it is will look broken on one provider:
+
+- **`agy` streams.** 93 `step_update` events with `state:"ACTIVE"`, each carrying a `text_delta` of
+  roughly 25–35 characters. Word-group granularity, not strictly per-token, but more than enough
+  for a live "typing" feel. *(An earlier short capture showed a single chunk — that was the answer
+  being too small to chunk, not the absence of streaming.)*
+- **`codex` does not stream.** `--json` is its only stream flag and there is no delta event type at
+  all: the turn emits `thread.started` → `turn.started` → one whole `item.completed` → `turn.completed`.
+  The reply appears all at once, however long it took.
+- **`claude` is unverified.** Plain `stream-json` gives one complete message per turn;
+  `--include-partial-messages` is documented to give deltas but has not been captured. See G-4.
+
+**The design consequence, and it is a real one:** the same conversation can have one provider
+typing smoothly and the next sitting silent for twenty seconds before a wall of text lands. A
+design whose only "working" signal is text appearing will read as *frozen* on `codex`. Whatever
+indicates "the agent is working" must be independent of text arriving — and it must be present in
+the design from the first draft, not retrofitted when codex is wired up.
 
 `gemini` 0.49.0 is installed but blocked (no account) — see above. Not captured, and not worth
 capturing until it is.
 
 ## Real caveats found while capturing (2026-09-10)
 
-- **`codex exec` loads the owner's global `CODEX_HOME` config**, including MCP servers configured
-  for unrelated projects. The capture emitted `AuthRequired` stderr noise for Supabase and GitHub
-  Copilot MCP servers that have nothing to do with this app. **The daemon must run `codex` with an
-  isolated or minimal config** — a scoped `CODEX_HOME`, or the equivalent of `claude`'s `--bare` —
-  or every run leaks unrelated auth errors and possibly unrelated tool calls into a chat turn.
+- **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`
+  fixes it.** An unscoped run emitted `AuthRequired` stderr noise for Supabase and GitHub Copilot
+  MCP servers unrelated to this app. `codex exec --json --ignore-user-config` was re-captured
+  2026-09-10 and produced **zero** MCP noise while still authenticating (the flag skips
+  `config.toml` but keeps using `CODEX_HOME` for auth). **The daemon's `codex` adapter passes
+  `--ignore-user-config`** — codex's equivalent of `claude --bare`. Not optional, for the same
+  scope-leak reason as G-3.
 - **`claude -p` inherits the entire personal Claude Code environment, and the tools actually work.**
   Two captures confirm this, and the second is worse than the first: from a real terminal, the
   `system.init` payload showed `clockify`, `square`, and `shadcn` MCP servers all
@@ -153,6 +172,8 @@ capturing until it is.
   Switching provider means replaying history into a fresh session — so a design implying one
   continuous thread with the provider is a lie the backend cannot make true. The *conversation* is
   continuous; the provider session is not.
+- **A chat surface whose only sign of progress is text appearing.** `codex` emits nothing until the
+  whole answer lands. Progress must have its own affordance.
 - **Instant response to a keystroke that requires the machine.** The round trip is too long.
 - **Anything requiring the agent to control the desktop** — mouse, keyboard, screen pixels. Not
   built, and deliberately not planned. See [`Later.md`](Later.md) L-1.
@@ -160,7 +181,9 @@ capturing until it is.
 
 ## Safe to design against
 
-- **Streaming assistant text, token by token.** This is the core interaction and it works.
+- **Streaming assistant text — but only on some providers.** Verified incremental on `agy`,
+  verified *not* incremental on `codex`, unverified on `claude`. Design the streaming case, and
+  design a working-but-silent case that doesn't look frozen. See the streaming section above.
 - **A persistent conversation that outlives any single provider session**, because our database is
   the transcript of record.
 - **Switching provider mid-conversation**, with the new provider replayed the history it hasn't
