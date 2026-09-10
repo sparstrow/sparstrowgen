@@ -1,0 +1,153 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Base surface + text tokens. Every colour in the app resolves through one of
+   these — a literal hue in a component breaks every theme but the one it was
+   written against. */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  /* Provider identity. Derived from each product's own mark rather than picked
+     from a palette, so the association is learnable rather than arbitrary. */
+  --provider-claude: oklch(0.7 0.128 45);
+  --provider-codex: oklch(0.82 0.012 250);
+  --provider-agy: oklch(0.7 0.115 255);
+  --provider-gemini: oklch(0.62 0.008 250);
+
+  /* Capacity + availability. "unknown" is deliberately not a shade of the ok/low
+     ramp: a provider that reports nothing must not read as a provider doing fine.
+     See docs/Capabilities.md — only claude emits a rate-limit signal. */
+  --capacity-ok: oklch(0.72 0.15 155);
+  --capacity-low: oklch(0.76 0.15 75);
+  --capacity-out: oklch(0.63 0.2 25);
+  --capacity-unknown: oklch(0.55 0.01 250);
+
+  /* Surface used for the owner's own messages, distinct from agent output. */
+  --mine: oklch(0.93 0.02 255);
+  --mine-foreground: oklch(0.2 0.02 255);
+}
+
+.dark {
+  --background: oklch(0.155 0.006 260);
+  --foreground: oklch(0.95 0.003 260);
+  --card: oklch(0.195 0.007 260);
+  --card-foreground: oklch(0.95 0.003 260);
+  --popover: oklch(0.215 0.008 260);
+  --popover-foreground: oklch(0.95 0.003 260);
+  --primary: oklch(0.92 0.003 260);
+  --primary-foreground: oklch(0.205 0.007 260);
+  --secondary: oklch(0.25 0.008 260);
+  --secondary-foreground: oklch(0.95 0.003 260);
+  --muted: oklch(0.25 0.008 260);
+  --muted-foreground: oklch(0.68 0.01 260);
+  --accent: oklch(0.3 0.01 260);
+  --accent-foreground: oklch(0.95 0.003 260);
+  --destructive: oklch(0.68 0.19 22);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.55 0.01 260);
+
+  --provider-claude: oklch(0.74 0.13 45);
+  --provider-codex: oklch(0.86 0.01 250);
+  --provider-agy: oklch(0.74 0.12 255);
+  --provider-gemini: oklch(0.58 0.008 250);
+
+  --capacity-ok: oklch(0.76 0.16 155);
+  --capacity-low: oklch(0.8 0.15 75);
+  --capacity-out: oklch(0.68 0.2 25);
+  --capacity-unknown: oklch(0.48 0.01 250);
+
+  --mine: oklch(0.3 0.028 258);
+  --mine-foreground: oklch(0.96 0.003 260);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-provider-claude: var(--provider-claude);
+  --color-provider-codex: var(--provider-codex);
+  --color-provider-agy: var(--provider-agy);
+  --color-provider-gemini: var(--provider-gemini);
+
+  --color-capacity-ok: var(--capacity-ok);
+  --color-capacity-low: var(--capacity-low);
+  --color-capacity-out: var(--capacity-out);
+  --color-capacity-unknown: var(--capacity-unknown);
+
+  --color-mine: var(--mine);
+  --color-mine-foreground: var(--mine-foreground);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* The working indicator. Deliberately animates only while a turn is in flight
+   and resolves when it lands — codex sends no incremental text at all, so
+   "something is happening" cannot be carried by text appearing. */
+@keyframes working-dot {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
+.working-dot {
+  animation: working-dot 1.2s ease-in-out infinite;
+}
+.working-dot:nth-child(2) { animation-delay: 0.15s; }
+.working-dot:nth-child(3) { animation-delay: 0.3s; }

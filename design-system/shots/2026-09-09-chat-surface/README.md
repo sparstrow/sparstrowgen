@@ -9,10 +9,10 @@ all four so the only variable is the idea.
 
 | | Direction | Optimised for | Outcome |
 |---|---|---|---|
-| A | **Sidebar messenger** — conversation list left, thread right, per-message agent badges, headroom strip above the thread | Familiarity. Zero learning cost; looks like every chat app he already uses | _pending_ |
-| B | **Terminal log** — one full-width monospace transcript, no bubbles, no avatars; agents distinguished only by a coloured left rule, and the provider switch is a divider inside the record | Density and continuity. The switch becomes part of the transcript rather than a UI action | _pending_ |
-| C | **Provider cockpit** — three provider cards with capacity gauges dominate the top, conversation demoted to a lower panel | Never being surprised by a limit. Treats "which agent, how much left" as the primary job | _pending_ |
-| D | **Document with gutter** — one wide reading column, agent attribution in a margin gutter, floating toolbar | Reading a long working session back as a coherent artifact rather than a chat log | _pending_ |
+| A | **Sidebar messenger** — conversation list left, thread right, per-message agent badges, headroom strip above the thread | Familiarity. Zero learning cost; looks like every chat app he already uses | **chosen** — "looks like claude code desktop which I prefer" |
+| B | **Terminal log** — one full-width monospace transcript, no bubbles, no avatars; agents distinguished only by a coloured left rule, and the provider switch is a divider inside the record | Density and continuity. The switch becomes part of the transcript rather than a UI action | rejected as a shell, **switch divider adopted into A** — "that is brilliant too" |
+| C | **Provider cockpit** — three provider cards with capacity gauges dominate the top, conversation demoted to a lower panel | Never being surprised by a limit. Treats "which agent, how much left" as the primary job | rejected — headroom belongs in a strip, not a dashboard |
+| D | **Document with gutter** — one wide reading column, agent attribution in a margin gutter, floating toolbar | Reading a long working session back as a coherent artifact rather than a chat log | rejected as a shell, **centred agent column adopted into A** |
 
 ## What the feasibility gate required of all four
 
@@ -56,5 +56,28 @@ Recorded so the next round's prompts start better:
 
 ## What this told us about taste
 
-_To be filled in when he reacts — his stated reasons, not the winner. A preference stated twice
-gets promoted into `DESIGN.md`._
+Durable preferences, in his words, not "he liked A":
+
+- **The familiar shell wins over the clever one.** A was chosen because it "looks like claude code
+  desktop which I prefer". Familiarity is a feature here, not a failure of imagination — he is
+  replacing three apps he already knows, and a novel shell would be a fourth thing to learn.
+- **A good idea can be extracted from a rejected direction.** He took B's switch divider and D's
+  centred reading column into A's shell. Present directions as separable ideas rather than
+  packages; expect the answer to be a merge.
+- **Interface asymmetry carries meaning.** His messages right, agent output centred: "my replies
+  should stay on right but the agent's reply should be centered." The agent's output is the thing
+  being *read*, his own is just the prompt that caused it — so they should not look like two sides
+  of a conversation of equals.
+- **He thinks about what an interaction costs, not only what it does.** The single most substantive
+  note in this round was not visual: replay must happen on the first prompt after switching, never
+  at the moment of switching, "because switching models casually and using tokens or switching will
+  burn lot of tokens." Expect him to catch cost-of-interaction problems; design for them up front.
+- **He wants the real stack in front of him, not an approximation.** He stopped the build to ask
+  whether shadcn was actually being used. A hand-rolled prototype that would later be rebuilt in
+  the real components is waste he will notice and object to.
+
+## What got built from this
+
+Direction A, in the real app rather than as a standalone prototype: `apps/web`, Next.js + shadcn on
+mock data. Merged in from the rejected directions: B's replay divider (made lazy) and D's centred
+agent column. See [`docs/Decisions.md`](../../../docs/Decisions.md) D-013.

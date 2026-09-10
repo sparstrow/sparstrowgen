@@ -10,17 +10,19 @@ project:
     Conversations persist in our database, so a conversation can move to a
     different provider when one hits its usage limit.
 
-# Nothing is scaffolded yet. Every entry below is a locked decision, not an
-# observation of code that exists. Remove this block once apps/web and
-# server/ actually build.
-status: pre-scaffold
+# apps/web builds, runs and has been verified in a browser — but on mock data
+# only. Everything under server/, daemon and protocol below is still a locked
+# decision rather than an observation of code that exists.
+status: web-scaffolded  # apps/web builds and runs on mock data; server/ and daemon not started
 
 stack:
   frontend:
-    framework: "Next.js (App Router)"
+    framework: "Next.js 16.3.4 (App Router, Turbopack)"
+    react: "19.2.8"
     styling: "Tailwind CSS v4"
-    ui: "shadcn/ui via packages/ui"
-    state: "TanStack Query for server state, Zustand for client state"
+    ui: "shadcn 4.21 (Base UI, style base-nova, neutral) — currently in apps/web/components/ui"
+    ui_note: "NOT yet extracted to packages/ui — one consumer, so extraction would be speculative (AGENTS.md rule 4). Mechanical move when apps/desktop lands; see docs/Later.md L-7"
+    state: "TanStack Query for server state, Zustand for client state — NEITHER INSTALLED YET, the chat surface uses local useState on mock data"
   server:
     language: "Go"
     module: "github.com/sparstrow/sparstrowgen/server"
@@ -42,8 +44,8 @@ stack:
     candidates: ["Ollama", "text-embeddings-inference"]
   infra:
     host: "Coolify on a Hostinger VPS"
-    package_manager: "pnpm"
-    monorepo: "Turborepo"
+    package_manager: "pnpm 11.6 workspace"
+    monorepo: "pnpm workspaces — Turborepo not added yet, one buildable package does not need an orchestrator"
   desktop:
     shell: "Electron"
     status: "not started"
@@ -101,10 +103,10 @@ agent_clis:
 
 commands:
   install: "pnpm install"
-  dev: "turbo run dev"
-  build: "turbo run build"
-  test: "turbo run test"
-  typecheck: "turbo run typecheck"
+  dev: "pnpm dev            # next dev on :3000"
+  build: "pnpm build"
+  lint: "pnpm lint"
+  typecheck: "pnpm typecheck"
   go_test: "cd server && go test ./..."
   proto: "buf generate"
 

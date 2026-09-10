@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Native binding for eslint-import-resolver, pulled in by eslint-config-next.
+# Approved explicitly so `pnpm dev` does not stop on the ignored-builds gate.
+allowBuilds:
+  unrs-resolver: true

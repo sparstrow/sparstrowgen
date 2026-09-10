@@ -103,3 +103,14 @@ adapter against assumed behaviour now would mean building against a guess with n
 
 **Unblocks when:** the owner signs into a Gemini account. At that point, capture its real
 `--help` and a real stream the same way `codex` and `agy` were done, before writing the adapter.
+
+## L-7 — Extract shadcn primitives to `packages/ui`
+
+**Status:** parked **Raised:** 2026-09-10
+
+`apps/web/components/ui` holds the shadcn primitives, not `packages/ui` as the locked layout says.
+With one consumer, a package boundary would be a speculative abstraction (AGENTS.md rule 4) and
+would add workspace wiring before anything works. The move is mechanical when it's earned.
+
+**Unblocks when:** a second consumer exists — `apps/desktop` (L-2) or `packages/views` gaining a
+view that the web app and something else both render.

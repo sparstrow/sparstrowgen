@@ -2,3 +2,10 @@ Reference/
 
 # design-shots generation logs — transient
 design-system/shots/**/.[A-Z].log
+
+# Next.js / node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts

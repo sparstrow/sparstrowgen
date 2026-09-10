@@ -186,3 +186,37 @@ Left its external artifact tree, JSON handshake files, polling loops, and a tast
 weekly-decaying confidence scores — that is the planning machinery that killed the first attempt.
 Taste is recorded instead as one `README.md` per shot round, holding the owner's stated reasons; a
 preference seen twice gets promoted into `DESIGN.md`.
+
+## D-013 — The prototype is built in the real app, not as a standalone artifact
+
+**2026-09-10.** Rejected: a self-contained `.dc.html` prototype in `design-system/designs/`, which
+is what the `interactive-prototype` skill prescribes and what was half-built before the owner
+stopped it.
+
+He asked, mid-build, whether shadcn was actually being used. It was not — the prototype was plain
+HTML with hand-written CSS, because that is what opens from disk with no build step. That
+portability is the skill's whole argument for the format, and here it buys nothing: the real app is
+Next.js + shadcn and must exist regardless, so a hand-rolled prototype is not a cheaper rehearsal,
+it is the same screen built twice in two different technologies. The second build would also
+silently re-decide spacing, component behaviour and states, because none of it transfers.
+
+So the Shots → Design → Wire sequence collapses its last two steps **when the app does not exist
+yet**: the chosen direction is built directly in `apps/web` on `*.mock.ts` data. The ordering
+principle is untouched — cheap steps still gate expensive ones, and images still cost two minutes
+against a day. What changed is the recognition that once a real app exists, wiring into it *is* the
+cheapest way to see a design, because it is the only build that survives.
+
+This does not retire `interactive-prototype`. It stays right for a surface whose route does not
+belong in the app yet, or for comparing two layouts side by side without committing either.
+
+**What the design's own contract now demands of the backend**, falling out of the built surface:
+
+- A conversation is provider-neutral and carries `seenBy` per provider, so a switch back replays
+  only the gap. This is the transcript-of-record decision (D-004) becoming a concrete field.
+- **Replay is lazy.** Selecting a provider is free and changes nothing server-side; the catch-up is
+  performed on the first message sent afterwards, and the cost is written into the transcript at
+  that point. The owner caught this — switching casually must not burn tokens — and it is a
+  data-model constraint, not a UI nicety: a `pending_switch` is client state and never persists.
+- Progress must be reportable independently of output text, because `codex` emits no deltas at all.
+- Usage is asymmetric by provider and the UI must not imply otherwise: USD for `claude`, tokens
+  only for `codex` and `agy`, and "no limit data" is a distinct state from "plenty left".

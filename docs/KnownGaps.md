@@ -115,3 +115,28 @@ is what G-1 established.
   codex, so nothing designed against this assumption gets thrown away.
 - **Clears when:** one capture of `claude -p --output-format stream-json --include-partial-messages
   --verbose` from a real terminal, checked for `stream_event` / `content_block_delta` entries.
+
+## G-6 — The chat surface runs entirely on mock data
+
+**Kind:** unproved
+**Raised:** 2026-09-10, wiring direction A into `apps/web`.
+
+Every behaviour on the chat surface is real UI driven by `apps/web/lib/chat.mock.ts`. Verified in a
+browser: conversation CRUD, provider and model switching, the lazy replay marker, streaming vs
+non-streaming turns, and all four states. **None of it has touched a server, a daemon, or a CLI.**
+
+Two specific things are simulated rather than observed, and both will differ:
+
+1. **Replay cost is estimated at a flat 1300 tokens per message** (`TOKENS_PER_MESSAGE` in
+   `chat-surface.tsx`). The real figure depends on message length and the provider's tokeniser.
+   The number shown to the owner before he commits to a switch must be trustworthy, because the
+   whole point of quoting it is that he decides on it.
+2. **Streaming cadence is faked** — a word-group timer, not real deltas. `agy`'s real chunks are
+   ~25-35 chars; `claude`'s are unverified (G-5); `codex` sends nothing until the end, which is the
+   one case modelled from real observation.
+
+- **If wrong:** the surface looks finished and is not. Anyone reading the route could mistake mock
+  behaviour for working behaviour — in particular the replay estimate, which is currently a
+  plausible-looking number with no backing.
+- **Clears when:** the daemon and server exist, `chat.mock.ts` is deleted, and a grep for `.mock`
+  in `apps/web/app` returns nothing.
