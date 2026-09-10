@@ -63,6 +63,13 @@ Not yet — a single-task branch targeting `main` is the right size for now.
 
 ## 3. Engineering rules
 
+**Rule zero: process serves shipping.** A previous attempt at this app was abandoned without
+shipping, because the budget went into planning documents and conversation instead of code. If a
+document isn't going to change what gets built, don't write it. If a step exists because coding
+agents used to need hand-holding, skip it. Prefer one good plan and working software over a
+complete paper trail — and when a rule below and shipping genuinely conflict, say so out loud
+rather than quietly following the rule.
+
 1. **Never guess code logic or file paths.** Inspect the authoritative file before writing code.
 2. **Read the full error before diagnosing.** Un-truncated stack traces, actual log output. Base
    diagnoses on evidence, not on what the symptom resembles.
@@ -101,10 +108,14 @@ Not yet — a single-task branch targeting `main` is the right size for now.
     Never tick a box on weaker evidence than it asked for and stay silent — a ticked box that
     quietly means "looked right to me" devalues every other ticked box in the repo.
 
-### The design skill chain
+### The design skill chain — runs once, not per feature
 
-`design-brief` → `design-system` → `interactive-prototype` → `ai-design-slop` → `frontend-verify`
-→ `slop-audit`.
+`design-brief` → `design-system` → `interactive-prototype`, with `ai-design-slop` loaded whenever
+UI is being written and `frontend-verify` closing every UI change.
+
+**The first three run once, when real UI work starts** — not before, and not again per feature.
+They establish the doctrine and the system; after that, building a screen means reading
+`DESIGN.md`, loading `ai-design-slop`, and writing the code.
 
 - `design-brief` writes the doctrine by interviewing the owner. Nothing downstream runs before it
   exists, and everything downstream is accountable to it.
@@ -112,8 +123,6 @@ Not yet — a single-task branch targeting `main` is the right size for now.
   duplicated doctrine keeps enforcing itself after the original changes.
 - `ai-design-slop` is a catalogue of tells that would be slop in *any* app — portable and
   deliberately free of this project's tokens. Anything project-specific belongs to the doctrine.
-- `slop-audit` is **report-only**, and an author auditing their own surface is not a second
-  opinion. Build with `ai-design-slop` loaded, then audit separately.
 - **Record why a design changed, not just what changed.** The reason usually generalises into a
   rule that stops the same debate recurring on every later page.
 
@@ -160,12 +169,16 @@ from each other are not comparable and are not ready either.
 ## 6. Project memory
 
 All non-code project memory lives in `docs/`. **Read [`docs/README.md`](docs/README.md) first** —
-it holds the lifecycle (idea → spec → owner review → plan → tasks → code), the register files, and
-the table mapping "what situation am I in" to "which file does this go in".
+it holds the lifecycle (idea → spec → owner review → plan → code), the register files, and the
+table mapping "what situation am I in" to "which file does this go in".
 
-Every file type has a skeleton in [`docs/templates/`](docs/templates/). Copy the matching one
-rather than inventing a shape; they encode the sections that make "done" mean the same thing every
-time it is written.
+**Three stages, not five. The plan is the last document before code** — there is no task folder
+and no queue. A plan carries a checklist of concrete steps, the files each touches, and how each
+is verified, so an agent can build straight from it.
+
+Specs, plans, and runbooks have skeletons in [`docs/templates/`](docs/templates/). Copy the
+matching one rather than inventing a shape. The registers state their own format at the top and
+need no template.
 
 When the owner says "park it", "later", or "just an idea", write it to the right file in the same
 turn rather than relying on the conversation being re-read.

@@ -8,7 +8,7 @@ and tier model are adaptations rather than copies.
 ## impeccable
 
 Source of the majority of the container, palette, type, furniture, motion, and
-substitution rules, and of three structural ideas this skill and `slop-audit`
+substitution rules, and of three structural ideas this skill
 adopt: the rule-registry schema, the two-tier surfacing split (adapted here into
 confidence tiers, because this family never blocks a build), and the
 narrowest-exception suppression ladder.

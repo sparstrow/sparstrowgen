@@ -3,7 +3,9 @@
 Unscoped. No commitment, no decision, possibly never built. Distinct from
 [`Deferred.md`](Deferred.md): those were agreed and parked, these were merely noticed.
 
-Entries are written with the `elaborating-ideas` skill, not freehand. Ids are never reused.
+A line or two is fine — an idea earns length only from evidence, never from speculation. Ids are
+never reused.
+
 If an idea graduates it becomes a spec in [`specs/`](specs/) — owner review first — and the entry
 is deleted.
 

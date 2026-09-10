@@ -1,121 +1,82 @@
 # docs/
 
-Working memory for the project. Everything that isn't code but needs to survive
-a session lives here.
+Working memory for the project. Everything that isn't code but needs to survive a session.
 
 ```
 docs/
-├── templates/                skeletons for every file type below
-│   └── README.md             ← start here when creating any new document
-├── specs/                    what the owner wants, in the owner's terms —
-│   └── README.md             user stories, written BEFORE any plan
-├── plans/                    approved plans — the technical "how"
-├── tasks/                    executable specs — the "how"
-│   ├── MasterTaskQueue.md    global run order + concurrency tags (active bands only)
-│   ├── CompletedMasterQueue.md  fully-done bands, archived out to keep the above short
-│   └── <phase>/              phase spec + individual tasks
-├── runbooks/                 manual steps only a human can do (external
-│   ├── README.md             ← start here: the owner's action-item checklist
-│   └── <topic>.md            dashboards, OAuth apps, anything an agent
-│                             shouldn't act on your behalf for). Not a
-│                             lifecycle stage — these don't graduate into
-│                             code, they just sit here as reference.
-├── research/                  findings from outside this repo — prior art,
-│                             comparable systems, library behaviour. Reference,
-│                             not a lifecycle stage: nothing graduates out of
-│                             here, but entries feed specs and ideas. Say how
-│                             strong the evidence is — read source vs. summary.
-├── feedback/                  raw owner/user reaction, not yet triaged
-│   └── README.md             ← format, workflow, index
-├── bug/                       owner-reported or agent-found wrong behavior
-│   └── README.md             ← format, workflow, index
-├── security/                  vulnerabilities, trust-boundary violations
-│   └── README.md             ← stricter format, index
-├── OpenQuestions.md          decisions waiting on the owner
-├── Deferred.md               agreed to build, explicitly parked
-├── KnownGaps.md              built, but not verified — or verified to be limited
-└── Ideas.md                  unscoped — might never be built
+├── templates/          skeletons — spec, plan, runbook
+├── specs/              what the owner wants, in the owner's terms. No technology.
+├── plans/              how it gets built. The LAST document before code.
+├── runbooks/           steps only the owner can do — dashboards, DNS, secrets
+├── OpenQuestions.md    decisions waiting on the owner
+├── Deferred.md         agreed, explicitly parked, with a trigger to unpark
+├── KnownGaps.md        built, but not proved
+├── Bugs.md             wrong behaviour in the running app
+└── Ideas.md            unscoped, may never be built
 ```
 
 ## Lifecycle
 
 ```
-idea ──────────────► Ideas.md
-  │                  NOT a one-line stub. What is true in the code today,
-  │                  the reframe, an arguable shape, the decisions it needs
-  │                  — answered nowhere. Skill: `elaborating-ideas`
+idea ─────► Ideas.md          a line or two. No procedure, no ceremony.
+  │
   │ (owner picks it up)
   ▼
-spec ──────────────► docs/specs/<date>-<slug>.md
-  │                  user stories, acceptance scenarios, what the interface
-  │                  should feel like. NO technology.
+spec ─────► specs/<date>-<slug>.md
+  │         User stories, acceptance scenarios, what the interface should
+  │         feel like. NO technology — no tables, endpoints, or frameworks.
+  │
   │ (owner reviews — the cheapest point to catch a wrong direction)
   ▼
-plan ──────────────► docs/plans/<date>-<slug>.md
-  │                  the technical "how". Splits the spec into foundational
-  │                  work and per-story work. Links the spec, never restates it.
-  │                  open decisions go to OpenQuestions.md until answered
+plan ─────► plans/<date>-<slug>.md
+  │         The technical how, detailed enough to build straight from.
+  │
   │ (owner approves)
   ▼
-task ──────────────► docs/tasks/<phase>/T-<id>-<slug>.md
-  │                  MUST contain zero open questions
-  │                  each carries a Serves row: a user story, or the story
-  │                  phase it unblocks
-  ▼
-code ──────────────► anything parked mid-flight goes to Deferred.md
-                     anything shipped-but-unproved goes to KnownGaps.md
+code
 ```
 
-**Internal work skips the spec.** Anything that only changes how the repo is
-built, checked, documented, or governed goes straight to a plan whose **Spec**
-row reads `n/a (internal)`. Anything the owner can see, use, or reach starts
-with a spec. When it's genuinely unclear, ask.
+**Three stages, not five.** There is no task folder and no queue. The plan is the executable
+artifact: a checklist of concrete steps, the files each touches, and how each is verified. An
+earlier attempt at this project decomposed every plan into task documents and spent its budget
+writing them instead of shipping. That layer existed because coding agents couldn't hold a plan and
+exercise judgment at once — not the constraint any more.
+
+**Internal work skips the spec.** Anything that only changes how the repo is built, checked, or
+documented goes straight to a plan whose Spec row reads `n/a (internal)`. Anything the owner can
+see, use, or reach starts with a spec.
 
 ## The rule that matters
 
-**A task document must be executable without asking the owner anything.** Every
-decision it needs is either already made in its plan, or made and recorded inside
-the task itself.
+**A plan must be buildable without asking the owner anything.** Every decision it needs is made in
+it. That is the whole reason the spec comes first and gets reviewed: uncertainty is resolved
+there, so the plan can be certain.
 
-This is the whole point of splitting plans from tasks: plans are where
-uncertainty is allowed, tasks are where it isn't.
+### One blocked piece doesn't stop the work
 
-### One blocked piece doesn't stop the task
-
-If converting a plan into tasks surfaces a genuine question, it goes to
-`OpenQuestions.md` — and **only the checklist item that depends on it waits**:
+If writing a plan surfaces a genuine question, it goes to `OpenQuestions.md` and **only the
+checklist item that depends on it waits**:
 
 ```markdown
-- [x] Batch writes to Postgres
-- [~] Auto-commit dirty tree before yielding   ← blocked → OQ-1
-- [x] Replay buffer oldest-seq first
+- [x] Stream daemon events into the message store
+- [~] Auto-title the conversation from its first message   ← blocked → OQ-1
+- [x] Replay buffer, oldest sequence first
 ```
 
-Everything else in that task still gets built and ticked off. The task is
-reported as **done except OQ-1** — a real, closeable state, not a stalled one.
-One missing piece must not stop the plate being served.
-
-When the question is answered: unblock the item, finish it, and delete the entry
-from `OpenQuestions.md`.
+Everything else still gets built. The work is **done except OQ-1** — a real, closeable state, not
+a stalled one. When the question is answered: unblock the item, finish it, delete the entry.
 
 ### Shipping without proof is allowed. Shipping without *saying so* is not
 
-Verification sometimes cannot be completed — a platform won't deliver the signal,
-the surface that exercises the code doesn't exist yet, the harness can't reach it.
-That is a normal outcome, and it is not a reason to hold a change back.
+Verification sometimes can't be completed — no deployment yet, the platform won't emit the signal,
+the surface doesn't exist. That's normal, and not a reason to hold a change back.
 
-It **is** a reason to write it down. Whenever a checklist item is ticked on
-weaker evidence than it asked for:
+It **is** a reason to write it down. Whenever something is ticked on weaker evidence than it asked
+for: say what you actually ran, and open a [`KnownGaps.md`](KnownGaps.md) entry in the same change.
 
-1. Say so in the task's Result section, naming what was actually run.
-2. Open an entry in [`KnownGaps.md`](KnownGaps.md) **in the same change**.
-3. Name the phase or task that should close it, if one is obvious.
-
-The rule this protects: *"done" must mean the same thing every time it is
-written.* A ticked box that quietly means "looked right to me" devalues every
-other ticked box in the repo, and the next agent has no way to tell which is
-which. A caveat that lives only in a chat message does not exist — chat is not
-read by the agent who picks this up in three weeks.
+A ticked box that quietly means "looked right to me" devalues every other ticked box in the repo,
+and the next session has no way to tell which is which. A caveat that lives only in a chat message
+does not exist.
 
 ## Which file does this go in?
 
@@ -126,39 +87,23 @@ read by the agent who picks this up in three weeks.
 | "It's built, but I couldn't prove it works" | `KnownGaps.md` |
 | "It works, but only within these limits" | `KnownGaps.md` |
 | "Might be nice one day" | `Ideas.md` |
+| "This is behaving wrong" | `Bugs.md` |
 | "Here's how I want to use it, and what it should feel like" | `specs/` |
-| "Here's how we'll build what the spec asks for" | `plans/` |
-| "Here's exactly how, step by step" | `tasks/` |
-| "Only a human can do this part (external dashboard, OAuth app, secrets)" | `runbooks/` |
-| "This is behaving wrong" — owner-reported or agent-found | `bug/` |
-| "This is a vulnerability / trust-boundary issue" — owner-reported or agent-found | `security/` |
-| "Here's some raw feedback — not sure yet if it's a bug, an idea, or a real feature" | `feedback/` |
+| "Here's exactly how we build it" | `plans/` |
+| "Only a human can do this part — dashboard, DNS, secrets" | `runbooks/` |
 
-Once you know the destination, [`templates/`](templates/README.md) has the
-skeleton for it — plans, phase specs, tasks, verification tasks, bugs,
-security reports, runbooks, and entries for all four registers. Copy, fill in,
-delete the guidance comments.
+Each register states its own format at the top. Only specs, plans, and runbooks have templates,
+because only those are long enough to need one.
 
-## Open questions must carry options
+## Open questions carry options
 
-Per `AGENTS.md` §4, every entry in `OpenQuestions.md` needs full context, a
-plain user-side scenario, and concrete options. Each option carries:
+Per [`AGENTS.md` §4](../AGENTS.md), an entry in `OpenQuestions.md` needs context, a plain
+user-side scenario, and concrete options — each with its own context, **the question's scenario
+replayed under that option**, pros and cons, a score out of 10, blast radius if chosen wrong,
+caveats, and a recommendation.
 
-- Its own context — what this option *is*, concretely
-- Its own user scenario — the question's scenario replayed under this option
-- Pros and cons
-- Score out of 10
-- Blast radius if chosen wrong
-- Caveats
-- The agent's recommendation
+A question with no options is not ready to be asked. Options describing *different* situations
+from one another cannot be compared, and aren't ready either.
 
-A question with no options is not ready to be asked. Options that describe
-*different* situations from each other are not ready either — replaying one
-shared moment is what lets the owner compare them.
-
-## Answered questions
-
-When an open question gets resolved — including implicitly, because a later
-decision settles it — the answer is recorded in the plan or task that consumed
-it and **the entry is deleted from `OpenQuestions.md`**. That file only ever
-holds what is still open, so its length is a real signal.
+Most decisions should never reach this file. The owner's standing preference is that agents
+recommend and he vetoes — reserve it for choices that are genuinely his.

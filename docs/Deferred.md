@@ -62,29 +62,53 @@ work.
 
 ---
 
-## D-4 — Skills deliberately not imported from the previous attempt
+## D-4 — Process deliberately not carried over from the previous attempt
 
-**Parked:** 2026-09-09, while importing the process system from the earlier
-sparstrowgen attempt.
+**Parked:** 2026-09-09, in two rounds — first while importing the process system from the earlier
+sparstrowgen attempt, then again when the owner pointed out that *that process is why the previous
+attempt never shipped*: the budget went into planning documents and conversation instead of code.
 
-Ten skills and two agents were imported and scrubbed. These were left behind
-because their *mechanics* described the old codebase, not because their ideas
-were wrong. Each needs writing fresh against this repo, at the moment the
-thing it describes actually exists — writing them earlier would mean
-documenting an app that isn't built, which `AGENTS.md` §3 forbids.
+Two different reasons things were dropped, and the distinction matters when deciding whether to
+bring one back.
+
+### Obsoleted — capable coding agents removed the need
+
+These existed because agents could not hold a plan in context and exercise judgment at the same
+time. They should not come back in their old form.
+
+| Dropped | What it did | Replaced by |
+| --- | --- | --- |
+| `decomposing-plans` skill | Split a plan into per-task files, a phase README, and a queue with concurrency tags | The plan itself carries the checklist, files, and verification |
+| `docs/tasks/`, `MasterTaskQueue.md` | Task documents and global run order | Nothing. The plan is the last document before code |
+| `task.md`, `verification-task.md`, `phase-spec.md` templates | Skeletons for the above | Nothing |
+| `elaborating-ideas` skill | A procedure for writing an `Ideas.md` entry, with evidence gathering | A line or two, written directly |
+| `slop-audit` skill + `slop-killer` agent | A separate report-only pass over a finished surface | Building with `ai-design-slop` loaded, then `frontend-verify` |
+| `frontend-builder` agent | A subagent for building UI | The main session builds it |
+| `register-entry.md` template | 219 lines of skeleton for four register formats | Each register states its own format at the top |
+| `docs/bug/`, `docs/security/`, `docs/feedback/`, `docs/research/` | A directory, README, and template per category | One `Bugs.md`; feedback and research arrive in chat and become a spec, an idea, or a bug |
+
+### Not obsolete — just wrong for *this* codebase, or too early
+
+These need writing fresh, at the moment the thing they describe actually exists. Writing them
+sooner means documenting an app that isn't built.
 
 | Not imported | Why | Write it when |
 | --- | --- | --- |
-| `frontend-wiring` | Described a router mock, Zod contracts, and an in-app docs surface none of which exist here | `apps/web` is scaffolded and has real wiring to describe |
+| `frontend-wiring` | Described a router mock, Zod contracts, and an in-app docs surface, none of which exist here | `apps/web` is scaffolded and has real wiring to describe |
 | `designing-shared-contracts` | Was TypeScript-to-TypeScript via Zod; ours is Go-to-TypeScript via Protobuf | The first `proto/` message is written |
 | `data-modeling-and-rls` | Built around Supabase row-level security; we are single-user on self-hosted Postgres | The first migration is written, as a sqlc/pgvector skill with no RLS |
 | `release` | Vercel-specific | Deploying to Coolify |
 | `worktree-orchestration` | Assumed an integration-branch tier and several agents in parallel | More than one agent runs on a feature at once |
-| `migrate-radix-to-base` | Migration skill; this repo is greenfield shadcn | Never, most likely |
+| `migrate-radix-to-base` | A migration skill; this repo is greenfield shadcn | Never, most likely |
 | `shadcn` | A global skill and MCP server already cover it | Never |
 | `antigravity-guide`, `agy-customizations` | About using Antigravity as an IDE; we only drive its CLI | Never |
 | `architect`, `scout`, `coordinator` agents | Orchestration roles; the lifecycle skills run fine in the main session for one person | Work is routinely handed to parallel agents |
 
-- **If wrong:** an agent improvises a procedure that used to be written down.
-- **Unpark when:** the "write it when" condition in the row is met. The
-  originals are at `D:\My Setup\.claude\skills\` for reference.
+The design chain (`design-brief` → `design-system` → `interactive-prototype`) was **kept but
+gated**: it runs once, when real UI work starts, not per feature. A skill on disk costs nothing;
+only invoking it spends tokens.
+
+- **If wrong:** an agent improvises a procedure that used to be written down. Acceptable — a
+  capable agent improvising beats a session spent writing documents nobody reads.
+- **Unpark when:** the "write it when" condition in the second table is met. The originals are at
+  `D:\My Setup\.claude\skills\` for reference.

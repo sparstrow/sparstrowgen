@@ -4,8 +4,8 @@ description: >-
   The catalogue of AI design slop — the visual tells that mark an interface as
   machine-generated rather than designed. Names each one with an id, what it
   looks like, why it reads as AI, and the direction out. Load it BEFORE writing
-  UI so the tells are never introduced, and it is what `slop-audit` scans an
-  existing app against. Use whenever a screen "looks AI", "looks like every
+  UI so the tells are never introduced, and again when reviewing a surface that
+  already exists. Use whenever a screen "looks AI", "looks like every
   other app", "feels templated", "looks generic", or whenever a page, component,
   or prototype is about to be built or reviewed. Do NOT use it to decide what
   this product should look like — that is DESIGN.md's job, and this file
@@ -13,18 +13,15 @@ description: >-
 license: Apache-2.0
 metadata:
   family: design
-  companion-skill: slop-audit
-  consumers: frontend-builder, slop-killer
 ---
 
 # AI design slop
 
-A catalogue, not a procedure. It names the tells; `slop-audit` is what scans for
-them, and `DESIGN.md` is what decides the actual design.
+A catalogue, not a procedure. It names the tells; `DESIGN.md` is what decides
+the actual design.
 
 This is the `design` family. Later families (`ai-coding-slop`,
-`ai-database-slop`) use the same schema and the same tiers, so `slop-audit` and
-the `slop-killer` agent work on them unchanged.
+`ai-database-slop`) use the same schema and the same tiers.
 
 ## The rule this file turns on
 
@@ -79,19 +76,20 @@ count.
 
 ## How to use it
 
-**Building (`frontend-builder`).** Read the refuse list once before writing UI.
+**Building.** Read the refuse list once before writing UI.
 Do not narrate the checklist or announce compliance — it is a list of reflexes
 to not have, and a screen that names its own restraint is its own tell.
 
-**Auditing (`slop-killer`).** The `slop-audit` skill drives it. This file
-supplies the rules; that one supplies the passes, triage, and report shape.
+**Reviewing.** Walk a finished surface against the catalogue and report what you
+find: the id, the evidence, and the direction out. Fixing what you find is a
+separate decision — list it first, never silently rewrite.
 
 **A rule the brief actually earns.** These are the category's defaults, not
 bans — one exception, `kicker-above-heading`, is marked as a hard ban and says
 so. When `DESIGN.md`, a pinned brief, or the owner has explicitly chosen
 something on this list, that choice wins and the finding is a false positive.
-Record it the narrow way `slop-audit` describes; never widen a suppression to
-make a fix go away.
+Record the exception against that one rule on that one surface; never widen it
+to make a fix go away.
 
 ## Scope boundaries
 
@@ -99,7 +97,6 @@ make a fix go away.
 - **No design decisions.** What this product looks like is `DESIGN.md`'s, written
   with the owner via `design-brief`. If a screen needs something the doctrine
   lacks, that is a `DESIGN.md` change with sign-off, not a rule added here.
-- **No suppressions written from this file.** `slop-audit` owns that ladder.
 - **Nothing project-specific added here.** A rule naming this repo's tokens,
   components, or palette has leaked from `drift.md` and belongs back in it.
 

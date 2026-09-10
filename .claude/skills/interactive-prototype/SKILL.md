@@ -177,7 +177,7 @@ names, real-shaped codes, realistic quantities and dates.
 
 - **Never write production application code.** This skill stops at the
   prototype and its handoff. Building it for real is the app's own work — in
-  this repo, `frontend-builder`'s.
+  this repo, the build step's.
 - **Never invent tokens.** If the design system has no `--shadow-lg`, the
   prototype does not get one. Needing a token the system lacks is a finding for
   the handoff, not something to paper over.

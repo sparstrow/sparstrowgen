@@ -31,13 +31,12 @@ one line. When it's genuinely unclear, ask.
 | **Trigger** | <who asked for this and why, in one line> |
 | **Depends on** | <plans or phases this needs first, or —> |
 | **Touches** | <the paths this will change> |
-| **Tasks** | <docs/tasks/<phase>/ once decomposed, or "not decomposed yet"> |
 | **Open questions** | <OQ-n, or "none"> |
 
 <!--
 Keep the Status row current. It is the first thing anyone reads, and a plan
 whose phases are all done but whose status still says "In progress" is the
-single most common form of drift in docs/. See docs/tasks/README.md's
+single most common form of drift in docs/. See
 "When a phase's tasks are fully completed" for exactly when to update it.
 -->
 
@@ -121,7 +120,7 @@ X over Y, because Y would have meant Z."
 <!--
 DELETE THIS SECTION for a single-shot plan.
 
-One subsection per phase, each becoming a docs/tasks/<phase>/ folder when
+One subsection per phase. Each carries its own checklist, files, and verification, since
 decomposed. Say what the phase delivers and what it depends on — not how, that
 is the task documents' job.
 
