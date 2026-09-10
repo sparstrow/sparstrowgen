@@ -28,7 +28,7 @@ gets wired into the real app on placeholder data, and only once it's confirmed d
 get built to serve exactly that. There is no plan document.
 
 The guardrail is [`docs/Capabilities.md`](docs/Capabilities.md): never design something the
-backend can't deliver. Full workflow in [`AGENTS.md` §1](AGENTS.md).
+backend can't deliver. Full workflow in [`AGENTS.md` §2](AGENTS.md).
 
 ## Layout
 

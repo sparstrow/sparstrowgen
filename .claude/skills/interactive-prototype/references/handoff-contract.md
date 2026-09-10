@@ -77,7 +77,7 @@ actually produce it. Check each row against
 
 A **no** row is a decision, not a footnote. Resolve it before the design is
 locked: verify it and update `Capabilities.md`, redesign so the surface doesn't
-need it, or cut it to `Deferred.md` with a trigger. A locked design containing
+need it, or cut it to `Later.md` with a trigger. A locked design containing
 an unresolved **no** is exactly the waste this workflow exists to prevent.
 
 Also state, per surface: whether each field streams or arrives whole, what
@@ -112,7 +112,7 @@ way it was rendered and that the choice is not a decision.
 
 Deliberate omissions, so nobody reads absence as oversight.
 
-- Bulk actions — deferred, see `docs/Deferred.md`.
+- Bulk actions — parked, see `docs/Later.md`.
 - Print view — out of scope.
 ```
 

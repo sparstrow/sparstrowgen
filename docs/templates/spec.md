@@ -30,7 +30,7 @@ Skip it entirely for bug fixes, backend-only work, and small specific changes
 | **Created** | <YYYY-MM-DD> |
 | **Trigger** | <what prompted this — the owner's words where possible> |
 | **Design** | <design-system/designs/<...> once locked, or "not designed yet"> |
-| **Open questions** | <OQ-n, or "none"> |
+| **Open questions** | <L-n, or "none"> |
 
 ## What's wrong today
 
@@ -72,8 +72,9 @@ can follow. P3 = nice, may never happen.
 
 <!--
 Given/When/Then. Observable behaviour only — no mention of how it works.
-Cover the unhappy paths too; those are where specs usually go thin, and they
-are what the design's empty and error states get built from.
+Cover the unhappy paths too; those are where specs go thin, and they are what
+the design's empty and error states get built from. These scenarios ARE the
+verification target later — there is no separate success-criteria list.
 -->
 
 - **Given** <situation> **when** <action> **then** <what is true afterwards>.
@@ -96,19 +97,6 @@ error states come from, and it is the part the owner is uniquely able to
 answer.
 -->
 
-## Success criteria
-
-<!--
-How we know it worked, observably. Numbered SC-1, SC-2 so the verification
-step can point at them.
-
-Good: "SC-1 — a conversation continues on a second provider without the owner
-re-explaining anything."
-Bad: "SC-1 — provider switching works."
--->
-
-- **SC-1** — <observable outcome>
-
 ## Out of scope
 
 <!--
@@ -117,21 +105,10 @@ it stops the design proposing it and stops a later reader assuming it was
 forgotten.
 -->
 
-## Assumptions
-
 <!--
-What is being taken as true without checking. Each one is a thing that, if
-wrong, changes the spec.
+Anything you are ASSUMING the backend can deliver goes in docs/Capabilities.md
+and gets verified there — not written down here as a hope.
 
-Anything about what the BACKEND can deliver belongs in docs/Capabilities.md
-instead — that gets verified before designing, rather than assumed here.
--->
-
-## Owner review
-
-<!--
-The gate. Nothing designs against a Draft.
-
-Status goes to Approved with the date once the owner has actually read it and
-said so. Not "no objections" — people don't object to documents they skimmed.
+Nothing designs against a Draft. Status goes to Approved with the date once he
+has actually read it and said so; "no objections" is not approval.
 -->

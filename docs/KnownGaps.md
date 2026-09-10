@@ -11,8 +11,8 @@ take on faith?*
 | `unproved` | We built it, but couldn't fully prove it works — or proved it works only within limits |
 | `caveat` | Something noticed in passing and deliberately left alone: fragile, surprising, half-finished, or true-but-unobvious |
 
-Neither is a bug report. If something is actually behaving **wrong**, it goes in
-[`Bugs.md`](Bugs.md).
+Neither is a bug report. If something is actually behaving **wrong**, it goes in [`Bugs.md`](Bugs.md). If it is a
+question, a parked decision, or an idea, it goes in [`Later.md`](Later.md).
 
 ## When to write one
 

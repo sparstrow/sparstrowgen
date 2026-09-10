@@ -79,14 +79,15 @@ commands:
   go_test: "cd server && go test ./..."
   proto: "buf generate"
 
-# How features get built. See AGENTS.md §1 — the owner approves a spec, then
+# How features get built. See AGENTS.md §2 — the owner approves a spec, then
 # picks from rendered designs. There is no plan document.
 workflow:
   method: design-driven
-  loop: "spec -> feasibility -> rendered options -> owner picks -> wire on mocks -> confirm -> backend -> swap -> verify"
+  loop: "spec -> feasibility -> design (he picks) -> wire on mocks (he confirms) -> backend -> verify"
   feasibility_gate: docs/Capabilities.md
   documents: "a spec the owner approves; no plan document"
   skills: [design-driven-feature, writing-specs]
+  agent_instructions: "AGENTS.md and CLAUDE.md are identical — edit one, copy to the other"
 
 mcp_servers: [context7, shadcn]
 

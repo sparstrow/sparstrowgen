@@ -65,7 +65,7 @@ before building it, not after.
   continuous; the provider session is not.
 - **Instant response to a keystroke that requires the machine.** The round trip is too long.
 - **Anything requiring the agent to control the desktop** — mouse, keyboard, screen pixels. Not
-  built, and deliberately not planned. See [`Ideas.md`](Ideas.md) I-1.
+  built, and deliberately not planned. See [`Later.md`](Later.md) L-1.
 
 ## Safe to design against
 
@@ -89,4 +89,4 @@ When a design asks for something not listed here, there are three legitimate ans
    usually minutes.
 2. **Design around it.** Change the design so it needs only what's deliverable.
 3. **Record it as a gap.** If the design genuinely needs it and it isn't deliverable yet, that goes
-   to [`Deferred.md`](Deferred.md) with a trigger, and the design ships without that piece.
+   to [`Later.md`](Later.md) with a trigger, and the design ships without that piece.

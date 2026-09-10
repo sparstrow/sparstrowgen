@@ -1,88 +1,63 @@
 # docs/
 
-Everything that isn't code but needs to survive a session. There are no plan documents — see
-[`AGENTS.md` §1](../AGENTS.md). A spec says what the owner wants; the design answers what it
-looks like.
+Everything that isn't code but needs to survive a session. Five files and three folders — if you're
+unsure where something goes, it's one of these.
 
 ```
 docs/
-├── specs/             what the owner wants and why, in his words. No technology, no layouts.
 ├── Capabilities.md    what the backend can deliver — READ BEFORE DESIGNING
 ├── Decisions.md       load-bearing choices, and what they beat
+├── KnownGaps.md       built-but-unproved, and caveats noticed in passing
 ├── Bugs.md            wrong behaviour in the running app
-├── KnownGaps.md       built, but not proved
-├── Deferred.md        agreed, explicitly parked, with a trigger to unpark
-├── OpenQuestions.md   decisions waiting on the owner
-├── Ideas.md           unscoped, may never be built
-├── runbooks/          steps only the owner can do — dashboards, DNS, secrets
-└── templates/         skeletons — spec, runbook
+├── Later.md           questions, parked work, and ideas — one file, one format
+├── specs/             what the owner wants and why, in his words
+├── runbooks/          steps only he can do — dashboards, DNS, secrets
+└── templates/         spec, runbook
 ```
+
+There is **no plan document**. See [`AGENTS.md` §2](../AGENTS.md): a spec says what he wants, a
+rendered design answers what it looks like, and that design's handoff contract is the backend's
+brief.
 
 ## Where a feature actually lives
 
-Not here. A feature's record is the design the owner approved and the code that serves it:
+Mostly not here:
 
 ```
-docs/specs/<date>-<slug>.md                         what the owner asked for, approved
+docs/specs/<date>-<slug>.md                         what he asked for, approved
 design-system/designs/<Category>/<name>.dc.html     the locked design
 design-system/designs/<Category>/<name>.handoff.md  what the backend must provide
-proto/                                              the shapes crossing Go ↔ TypeScript
+proto/                                              shapes crossing Go ↔ TypeScript
 server/migrations/                                  the schema it needed
 ```
 
-The handoff contract is what a plan document used to be, except it is derived from something the
-owner already looked at and approved — so it cannot describe a feature nobody asked for.
-
-## The two files that get read most
-
-**[`Capabilities.md`](Capabilities.md)** — what the backend can and cannot produce. Read it before
-designing anything. Designing something undeliverable is the specific waste this project is
-organised to avoid: the screen looks finished, it gets approved, and then it can't be served.
-
-**[`Decisions.md`](Decisions.md)** — why each load-bearing choice beat its alternatives. Appended
-to when a choice would be expensive to reverse; skipped when it's cheap to change later. A few
-lines, never a document.
-
-## Which file does this go in?
+## Which file?
 
 | Situation | File |
 |---|---|
 | "Can the backend actually do this?" | `Capabilities.md` — and if it isn't answered there, answer it there |
-| "We chose X over Y, and here's why" | `Decisions.md` |
+| "We chose X over Y, here's why" | `Decisions.md` |
+| "Built, but I couldn't prove it" / "works only within these limits" | `KnownGaps.md` (`unproved`) |
+| "I noticed something fragile and left it alone" | `KnownGaps.md` (`caveat`) |
 | "This is behaving wrong" | `Bugs.md` |
-| "It's built, but I couldn't prove it works" | `KnownGaps.md` |
-| "It works, but only within these limits" | `KnownGaps.md` |
-| "Let's do that later" | `Deferred.md` |
-| "I'm not answering that right now" | `OpenQuestions.md` |
-| "Might be nice one day" | `Ideas.md` |
-| "Here's what I want and why, and how I'd use it" | `specs/` |
-| "Only a human can do this — dashboard, DNS, secrets" | `runbooks/` |
+| "Later" / "just an idea" / "I'm not answering that now" | `Later.md` |
+| "Here's what I want and how I'd use it" | `specs/` |
+| "Only a human can do this part" | `runbooks/` |
 
-Each register states its own format at the top. Only specs and runbooks have templates, because
-only they are long enough to need one.
+Each file states its own format at the top. Only specs and runbooks have templates, because only
+they're long enough to need one.
+
+## The three rules that make this work
 
 **A spec never describes an interface.** "A sidebar showing recent conversations" is a design
-decision smuggled into prose, and it pre-empts the options the owner is meant to choose between.
-Say what someone needs to do and what is true afterwards; the design answers the rest.
+decision smuggled into prose, and it pre-empts the options he's meant to choose between. Say what
+someone needs to do and what's true afterwards.
 
-## Two rules worth repeating
+**One blocked piece doesn't stop the work.** A real question goes to `Later.md` as a `question` and
+blocks only the thing depending on it. Build the rest and report **done except L-n** — a closeable
+state, not a stalled one.
 
-**One blocked piece doesn't stop the work.** A genuine open question goes to `OpenQuestions.md`
-and blocks only the thing that depends on it. Everything else still gets built, and the work is
-reported **done except OQ-n** — a real, closeable state, not a stalled one.
-
-**Shipping without proof is allowed. Shipping without *saying so* is not.** Verification sometimes
-can't be completed — no deployment yet, the platform won't emit the signal, the surface doesn't
-exist. That's normal and not a reason to hold a change back. It *is* a reason to say what you
-actually ran and open a [`KnownGaps.md`](KnownGaps.md) entry in the same change. A caveat that
-lives only in a chat message does not exist to the next session.
-
-## Open questions carry options
-
-Per [`AGENTS.md` §6](../AGENTS.md): context, a plain user-side scenario, and concrete options —
-each with the scenario replayed under it, pros and cons, a score, blast radius, caveats, and a
-recommendation.
-
-**If it can be rendered, it doesn't belong here** — show the owner the designs instead. This file
-is for decisions with no picture, and most decisions shouldn't reach it at all: the standing
-preference is that agents recommend and the owner vetoes.
+**Shipping without proof is allowed. Shipping without *saying so* is not.** Sometimes a check can't
+be run — no deployment, no signal, the surface doesn't exist. That's normal and not a reason to
+hold a change. It *is* a reason to say what you actually ran and open a `KnownGaps.md` entry in the
+same change. A caveat that lives only in a chat message does not exist to the next session.

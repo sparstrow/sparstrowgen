@@ -29,22 +29,19 @@ Anything visual is decided by looking at it, never by prose.
 ## The loop
 
 ```
- 1  Spec          what the owner wants and why, in his words — he approves it
- 2  Feasibility   what can the backend actually deliver here?
- 3  Options       2–3 genuinely different directions, rendered
- 4  Pick          owner chooses one, or a mix
- 5  Wire it       into the real app, on placeholder data
- 6  Confirm       owner uses it in the app, not a mockup
- 7  Contract      what the backend must provide, derived from the locked design
- 8  Backend       built to that contract, nothing speculative
- 9  Swap          placeholder data out, real data in
-10  Verify        frontend-verify, against the real thing
+Spec         what he wants and why, in his words. He approves it.
+Feasibility  can the backend actually deliver it?
+Design       2–3 genuinely different directions, rendered. He picks.
+Wire         into the real app on mock data. He confirms it there.
+Backend      built to the locked design's contract. Mocks swapped out.
+Verify       frontend-verify, against real data.
 ```
 
-Steps 1–6 are cheap and fast. Step 8 is the expensive one, and it does not
-start until step 6 is done. That ordering is the whole point.
+Everything up to Wire is cheap and fast. **Backend is the expensive phase and
+it does not start until he has confirmed the design in the app.** That ordering
+is the whole point.
 
-## 1 — The spec, when there is something to explain
+## Spec — when there is something to explain
 
 The owner's statement of what he wants and why, as user scenarios. `writing-specs`
 carries the procedure; the short version is **draft it from what he already
@@ -53,7 +50,7 @@ said and hand it back for correction** rather than interviewing him for it.
 Two things a spec must never contain: technology, and interface design. The
 second is the one that gets broken — "a sidebar showing recent conversations"
 is a design decision in prose, and it pre-empts the options he is supposed to
-choose between at step 3.
+choose between in the Design phase.
 
 Nothing designs against a Draft. `Status: Approved <date>` first.
 
@@ -61,7 +58,7 @@ Nothing designs against a Draft. `Status: Approved <date>` first.
 changes. A spec earns its place when he has something to explain, not as a
 formality.
 
-## 2 — Feasibility comes first, always
+## Feasibility — before drawing anything
 
 **Read [`docs/Capabilities.md`](../../../docs/Capabilities.md) before designing
 anything.** It says what the backend can and cannot produce.
@@ -77,10 +74,10 @@ If the design needs something not in `Capabilities.md`, pick one — never
 - **Check it.** Run the CLI, capture the output, add a verified row. Usually
   minutes.
 - **Design around it.** Change the design to need only what's deliverable.
-- **Cut it.** Record it in `Deferred.md` with a trigger and ship the design
+- **Cut it.** Record it in `Later.md` with a trigger and ship the design
   without that piece.
 
-## 3 — Show, don't describe
+## Design — show, don't describe
 
 Two or three directions, **genuinely different** — different layout, different
 information hierarchy, different interaction model. Three variations on one
@@ -100,12 +97,13 @@ Build against `DESIGN.md` and the design system's tokens, with
 own visual language teaches the owner nothing about what the real thing will
 look like.
 
-**Don't run the AGENTS.md §6 options framework on anything you can render.**
+**Don't run the "Presenting a choice" framework (`AGENTS.md` §4) on anything
+you can render.**
 That framework is for decisions with no picture — a protocol choice, a
 tradeoff between two libraries. For design, seeing them *is* the comparison.
 Say what each direction is optimising for in a line, then let them look.
 
-## 4–6 — Lock it, wire it, confirm it
+## Wire — lock it, wire it, confirm it
 
 The owner picks a direction, or asks for pieces of two. Fine — merge and
 re-show rather than arguing for one.
@@ -124,11 +122,11 @@ Placeholder data conventions:
   hides the layout problems real data will cause — long names, empty fields,
   one item, two hundred items.
 
-All four states are present before the owner confirms (`AGENTS.md` §4.9).
+All four states are present before the owner confirms (`AGENTS.md` §4, rule 5).
 Judging a design on its populated state alone is how empty states end up
 designed by accident.
 
-## 7 — The contract falls out of the locked design
+## Backend — the contract falls out of the locked design
 
 The design now says exactly what data it needs. Write that down as the
 prototype's handoff contract — `interactive-prototype` produces one, and its
@@ -140,9 +138,9 @@ must survive a refresh.
 
 This is what a plan document used to be, except it is derived from a design
 the owner has already approved — so it cannot describe a feature nobody asked
-for. Tie it back to the spec's `SC-n` criteria where they apply.
+for. Tie it back to the spec's acceptance scenarios where they apply.
 
-## 8–9 — Backend, then swap
+### Build it, then swap the mocks
 
 Build to the contract. **Nothing speculative** — no field the design doesn't
 show, no endpoint nothing calls. If building reveals the contract was wrong,
@@ -157,7 +155,7 @@ document.
 Then delete the mocks and wire the real data. Grep for `*.mock.ts` to prove
 none are left.
 
-## 10 — Verify
+## Verify
 
 `frontend-verify`, against the real app on real data. A green typecheck is not
 evidence that a feature works.

@@ -73,7 +73,7 @@ noticing until the backend is due.
 - `Status: Draft` until he has actually read it and said yes. "No objections"
   is not approval; people don't object to documents they skimmed.
 - Nothing designs against a Draft.
-- Once approved, the design step takes over — see `AGENTS.md` §1. Fill the
+- Once approved, the design step takes over — see `AGENTS.md` §2. Fill the
   spec's **Design** row when a direction is locked, so the two stay linked.
 
 ## When to skip a spec entirely

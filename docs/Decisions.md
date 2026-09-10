@@ -64,7 +64,7 @@ training models, and that arrives as its own service behind the same boundary.
 **2026-09-09.** Rejected: building screen capture, encoding, and input injection.
 
 Commodity, multi-engineer-year work. Deploy MeshCentral or Guacamole and embed the viewer behind
-our own auth. Full reasoning in [`Ideas.md`](Ideas.md) I-1.
+our own auth. Full reasoning in [`Later.md`](Later.md) L-1.
 
 ## D-007 — Agents run auto-approved inside registered directories
 
@@ -73,7 +73,7 @@ our own auth. Full reasoning in [`Ideas.md`](Ideas.md) I-1.
 Auto-approval scoped to directories registered with the daemon is what actually replaces the
 owner's desktop apps, and the daemon enforces the boundary rather than trusting the CLI. The
 approve/deny UI is **additive** — a second mode alongside auto — which is why building auto first
-is not throwaway work. Parked as [`Deferred.md`](Deferred.md) D-3.
+is not throwaway work. Parked as [`Later.md`](Later.md) L-4.
 
 ## D-008 — Design-driven development; a spec, then designs, no plan
 
@@ -103,7 +103,7 @@ wholesale rather than reinvented.
 
 - **Testing discipline** — where tests live, one canonical layer per behaviour, `node` environment
   for DOM-free tests, shared Go fixtures instead of open-coded inserts, and helpers that never
-  assert a product rule on a test's behalf. `AGENTS.md` §5.
+  assert a product rule on a test's behalf. The `testing` skill.
 - **Never letting a default test execute a real agent CLI.** The single most valuable rule they
   have for us: we drive the same CLIs, and a test that resolves one from `PATH` spends the owner's
   quota. Fake executable paths by default; real-agent smoke behind a build tag *and* an env var.
