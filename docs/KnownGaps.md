@@ -53,21 +53,58 @@ to it" are different situations and the reader needs to know which.>
 
 ---
 
-## G-1 — What the agent CLIs actually emit is unverified
+## G-1 — What `claude` actually emits in print mode is still unverified
 
 **Kind:** unproved
-**Raised:** 2026-09-09, while writing [`Capabilities.md`](Capabilities.md).
+**Raised:** 2026-09-09, while writing [`Capabilities.md`](Capabilities.md). **Narrowed:** 2026-09-10.
 
-The CLI *flags* are verified — `--output-format stream-json`, `--json`, `--resume`, `--model` and
-friends were confirmed by running `--help` on `claude` 2.1.90, `codex` 0.153.4 and `agy` 1.1.27.
-**The contents of those streams were not.** No event stream has been captured or compared across
-providers, so we do not know which fields exist, which are shared, or what a turn's lifecycle
-looks like in each.
+Originally covered all three live providers. `codex` and `agy` are now closed — both were run for
+real, their streams captured, and `Capabilities.md`'s table reflects actual field names, not
+assumed ones.
 
-`gemini` 0.49.0 is installed and its surface has not been looked at at all.
+**`claude` remains open**, and for a specific reason: capturing it from this coding session failed.
+`claude -p` hung and returned no output (`exit 124` on a 20s timeout) when run from this session's
+Bash tool, and a `--verbose --output-format stream-json` attempt logged repeated
+`api_retry` / `authentication_failed` (401) events before being stopped. `codex` and `agy` ran
+clean from the identical shell. The most likely explanation is that this session's Bash tool is
+itself a nested Claude Code process, and doesn't carry the `claude` CLI's own stored OAuth session
+the way a real terminal or the production daemon would — but that is a hypothesis, not confirmed.
 
-- **If wrong:** any chat surface designed against an assumed field is undeliverable, and we find
-  out at the backend step instead of the design step — the exact waste the design-driven workflow
-  exists to prevent.
-- **Clears when:** each CLI is run once in print mode, its stream captured, the three compared,
-  and `Capabilities.md`'s assumed rows are rewritten as verified ones.
+- **If wrong** (i.e., if `claude` actually fails the same way from the real daemon): any
+  claude-specific field in a chat design is undeliverable, discovered at the backend step instead
+  of the design step — the exact waste the design-driven workflow exists to prevent.
+- **Clears when:** `claude -p --output-format stream-json --verbose` is run once from a real
+  terminal (the owner's, not a nested agent session) or from the actual daemon once it exists, the
+  stream is captured, and `Capabilities.md`'s claude column is rewritten as verified.
+
+## G-2 — `codex exec` loads the owner's global MCP config
+
+**Kind:** caveat
+**Raised:** 2026-09-10, while capturing `codex`'s real stream for G-1.
+
+A trivial `codex exec --json "Reply with exactly: OK"` produced `AuthRequired` stderr errors for
+Supabase and GitHub Copilot MCP servers — both configured in the owner's global `CODEX_HOME`,
+neither relevant to this project. Left alone rather than fixed now, because the daemon doesn't
+exist yet to configure.
+
+- **If wrong** (i.e., this is fine to ship as-is): every real `codex` run in production logs noise
+  for integrations the conversation never asked for, and a misconfigured global MCP server could
+  someday do more than log — a tool call landing somewhere unintended.
+- **Clears when:** the daemon's `codex` adapter is built with an isolated or minimal `CODEX_HOME`
+  (or codex's equivalent of `claude --bare`), verified by a capture showing no unrelated MCP
+  activity.
+
+## G-3 — `claude -p` inherits the entire personal Claude Code environment
+
+**Kind:** caveat
+**Raised:** 2026-09-10, from the same capture attempt as G-1.
+
+The one `claude -p` invocation that got far enough to emit output (before hanging on auth) showed
+a `system.init` payload listing 60+ personal skills, 2 MCP servers, and this machine's full plugin
+set — none of it related to the chat feature. Confirms `claude --bare` (or equivalent scoping) is
+required, not optional, for the daemon's adapter.
+
+- **If wrong:** every claude-driven chat turn in production silently has access to unrelated
+  skills and tools, and starts slower than necessary loading them.
+- **Clears when:** the daemon's `claude` adapter passes `--bare` (or the scoping it implies) and a
+  capture confirms a minimal `system.init` payload.

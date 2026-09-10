@@ -92,3 +92,14 @@ copying when it's needed — see [`Decisions.md`](Decisions.md) D-009.
 
 **Unblocks when:** the row's condition is met. Not before — writing them earlier means documenting
 an app that isn't built.
+
+## L-6 — Gemini adapter
+
+**Status:** parked **Raised:** 2026-09-10
+
+`gemini` 0.49.0 is installed on the machine but the owner has no account signed in — **blocked**,
+not merely unbuilt, per the three-state model in [`Capabilities.md`](Capabilities.md). Writing an
+adapter against assumed behaviour now would mean building against a guess with no way to verify it.
+
+**Unblocks when:** the owner signs into a Gemini account. At that point, capture its real
+`--help` and a real stream the same way `codex` and `agy` were done, before writing the adapter.

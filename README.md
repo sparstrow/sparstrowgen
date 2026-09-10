@@ -18,7 +18,8 @@ replayed the history it hasn't seen.
 | Desktop | Electron — later |
 | Mobile | Expo / React Native — later |
 
-Agent CLIs are driven, not shipped: `claude`, `codex`, `agy`, `gemini`.
+Agent CLIs are driven, not shipped: `claude`, `codex`, `agy` — available now. `gemini` is
+installed but blocked (no account signed in); see [`docs/Capabilities.md`](docs/Capabilities.md).
 
 ## How it gets built
 
@@ -48,7 +49,7 @@ server/         Go module producing both binaries
   cmd/server/   API server — deployed to Coolify
   cmd/daemon/   Local daemon — runs on your machine
   internal/
-    agent/      CLI adapters: claude, codex, agy, gemini
+    agent/      CLI adapters: claude, codex, agy (gemini blocked — no account)
     api/        HTTP handlers
     hub/        WebSocket hub, daemon connection registry
     store/      Database queries
@@ -72,7 +73,7 @@ Browser / phone ──WSS──┐
                        ▲
                        └──WSS (outbound, token)── Daemon on your machine
                                                         │ spawns
-                                        claude · codex · agy · gemini
+                                        claude · codex · agy
 ```
 
 The daemon dials out only. Nothing inbound to your machine, no ports exposed.

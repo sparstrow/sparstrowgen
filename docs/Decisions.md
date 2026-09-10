@@ -139,3 +139,19 @@ Something an agent notices in passing and deliberately leaves alone answers the 
 an unproved claim: *how much can the next agent take on faith?* `KnownGaps.md` is already the file
 read before relying on an area, so a second register would be another place to look and another
 place to forget. Entries carry a `Kind:` of `unproved` or `caveat` so both stay legible.
+
+## D-011 — Provider availability is three-valued: available / waitable / blocked
+
+**2026-09-10.** Rejected: a plain online/offline boolean.
+
+Adopted from Multica's `AgentAvailability` (`server/internal/service/agent_ready.go`): the
+distinction that matters is not "ready or not" but *whether waiting is a plan*. A daemon whose
+machine is asleep resolves itself — queue the work. A CLI that is installed but cannot run (no
+account, no execute permission, broken postinstall) will never resolve until a human acts, and a
+caller must refuse and say why rather than queue silently.
+
+This surfaced immediately: `gemini` is installed on the owner's machine but he has no account
+signed in. It is **blocked**, not "not built" — a real, permanent-until-fixed state a provider
+picker UI must show with a reason, the way Multica's `RuntimeUnusableNotice` does, not silently
+omit the way an unbuilt provider is omitted. See [`Capabilities.md`](Capabilities.md) and
+[`Later.md`](Later.md) L-6.

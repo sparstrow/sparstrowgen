@@ -52,23 +52,38 @@ stack:
     status: "not started"
 
 # Agent CLIs this app drives. It does not ship them; they must be installed
-# and authenticated on the machine running the daemon.
+# and authenticated on the machine running the daemon. Availability is
+# three-valued (available / waitable / blocked), adopted from Multica's
+# AgentAvailability — see docs/Capabilities.md and docs/Decisions.md D-011.
 agent_clis:
   - name: claude
-    print: "-p --output-format stream-json --include-partial-messages"
+    availability: available
+    print: "-p --output-format stream-json --include-partial-messages --verbose"
+    print_note: "--verbose is REQUIRED with --output-format stream-json in print mode, not obvious from --help"
     resume: "--resume <uuid> / --session-id <uuid>"
     model_flag: "--model"
+    scoping: "spawn with --bare — see docs/KnownGaps.md G-3"
+    usage_verified: false
   - name: codex
+    availability: available
     print: "codex exec --json"
     resume: "codex exec resume <session-id> <prompt>"
     model_flag: "-m"
+    scoping: "needs an isolated/minimal CODEX_HOME — see docs/KnownGaps.md G-2"
+    usage_verified: true
+    usage_fields: [input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens]
   - name: agy
+    availability: available
     print: "-p --output-format stream-json"
     resume: "--conversation <id>"
     model_flag: "--model"
     model_list: "agy models"
+    usage_verified: true
+    usage_fields: [input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens]
   - name: gemini
-    status: "installed, adapter not written"
+    availability: blocked
+    blocked_reason: "installed, no account signed in"
+    status: "adapter not written — do not write one until availability changes; see docs/Later.md L-6"
 
 commands:
   install: "pnpm install"
