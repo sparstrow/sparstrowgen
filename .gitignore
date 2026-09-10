@@ -1,1 +1,4 @@
 Reference/
+
+# design-shots generation logs — transient
+design-system/shots/**/.[A-Z].log
