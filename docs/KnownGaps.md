@@ -75,24 +75,6 @@ feature: switching provider mid-conversation is user-initiated and works regardl
 - **Clears when:** a provider is used enough to actually hit a limit — capture the stream when it
   happens, it is the only cheap opportunity — or provider documentation describes the payload.
 
-## G-7 — Conversation search runs in memory over everything loaded
-
-**Kind:** caveat
-**Raised:** 2026-09-10, feedback round item 6.
-
-`apps/web/lib/conversation-search.ts` scans every conversation and every message on each keystroke.
-That is correct for a prototype holding seven conversations and wrong the moment transcripts are
-real: the client would have to hold every message of every conversation to search them, which is
-exactly what our own database exists to avoid.
-
-The search is deliberately shaped so the move is mechanical — one function, taking a list and a
-query, returning matches with an excerpt. The Postgres version answers the same shape.
-
-- **If wrong:** nothing today. It degrades gradually with transcript volume rather than failing,
-  which is the risk — it will keep seeming fine while quietly loading more than it should.
-- **Clears when:** search is served by a query against Postgres and the client no longer needs the
-  full transcript set in memory to run it.
-
 ## G-8 — Only `agy` can enumerate its own models
 
 **Kind:** caveat
@@ -131,26 +113,3 @@ is account-dependent (`"not supported when using Codex with a ChatGPT account"`)
 - **Clears when:** the daemon asks `claude` and `agy` at runtime and treats an unknown-model error
   as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
   this way and stays curated.
-
-## G-11 — Server state is held in `useState`, not TanStack Query
-
-**Kind:** caveat
-**Raised:** 2026-09-10, wiring the surface to real data.
-
-`AGENTS.md` §3 makes this a hard constraint: TanStack Query owns anything from
-the server, Zustand owns view state, and realtime events invalidate or patch the
-Query cache. The surface currently holds conversations and the open transcript
-in `useState` and patches them by hand from websocket events. **Neither library
-is installed.**
-
-It works, and the hand-patching is deliberately written to be the shape a Query
-cache update would take. But the constraint exists to prevent a bug class —
-stale reads, two sources of truth for one fact, refetch-on-focus done ad hoc —
-and this code is inside that class rather than outside it.
-
-- **If wrong:** the failures are the quiet kind. Two tabs disagree; a conversation
-  edited elsewhere shows a stale title until reload; an event that arrives during
-  a fetch loses the race and is silently overwritten.
-- **Clears when:** TanStack Query owns the server state, websocket events patch
-  its cache, and `useState` in `chat-surface.tsx` holds only draft, pending
-  switch and selection.

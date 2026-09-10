@@ -30,8 +30,12 @@ export const api = {
     return json(await fetch(`${BASE}/api/providers`, { cache: "no-store" }));
   },
 
-  async conversations(): Promise<Conversation[]> {
-    return json(await fetch(`${BASE}/api/conversations`, { cache: "no-store" }));
+  /** Every conversation, archived included — the archive is a filter, not a
+   *  separate store. A query searches titles, folders and message bodies in
+   *  Postgres and returns an excerpt for a body match. */
+  async conversations(search = ""): Promise<Conversation[]> {
+    const q = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "";
+    return json(await fetch(`${BASE}/api/conversations${q}`, { cache: "no-store" }));
   },
 
   async conversation(id: string): Promise<Conversation> {

@@ -13,8 +13,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { Conversation, SearchHit } from "@/lib/chat-types";
-import { searchConversations } from "@/lib/conversation-search";
+import type { Conversation } from "@/lib/chat-types";
+import { useChatView } from "@/lib/store";
 import { providerClasses } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ type Props = {
 
 function Row({
   conversation,
-  hit,
+  showExcerpt,
   selected,
   onSelect,
   onRename,
@@ -57,7 +57,7 @@ function Row({
   onAskDelete,
 }: {
   conversation: Conversation;
-  hit?: SearchHit;
+  showExcerpt: boolean;
   selected: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
@@ -130,10 +130,11 @@ function Row({
             {conversation.folder.split("\\").pop()} · {conversation.updated}
           </span>
           {/* Only ever shown for a match found in the message text — a title
-              match explains itself, and repeating it would say nothing. */}
-          {hit?.excerpt && (
+              match explains itself, and repeating it would say nothing. The
+              server decides which, and sends an excerpt only for the former. */}
+          {showExcerpt && conversation.excerpt && (
             <span className="mt-1 block truncate text-xs text-muted-foreground/80 italic">
-              {hit.excerpt}
+              {conversation.excerpt}
             </span>
           )}
         </span>
@@ -189,35 +190,35 @@ export function ConversationList({
   onSetArchived,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
-  const [query, setQuery] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
+  // Search text is view state, but the SEARCH ITSELF is not: the query goes to
+  // Postgres, which is the only place that can look inside message bodies
+  // without shipping every transcript to the browser.
+  const query = useChatView((s) => s.search);
+  const setQuery = useChatView((s) => s.setSearch);
+  const showArchived = useChatView((s) => s.showArchived);
+  const toggleArchived = useChatView((s) => s.toggleArchived);
 
   const searching = query.trim().length > 0;
-  const results = useMemo(
-    () => searchConversations(conversations, query),
-    [conversations, query],
-  );
-
-  const active = results.filter((r) => !r.conversation.archived);
-  const archived = results.filter((r) => r.conversation.archived);
-  const archivedTotal = conversations.filter((c) => c.archived).length;
+  const active = useMemo(() => conversations.filter((c) => !c.archived), [conversations]);
+  const archived = useMemo(() => conversations.filter((c) => c.archived), [conversations]);
+  const archivedTotal = archived.length;
 
   // Searching reaches into the archive. Hiding an archived match would make the
   // archive a place things go to become unfindable, which is what deleting is
   // for.
   const archivedOpen = showArchived || searching;
 
-  function rowFor(r: { conversation: Conversation; hit: SearchHit }) {
+  function rowFor(c: Conversation) {
     return (
       <Row
-        key={r.conversation.id}
-        conversation={r.conversation}
-        hit={searching ? r.hit : undefined}
-        selected={r.conversation.id === selectedId}
-        onSelect={() => onSelect(r.conversation.id)}
-        onRename={(title) => onRename(r.conversation.id, title)}
-        onSetArchived={(a) => onSetArchived(r.conversation.id, a)}
-        onAskDelete={() => setPendingDelete(r.conversation)}
+        key={c.id}
+        conversation={c}
+        showExcerpt={searching}
+        selected={c.id === selectedId}
+        onSelect={() => onSelect(c.id)}
+        onRename={(title) => onRename(c.id, title)}
+        onSetArchived={(a) => onSetArchived(c.id, a)}
+        onAskDelete={() => setPendingDelete(c)}
       />
     );
   }
@@ -270,7 +271,7 @@ export function ConversationList({
             </li>
           ))}
         </ul>
-      ) : conversations.length === 0 ? (
+      ) : conversations.length === 0 && !searching ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <MessagesSquare className="size-7 text-muted-foreground" aria-hidden />
           <p className="text-sm text-muted-foreground">
@@ -282,7 +283,7 @@ export function ConversationList({
             New conversation
           </Button>
         </div>
-      ) : results.length === 0 ? (
+      ) : conversations.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           <Search className="size-6 text-muted-foreground" aria-hidden />
           <p className="text-sm text-muted-foreground">
@@ -298,7 +299,7 @@ export function ConversationList({
             <div className="pb-3">
               <button
                 type="button"
-                onClick={() => setShowArchived((v) => !v)}
+                onClick={toggleArchived}
                 aria-expanded={archivedOpen}
                 className="flex w-full items-center gap-1.5 px-4 py-2 text-xs text-muted-foreground hover:text-foreground"
               >

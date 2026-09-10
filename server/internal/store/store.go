@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -136,7 +137,15 @@ func toEntry(e db.Entry) protocol.Entry {
 // List returns every conversation, archived included. The client decides what
 // to show: the archive is a filter, not a separate store, which is what lets
 // search reach into it.
-func (s *Store) List(ctx context.Context) ([]protocol.Conversation, error) {
+//
+// A non-empty query searches titles, folders AND message bodies in Postgres.
+// Searching titles alone would miss the ones that most need finding, since an
+// unnamed conversation stays "Untitled conversation" until somebody renames it.
+func (s *Store) List(ctx context.Context, query string) ([]protocol.Conversation, error) {
+	query = strings.TrimSpace(query)
+	if query != "" {
+		return s.search(ctx, query)
+	}
 	rows, err := s.q.ListConversations(ctx)
 	if err != nil {
 		return nil, err
@@ -152,6 +161,57 @@ func (s *Store) List(ctx context.Context) ([]protocol.Conversation, error) {
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// excerptPad is how much context surrounds a match. Enough to recognise the
+// sentence, short enough for one line in a 288px sidebar.
+const excerptPad = 34
+
+func (s *Store) search(ctx context.Context, query string) ([]protocol.Conversation, error) {
+	rows, err := s.q.SearchConversations(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]protocol.Conversation, 0, len(rows))
+	for _, r := range rows {
+		c := toConversation(r.Conversation)
+		seen, err := s.seenBy(ctx, r.Conversation.ID)
+		if err != nil {
+			return nil, err
+		}
+		c.SeenBy = seen
+		// A title match needs no excerpt; the query only returns one when the
+		// hit was in a body.
+		if r.Excerpt != "" && !strings.Contains(strings.ToLower(c.Title), strings.ToLower(query)) {
+			c.Excerpt = excerptAround(r.Excerpt, query)
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// excerptAround trims a matching message down to the part worth reading.
+func excerptAround(body, query string) string {
+	at := strings.Index(strings.ToLower(body), strings.ToLower(query))
+	if at < 0 {
+		at = 0
+	}
+	start := at - excerptPad
+	if start < 0 {
+		start = 0
+	}
+	end := at + len(query) + excerptPad
+	if end > len(body) {
+		end = len(body)
+	}
+	out := strings.TrimSpace(body[start:end])
+	if start > 0 {
+		out = "…" + out
+	}
+	if end < len(body) {
+		out += "…"
+	}
+	return out
 }
 
 // Get returns one conversation with its full transcript.

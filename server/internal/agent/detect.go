@@ -49,6 +49,9 @@ func detectClaude(ctx context.Context) protocol.Provider {
 		Availability: protocol.Available,
 		// The only one of the three that states a real dollar figure.
 		ReportsUsd: true,
+		// And the only one that emits rate_limit_event. It arrives mid-turn, so
+		// there is nothing to show until a message has been sent.
+		ReportsLimits: true,
 		// VERIFIED 2026-09-10 once auth worked: 89 content_block_delta events
 		// averaging 8.1 characters for a four-sentence answer — finer-grained
 		// than agy. Needs --include-partial-messages, which is in the args.

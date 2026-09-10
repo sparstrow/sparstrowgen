@@ -85,7 +85,9 @@ function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
         <HeadroomReadout head={head} now={now} />
       ) : (
         <span className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">no limit data</span>
+          <span className="text-xs text-muted-foreground">
+            {provider.reportsLimits ? "limit unknown yet" : "no limit data"}
+          </span>
           <span
             className="h-1 w-10 rounded-full border-t border-dashed border-capacity-unknown"
             aria-hidden
@@ -101,7 +103,9 @@ function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
       ? `${provider.label} can't be reached right now: ${provider.unavailableReason?.toLowerCase()}. Nothing is broken — it should come back on its own.`
       : head
         ? `${provider.label} reports a ${windowLabel(head.window)} usage window, currently ${head.status}, resetting in ${untilReset(head.resetsAt, now)}. It does not say how much of the window is left — only when it starts again.`
-        : `${provider.label} does not report usage limits at all. This is not the same as having plenty left — we genuinely cannot tell.`;
+        : provider.reportsLimits
+          ? `${provider.label} reports its usage window, but only while answering. Send one message and the reset time will appear here.`
+          : `${provider.label} does not report usage limits at all. This is not the same as having plenty left — we genuinely cannot tell.`;
 
   return (
     <Tooltip>

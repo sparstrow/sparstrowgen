@@ -108,7 +108,7 @@ func (a *API) getProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listConversations(w http.ResponseWriter, r *http.Request) {
-	list, err := a.store.List(r.Context())
+	list, err := a.store.List(r.Context(), r.URL.Query().Get("q"))
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return

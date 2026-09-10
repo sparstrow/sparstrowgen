@@ -54,6 +54,10 @@ export type Provider = {
   headroom: Headroom | null;
   /** Whether this provider reports real currency. Only claude does. */
   reportsUsd: boolean;
+  /** Whether it emits a usage window at all. Distinct from `headroom` being
+   *  null: a provider that reports limits but has not been used yet is "not
+   *  known yet", which is a different claim from "reports nothing". */
+  reportsLimits: boolean;
   /** Whether text arrives incrementally. codex VERIFIED false — one whole
    *  message per turn. See KnownGaps G-5 for claude. */
   streams: boolean;
@@ -121,6 +125,10 @@ export type Conversation = {
   /** Which providers have already seen how much of this conversation, so a
    *  switch back only replays the gap. Keyed by provider id → entries seen. */
   seenBy: Partial<Record<ProviderId, number>>;
+  /** Set only on a search result whose match was in the message text: the
+   *  matching line, so a hit in a long transcript is explicable. A title match
+   *  leaves this empty — the reason for that hit is already on screen. */
+  excerpt?: string;
   /** Out of the list but fully intact. Unlike deleting, this is reversible,
    *  which is why it is offered at the point of deletion. */
   archived: boolean;
@@ -134,11 +142,3 @@ export type PendingSwitch = {
   estimatedTokens: number;
 };
 
-/** Where a search term was found. A title-only match is not enough to find the
- *  conversations that most need finding — several are called "Untitled
- *  conversation". */
-export type SearchHit = {
-  /** The matching line of message text, when the match was not in the title. */
-  excerpt?: string;
-  inTitle: boolean;
-};

@@ -74,6 +74,12 @@ type Provider struct {
 	Headroom *Headroom `json:"headroom"`
 	// Only claude reports real currency.
 	ReportsUsd bool `json:"reportsUsd"`
+	// Whether this provider emits a usage window at all. Distinct from Headroom
+	// being nil: a provider that reports limits but has not been used yet this
+	// session is "not known yet", which is not the same claim as "reports
+	// nothing". Collapsing the two would tell the owner codex has no limits and
+	// claude has none left, and both would be wrong.
+	ReportsLimits bool `json:"reportsLimits"`
 	// codex is verified false: one whole message per turn, no deltas.
 	Streams bool `json:"streams"`
 	// True when the CLI is a router in front of several vendors' models. agy
@@ -132,6 +138,10 @@ type Conversation struct {
 	// How much of the transcript each provider has already been told, so a
 	// switch back replays only the gap.
 	SeenBy map[string]int32 `json:"seenBy"`
+	// Set only on a search result whose match was in the message text: the
+	// matching line, so a hit in a long transcript is explicable. A title match
+	// leaves this empty — the reason for that hit is already on screen.
+	Excerpt string `json:"excerpt,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
