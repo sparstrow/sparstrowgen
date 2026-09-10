@@ -19,7 +19,7 @@ prototype is the reference.** When they disagree, the handoff wins.
 | | |
 |---|---|
 | **Prototype** | `<name>.dc.html` |
-| **Provenance** | `docs/specs/<file>.md` — or `exploratory — no spec` |
+| **Provenance** | `<the owner's request, in one line>` |
 | **Mode** | build \| explore |
 | **Status** | draft \| reviewed <date> \| superseded by <x> |
 | **Design system** | mirror \| greenfield, at `design-system/` |
@@ -61,14 +61,27 @@ implementer should invent.
 
 ## Data contract
 
-What the surface needs, in plain terms — fields, shapes, and where each comes
-from. Flag anything with no backend behind it today; that is scope the plan has
-to account for.
+**This section is the backend's brief.** In this repo there is no plan document
+— what a plan used to carry lives here, derived from a design the owner has
+already approved, so it cannot describe a feature nobody asked for.
 
-| Field | Source | Exists? |
+Every field the surface shows, where it comes from, and whether the backend can
+actually produce it. Check each row against
+[`docs/Capabilities.md`](../../../../docs/Capabilities.md).
+
+| Field | Source | Deliverable? |
 |---|---|---|
-| `order.total` | orders API | yes |
-| `order.riskScore` | — | **no backend — new work** |
+| `message.text` | daemon stream | yes — verified |
+| `run.provider` | run record | yes |
+| `message.tokenCost` | — | **no — providers don't report uniformly** |
+
+A **no** row is a decision, not a footnote. Resolve it before the design is
+locked: verify it and update `Capabilities.md`, redesign so the surface doesn't
+need it, or cut it to `Deferred.md` with a trigger. A locked design containing
+an unresolved **no** is exactly the waste this workflow exists to prevent.
+
+Also state, per surface: whether each field streams or arrives whole, what
+loading / empty / error actually mean here, and what must survive a refresh.
 
 ## Interactions
 

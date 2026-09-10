@@ -108,6 +108,22 @@ The design chain (`design-brief` → `design-system` → `interactive-prototype`
 gated**: it runs once, when real UI work starts, not per feature. A skill on disk costs nothing;
 only invoking it spends tokens.
 
+### Removed again when the repo went design-driven
+
+**2026-09-09, same day.** The owner named the deeper problem: the previous attempt was
+*plan-driven*, and planning consumed the time that coding and testing didn't get. The replacement
+is design-driven development — see [`Decisions.md`](Decisions.md) D-008 and `AGENTS.md` §1.
+
+| Dropped | Why |
+| --- | --- |
+| `writing-specs` skill, `spec.md`, `docs/specs/` | The design is the specification. A rendered direction the owner can look at communicates intent better than user stories in prose, and they can actually judge it |
+| `writing-plans` skill, `plan.md`, `docs/plans/` | What a plan carried now lives in the prototype's handoff contract, derived from a design the owner already approved — so it cannot describe a feature nobody asked for |
+
+Kept from the plan layer, because they were load-bearing rather than ceremony: the Decisions
+section became [`Decisions.md`](Decisions.md), one running file; and the feasibility discipline
+became [`Capabilities.md`](Capabilities.md), which is now read *before* designing rather than
+discovered during building.
+
 - **If wrong:** an agent improvises a procedure that used to be written down. Acceptable — a
   capable agent improvising beats a session spent writing documents nobody reads.
 - **Unpark when:** the "write it when" condition in the second table is met. The originals are at

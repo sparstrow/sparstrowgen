@@ -5,180 +5,204 @@ Mandatory workflow, safety rules, and engineering standards for every AI coding 
 
 ---
 
-## 1. Stack and layout
+## 1. How work happens here: design-driven development
+
+**Nothing starts with a document. It starts with something the owner can look at.**
+
+A previous attempt at this app was plan-driven — a spec, then a plan, then tasks. The planning
+took the time, the coding and testing didn't, and it never shipped. The order is now inverted, and
+this is the single most important rule in this file.
+
+**The design is the specification.** There are no spec documents and no plan documents. There is a
+rendered design the owner has approved, and a backend built to serve it.
+
+### The loop
+
+```
+1  Feasibility   what can the backend actually deliver here?
+2  Options       2–3 genuinely different directions, rendered
+3  Owner picks   one direction, or a mix
+4  Wire it       into the real app, on placeholder data
+5  Confirm       owner uses it in the app, not a mockup
+6  Contract      what the backend must provide, derived from the locked design
+7  Backend       built to that contract, nothing speculative
+8  Swap          placeholder data out, real data in
+9  Verify        frontend-verify, against the real thing
+```
+
+**Invoke the `design-driven-feature` skill** for any feature work — it carries the procedure. This
+section is the rule; that skill is the how.
+
+### The rule that makes it work
+
+**Never design something the backend cannot deliver.** A screen showing data no provider emits is
+waste: it looks finished, it gets approved, and then it cannot be served.
+
+[`docs/Capabilities.md`](docs/Capabilities.md) is the feasibility surface — **read it before
+designing anything.** When a design needs something not listed there, choose explicitly: check it
+and add a verified row, redesign around it, or cut it to `Deferred.md` with a trigger. Never
+"probably fine".
+
+### Backend work does not start early
+
+Steps 1–5 are cheap. Step 7 is expensive, and it does not begin until the owner has confirmed the
+design in the real app. Building backend for a design that then changes is the second-biggest
+waste after designing the undeliverable.
+
+Backend-only work with no surface — the daemon connection, a migration, a protocol change — has
+nothing to design. Build it.
+
+---
+
+## 2. Stack and layout
 
 **`.sparstrowgen/blueprint.yaml` is the single source of truth for the stack, commands, and CLI
 roster — read it, don't restate its facts here or anywhere else.** [README.md](README.md) carries
-the folder layout and the architecture diagram. When the stack changes, change the blueprint; this
-file only carries wiring detail the blueprint deliberately doesn't ("what tech are we on" lives
-there, "how the pieces are wired" lives here).
+the folder layout and the architecture diagram. [`docs/Decisions.md`](docs/Decisions.md) carries
+why each choice beat its alternatives.
 
 Wiring detail:
 
 - **Server and daemon are one Go module.** Both binaries build from `server/`, sharing
-  `internal/`. This is deliberate: the wire protocol structs are used by both, so drift becomes a
-  compile error rather than a runtime bug on a laptop running an older daemon.
+  `internal/`, so wire-protocol drift is a compile error rather than a runtime bug on a laptop
+  running an older daemon.
 - **The wire protocol is defined once**, in `proto/`, and generated into Go and TypeScript. Never
   hand-write a message shape on one side and mirror it by hand on the other.
 - **Conversations are provider-neutral.** Our database is the transcript of record; a provider's
   own session is only a per-provider cache, because no agent CLI can resume another's session.
-  Switching provider mid-conversation replays the history the target hasn't seen yet.
-- **The daemon dials out only.** Nothing inbound to the user's machine, no ports exposed.
+- **The daemon dials out only.** Nothing inbound to the owner's machine, no ports exposed.
 
 `Reference/` holds read-only checkouts kept for architectural comparison — currently
-[Multica](Reference/multica-main), a live, working example of this same shape (Go server, local
-daemon, Next.js front end, agents as first-class actors). **Consult it for patterns before
-inventing new ones. Never edit anything under `Reference/`.**
+[Multica](Reference/multica-main), a live working example of this same shape. **Consult it for
+patterns before inventing new ones. Never edit anything under `Reference/`.**
 
 ---
 
-## 2. Git workflow
+## 3. Git workflow
 
 ```
 feature branch ──PR (squash)──► main
-     │
-     └── typecheck + tests pass locally, before the PR
 ```
 
-1. **Never edit `main` directly.** Work happens on `feature/<slug>`, `fix/<slug>`, or
-   `task/<task-id>`.
-2. **One working directory per agent, always.** Two agents — subagents, forked sessions, or
-   separate windows — must never share a checkout. That is not a merge conflict resolved later; it
-   is two processes writing the same files at once.
-3. **Verification before the PR.** Typecheck and unit tests must pass locally. For anything a
-   browser can exercise, green tests are not sufficient on their own — see §3.8.
-4. **Commit and push without asking.** Once a coherent unit of work is complete, commit it on the
-   current branch and push it. This file is the standing authorization. Commit at the end of a
-   logical change, not per file touched. A commit that never leaves the local checkout is exactly
-   as unrecoverable as one that was never made.
-5. **This does not authorize pushing to `main`**, opening a PR, or merging one. Those stay
-   explicit.
-6. **If a push is rejected**, do not force-push over it. Fetch, reconcile, push the reconciled
-   result.
-
-When parallel agents start running on one feature at a time, this grows an integration-branch tier.
-Not yet — a single-task branch targeting `main` is the right size for now.
+1. **Never edit `main` directly.** Work on `feature/<slug>` or `fix/<slug>`.
+2. **One working directory per agent.** Two agents must never share a checkout — that is not a
+   merge conflict resolved later, it is two processes writing the same files at once.
+3. **Verification before the PR.** Typecheck and tests pass locally. For anything a browser can
+   exercise, green tests are not sufficient — see §4.8.
+4. **Commit and push without asking.** Once a coherent unit of work is done, commit it on the
+   current branch and push. This file is the standing authorization. A commit that never leaves
+   the local checkout is as unrecoverable as one never made.
+5. **This does not authorize pushing to `main`**, opening a PR, or merging one.
+6. **If a push is rejected**, don't force over it. Fetch, reconcile, push the result.
 
 ---
 
-## 3. Engineering rules
+## 4. Engineering rules
 
-**Rule zero: process serves shipping.** A previous attempt at this app was abandoned without
-shipping, because the budget went into planning documents and conversation instead of code. If a
-document isn't going to change what gets built, don't write it. If a step exists because coding
-agents used to need hand-holding, skip it. Prefer one good plan and working software over a
-complete paper trail — and when a rule below and shipping genuinely conflict, say so out loud
-rather than quietly following the rule.
+**Rule zero: process serves shipping.** If a document isn't going to change what gets built, don't
+write it. If a step exists because coding agents used to need hand-holding, skip it. When a rule
+below and shipping genuinely conflict, say so out loud rather than quietly following the rule.
 
 1. **Never guess code logic or file paths.** Inspect the authoritative file before writing code.
-2. **Read the full error before diagnosing.** Un-truncated stack traces, actual log output. Base
-   diagnoses on evidence, not on what the symptom resembles.
-3. **No superficial symptom patches.** Do not mask errors with dummy fallbacks, silently swallowed
-   exceptions, or commented-out tests. Fix the root cause.
-4. **Never declare success without running verification.** Execute the check and read its output
-   before claiming a task is complete. If you skipped a check, say which and why.
-5. **Human-in-the-loop gates.** Destructive operations — dropping tables, deleting protected files,
-   anything touching production — require explicit confirmation in chat.
-6. **Micro-level, complete feature delivery.** Build one feature fully — data layer, server,
-   protocol, UI, UX — before starting the next. If B depends on A, finish A completely, exposing
-   the minimal clean interface B needs. Avoid over-engineering: minimal effective implementations,
-   no speculative abstractions.
-7. **Open question protocol.** An unanswered question blocks only the checklist item that depends
-   on it — never the whole task, never the whole plan. Park it in `docs/OpenQuestions.md`, mark
-   that one item `[~] blocked → OQ-n`, and complete everything else. "Done except OQ-n" is a real,
-   reportable state. See §4 for how to present the question.
-8. **End-to-end verification loop.** At the end of any feature or bug fix that a browser can
-   exercise, drive the real UI, report console errors and usability problems, fix them, and
-   re-verify. Loop until clean. The `frontend-verify` skill is the concrete form of this rule —
-   invoke it rather than improvising.
-9. **All four states, on every surface.** Populated, empty, loading, and error. The empty state is
-   the one that gets skipped, and it is the first thing the owner sees on a feature he has not used
-   yet. A surface shipped with only its populated state is not done, and saying "the happy path
-   works" does not change that.
-10. **Check for a settings surface, every feature.** Before calling a feature complete, ask whether
-    it introduces behaviour a user might reasonably want to configure or set a default for. If yes,
-    build that entry in the same PR. If it is a straight capability with no meaningful
-    configuration, it stays a straight feature — this is a required *check*, not a mandate to
-    invent settings (see rule 6).
-11. **Document a bug or security issue in the same turn it surfaces**, whether the owner reports it
-    or you notice it while doing something unrelated. A problem mentioned only in chat does not
-    exist to the next session.
+2. **Read the full error before diagnosing.** Un-truncated stack traces, actual log output.
+3. **No superficial symptom patches.** No dummy fallbacks, silently swallowed exceptions, or
+   commented-out tests. Fix the root cause.
+4. **Never declare success without running verification.** Execute the check and read its output.
+   If you skipped one, say which and why.
+5. **Human-in-the-loop gates.** Destructive operations — dropping tables, deleting protected
+   files, anything touching production — require explicit confirmation in chat.
+6. **One feature at a time, all the way through.** Design, frontend, backend, real data, verified —
+   then the next. Avoid over-engineering: minimal effective implementations, no speculative
+   abstractions, no field the design doesn't show.
+7. **Open questions block one thing, not everything.** Park it in `docs/OpenQuestions.md` and carry
+   on with the rest. "Done except OQ-n" is a real, reportable state.
+8. **End-to-end verification loop.** At the end of any feature or bug fix a browser can exercise,
+   drive the real UI, report console errors and usability problems, fix them, and re-verify until
+   clean. The `frontend-verify` skill is the concrete form — invoke it rather than improvising.
+9. **All four states, on every surface.** Populated, empty, loading, error. The empty state is the
+   one that gets skipped, and it is the first thing the owner sees on a feature they haven't used.
+   Present before the owner confirms a design, not after.
+10. **Check for a settings surface, every feature.** Does this introduce behaviour a user might
+    reasonably want to configure? If yes, build that entry in the same PR. If not, it stays a
+    straight feature — a required *check*, not a mandate to invent settings.
+11. **Log a bug in the same turn it surfaces**, whether the owner reports it or you notice it doing
+    something else. A problem mentioned only in chat does not exist to the next session.
 12. **Shipping without proof is allowed. Shipping without saying so is not.** When a check can't be
     completed, name what you actually ran and open a `docs/KnownGaps.md` entry in the same change.
-    Never tick a box on weaker evidence than it asked for and stay silent — a ticked box that
-    quietly means "looked right to me" devalues every other ticked box in the repo.
 
-### The design skill chain — runs once, not per feature
+### Design rules
 
-`design-brief` → `design-system` → `interactive-prototype`, with `ai-design-slop` loaded whenever
-UI is being written and `frontend-verify` closing every UI change.
-
-**The first three run once, when real UI work starts** — not before, and not again per feature.
-They establish the doctrine and the system; after that, building a screen means reading
-`DESIGN.md`, loading `ai-design-slop`, and writing the code.
-
-- `design-brief` writes the doctrine by interviewing the owner. Nothing downstream runs before it
-  exists, and everything downstream is accountable to it.
-- **Never restate the doctrine's rules inside another skill or checklist. Point at it.** A
-  duplicated doctrine keeps enforcing itself after the original changes.
-- `ai-design-slop` is a catalogue of tells that would be slop in *any* app — portable and
-  deliberately free of this project's tokens. Anything project-specific belongs to the doctrine.
+- **`DESIGN.md` is the doctrine.** Written with the owner by `design-brief`. Everything visual is
+  accountable to it. Never restate its rules elsewhere — point at it; a duplicated doctrine keeps
+  enforcing itself after the original changes.
+- **`ai-design-slop` is loaded before writing UI**, so the tells never go in. It is a catalogue of
+  what would be slop in *any* app; anything project-specific belongs to the doctrine.
+- **No hardcoded colour, ever.** The doctrine is a theming contract, so a literal hue breaks every
+  theme but the one you looked at.
+- **`design-brief` and `design-system` run once**, when real UI work starts — not per feature.
+  After that, building a screen means reading `DESIGN.md`, loading `ai-design-slop`, and writing
+  the code.
 - **Record why a design changed, not just what changed.** The reason usually generalises into a
   rule that stops the same debate recurring on every later page.
+- **Mock data is named `*.mock.ts`.** A feature is not done while a shipped route still imports
+  one — that makes leftovers greppable rather than something to remember.
 
 ---
 
-## 4. Presenting decisions to the owner
+## 5. Presenting options to the owner
 
-The owner supplies user scenarios and the experience expected; agents decide the implementation.
-Don't hand library-level choices back as open questions — recommend, explain why, let him veto.
-See [CLAUDE.md](CLAUDE.md) for how he works and what depth to pitch at.
+The owner supplies scenarios and judgment; agents decide implementation. Don't hand library-level
+choices back as open questions — recommend, explain why, let them veto. See [CLAUDE.md](CLAUDE.md)
+for how they work and what depth to pitch at.
 
-When something genuinely is his call, every option carries:
+**If you can render it, render it.** For anything visual, seeing the options *is* the comparison —
+say in one line what each direction optimises for, then let them look. Do not run the framework
+below on a design.
 
-- **Its own context** — what this option concretely *is*: what gets built, what he has to do
-- **Its own user scenario** — the question's scenario replayed under this option, so outcomes
-  compare side by side. Same person, same moment, different result. This is the field that makes
-  options answerable
+For decisions with no picture — a protocol choice, two libraries, a tradeoff — each option carries:
+
+- **Its own context** — what this option concretely *is*: what gets built, what they have to do
+- **Its own scenario** — the question's scenario replayed under this option, so outcomes compare
+  side by side. Same person, same moment, different result. This is the field that makes options
+  answerable
 - Pros and cons
 - Score out of 10
 - Blast radius if chosen wrong
 - Caveats
 - The agent's recommendation
 
-A question with no options is not ready to be asked. Options that describe *different* situations
-from each other are not comparable and are not ready either.
+A question with no options is not ready to be asked. Options describing *different* situations
+from one another cannot be compared, and aren't ready either.
 
 ---
 
-## 5. Database
+## 6. Database
 
-- **PostgreSQL, self-hosted in Coolify.** Access through sqlc + pgx; migrations through goose. See
-  the blueprint for versions.
+- **PostgreSQL, self-hosted in Coolify.** sqlc + pgx for access, goose for migrations.
 - **The schema is multi-provider from the first migration.** Provider switching is the product's
-  whole reason to exist, and retrofitting it into a single-provider schema is exactly the kind of
-  rewrite this project is trying to avoid.
-- **Vector search is pgvector, in the same Postgres.** Embeddings are computed by a separate HTTP
-  service and never in-process — that keeps the backend language decision free of the ML
-  ecosystem, and keeps retrieval out of a cold-start path.
-- Single-user for now, so there is no row-level tenancy boundary yet. When multi-user arrives it
-  needs a deliberate design pass, not a column bolted onto existing tables.
+  reason to exist, and retrofitting it is the kind of rewrite this project avoids.
+- **Vector search is pgvector, in the same Postgres.** Embeddings come from a separate HTTP
+  service, never in-process.
+- Single-user for now, so there is no tenancy boundary yet. Multi-user needs a deliberate design
+  pass, not a column bolted onto existing tables.
 
 ---
 
-## 6. Project memory
+## 7. Project memory
 
-All non-code project memory lives in `docs/`. **Read [`docs/README.md`](docs/README.md) first** —
-it holds the lifecycle (idea → spec → owner review → plan → code), the register files, and the
-table mapping "what situation am I in" to "which file does this go in".
+`docs/` holds everything that isn't code but must survive a session. **Read
+[`docs/README.md`](docs/README.md) first.**
 
-**Three stages, not five. The plan is the last document before code** — there is no task folder
-and no queue. A plan carries a checklist of concrete steps, the files each touches, and how each
-is verified, so an agent can build straight from it.
+The load-bearing two:
 
-Specs, plans, and runbooks have skeletons in [`docs/templates/`](docs/templates/). Copy the
-matching one rather than inventing a shape. The registers state their own format at the top and
-need no template.
+- [`docs/Capabilities.md`](docs/Capabilities.md) — what the backend can deliver. Read before
+  designing.
+- [`docs/Decisions.md`](docs/Decisions.md) — load-bearing choices and their rejected alternatives.
+  A few lines each, appended when a choice would be expensive to reverse.
+
+Then the registers — `Bugs`, `KnownGaps`, `Deferred`, `OpenQuestions`, `Ideas` — each stating its
+own format at the top. Only runbooks have a template, because only they are long enough to need
+one.
 
 When the owner says "park it", "later", or "just an idea", write it to the right file in the same
 turn rather than relying on the conversation being re-read.

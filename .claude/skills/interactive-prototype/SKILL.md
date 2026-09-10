@@ -43,35 +43,44 @@ Look for `design-system/system.json`.
   becomes the raw material for the design system, and you should say that
   explicitly rather than quietly inventing a palette.
 
+## Feasibility first — before either mode
+
+**Read [`docs/Capabilities.md`](../../../docs/Capabilities.md) before drawing
+anything.** It says what the backend can and cannot produce.
+
+A prototype showing data no provider emits is the specific waste this repo is
+organised to avoid: it looks finished, the owner approves it, and then it
+cannot be served. If the surface needs something not listed as deliverable,
+resolve it *now* — check it and add a verified row, design around it, or cut
+it — never "probably fine".
+
 ## Two modes
 
 The mode determines what the prototype is *accountable to*, and it changes how
 much you are allowed to invent.
 
-### `build` — from a spec
+### `build` — a direction the owner has chosen
 
-The user points at a written spec (in this repo, `docs/specs/*.md`). The
-prototype's job is to render **what the spec actually says**, so the owner can
-see whether the spec describes what they wanted.
+The owner has picked a direction, or asked for something specific. The
+prototype's job is to render **what they actually asked for**, faithfully
+enough that confirming it is a real decision.
 
-- Read the spec fully, including acceptance scenarios, the four required states,
-  and anything marked `[NEEDS CLARIFICATION]`.
-- Every user story and acceptance scenario should be walkable in the prototype.
-  A scenario you cannot click through is a scenario nobody has actually reviewed.
-- **Do not resolve the spec's open questions by picking one silently.** Where the
-  spec is undecided, either show both options side by side or render the state
-  visibly marked as a guess. A prototype that quietly answers an open question
-  gets treated as the decision.
-- Anything you add that the spec does not mention goes in the handoff's
-  "invented" list. This list is the single most valuable thing you produce,
-  because those are the decisions nobody has approved yet.
+- Every behaviour they described should be walkable. One you cannot click
+  through is one nobody has actually reviewed.
+- **Do not resolve an undecided point by picking one silently.** Show both
+  side by side, or render the state visibly marked as a guess. A prototype
+  that quietly answers an open question gets treated as the decision.
+- Anything you add that they did not mention goes in the handoff's "invented"
+  list. That list is the single most valuable thing you produce, because those
+  are the decisions nobody has approved yet.
 
 ### `explore` — from a prompt
 
-No spec exists; the user is thinking out loud. The prototype is how they find out
-what they want.
+The owner is thinking out loud. The prototype is how they find out what they
+want, and in this repo it is the normal starting point — there are no written
+specs to work from.
 
-- Sketching is legitimately how a spec gets discovered, so do not demand one.
+- Sketching is how the requirement gets discovered, so do not demand one.
 - Prefer **two or three genuinely different directions** over one polished
   answer. Different framings — dense vs spacious, wizard vs single-page,
   list-first vs detail-first — surface the real preference far faster than

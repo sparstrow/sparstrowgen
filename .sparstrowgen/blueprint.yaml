@@ -79,6 +79,14 @@ commands:
   go_test: "cd server && go test ./..."
   proto: "buf generate"
 
+# How features get built. See AGENTS.md §1 — the design is the specification;
+# there are no spec or plan documents.
+workflow:
+  method: design-driven
+  loop: "feasibility -> rendered options -> owner picks -> wire on mocks -> confirm -> backend -> swap -> verify"
+  feasibility_gate: docs/Capabilities.md
+  skill: design-driven-feature
+
 mcp_servers: [context7, shadcn]
 
 cli_tools: [gh, docker, pnpm]
