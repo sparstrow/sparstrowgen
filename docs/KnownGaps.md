@@ -53,38 +53,6 @@ to it" are different situations and the reader needs to know which.>
 
 ---
 
-## G-1 — What `claude` actually emits in print mode is still unverified
-
-**Kind:** unproved
-**Raised:** 2026-09-09, while writing [`Capabilities.md`](Capabilities.md). **Narrowed:**
-2026-09-10, twice.
-
-Originally covered all three live providers. `codex` and `agy` are now closed — both were run for
-real, their streams captured, and `Capabilities.md`'s table reflects actual field names, not
-assumed ones.
-
-**`claude` remains open, but the sandbox hypothesis is now confirmed rather than guessed.**
-Capturing it from this coding session failed: `claude -p` hung with no output (`exit 124` on a 20s
-timeout) from this session's Bash tool, and a `--verbose --output-format stream-json` attempt
-logged repeated `api_retry` / `authentication_failed` (401) events before being stopped. `codex`
-and `agy` ran clean from the identical shell.
-
-The owner then ran `claude` interactively from a real PowerShell terminal on the same machine —
-authenticated instantly, v2.1.90, normal model picker. So the account and the CLI are both fine;
-the failure is specific to this session's Bash tool being a nested Claude Code process without
-`claude`'s own stored OAuth session. **What is still missing is not "does claude work" but the
-actual `-p --output-format stream-json --verbose` event stream** — the interactive run doesn't
-produce that, only print mode does.
-
-- **If wrong** (i.e., print mode fails the same way even from a real terminal): any claude-specific
-  field in a chat design is undeliverable, discovered at the backend step instead of the design
-  step — the exact waste the design-driven workflow exists to prevent. Now unlikely, given the
-  interactive session worked cleanly, but not yet ruled out for print mode specifically.
-- **Clears when:** the owner runs
-  `claude -p "Reply with exactly: OK" --output-format stream-json --verbose --session-id <any-uuid>`
-  from that same real terminal and shares the output, or the daemon does this once it exists.
-  `Capabilities.md`'s claude column gets rewritten as verified from whatever that shows.
-
 ## G-2 — `codex exec` loads the owner's global MCP config
 
 **Kind:** caveat
@@ -102,17 +70,50 @@ exist yet to configure.
   (or codex's equivalent of `claude --bare`), verified by a capture showing no unrelated MCP
   activity.
 
-## G-3 — `claude -p` inherits the entire personal Claude Code environment
+## G-3 — `claude -p` inherits the entire personal Claude Code environment, with working tool access
 
 **Kind:** caveat
-**Raised:** 2026-09-10, from the same capture attempt as G-1.
+**Raised:** 2026-09-10, sandboxed capture attempt. **Escalated:** 2026-09-10, real-terminal capture.
 
-The one `claude -p` invocation that got far enough to emit output (before hanging on auth) showed
-a `system.init` payload listing 60+ personal skills, 2 MCP servers, and this machine's full plugin
-set — none of it related to the chat feature. Confirms `claude --bare` (or equivalent scoping) is
-required, not optional, for the daemon's adapter.
+Two captures, same finding, worse the second time. The sandboxed attempt showed a `system.init`
+payload listing 60+ personal skills and MCP servers in `"pending"` status. The real-terminal
+capture — a genuine account, a genuine turn — showed `clockify`, `square`, and `shadcn` all
+`"status":"connected"`. **Not merely listed: reachable.** A conversation whose only prompt was
+"reply with exactly: OK" had working access to the owner's time-tracking and invoicing tools for
+the length of that turn.
 
-- **If wrong:** every claude-driven chat turn in production silently has access to unrelated
-  skills and tools, and starts slower than necessary loading them.
-- **Clears when:** the daemon's `claude` adapter passes `--bare` (or the scoping it implies) and a
-  capture confirms a minimal `system.init` payload.
+This is not a performance or noise concern. It is a scope leak: an unscoped `claude -p` call gives
+the model real tool access unrelated to the conversation it's actually in, and the model deciding
+not to use it this time is not a boundary — it's luck.
+
+- **If wrong:** every claude-driven chat turn in production has functional access to whatever MCP
+  servers happen to be configured on the machine, not just visibility into them. A future prompt
+  or an unexpected model decision could act on that access.
+- **Clears when:** the daemon's `claude` adapter passes `--bare` (or equivalent scoping) and a
+  capture confirms both a minimal `system.init` payload and zero connected MCP servers.
+
+## G-4 — Two narrower streaming questions left after the real `claude` capture
+
+**Kind:** unproved
+**Raised:** 2026-09-10, after closing G-1.
+
+The real capture answered the shape of a full turn, but not everything:
+
+1. **What does a hit rate limit actually look like?** The captured `rate_limit_event` showed only
+   `"status":"allowed"`. We do not know the blocked value, or whether the payload changes shape
+   when a limit is actually exceeded. Cannot be forced in a trivial test.
+2. **Token-by-token deltas are unverified for all three providers.** Every capture so far used the
+   non-partial stream mode — one complete message per turn. The incremental "typing" feel a chat
+   UI wants requires `claude --include-partial-messages` (and codex/agy's equivalents, if they
+   exist) captured separately.
+
+Lower stakes than G-1 was: (1) blocks the "you're over your limit" state specifically, not the
+whole feature, and a design can ship the "approaching your limit" state without it; (2) is a
+rendering smoothness question, not a data-modeling one.
+
+- **If wrong:** (1) a "provider blocked" UI state gets built against a guess and needs correcting
+  once a real limit is hit. (2) chat text renders per-message rather than per-token until fixed —
+  a downgrade in polish, not a broken feature.
+- **Clears when:** (1) any provider is used enough to actually hit a limit, or provider
+  documentation describes the blocked payload. (2) one more capture with
+  `--include-partial-messages` added.

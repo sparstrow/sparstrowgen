@@ -62,8 +62,16 @@ agent_clis:
     print_note: "--verbose is REQUIRED with --output-format stream-json in print mode, not obvious from --help"
     resume: "--resume <uuid> / --session-id <uuid>"
     model_flag: "--model"
-    scoping: "spawn with --bare — see docs/KnownGaps.md G-3"
-    usage_verified: false
+    scoping: "MANDATORY --bare — see docs/KnownGaps.md G-3 (unscoped calls get working MCP tool access, verified)"
+    usage_verified: true
+    usage_fields: [input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens, service_tier, inference_geo]
+    cost_verified: true
+    cost_field: "total_cost_usd (on the result event) — the only one of the three that reports real USD"
+    rate_limit_signal:
+      verified: true
+      event_type: "rate_limit_event"
+      fields: [status, resetsAt, rateLimitType, overageStatus, overageDisabledReason, isUsingOverage]
+      note: "only status=allowed observed; the blocked/exceeded shape is unverified — see docs/KnownGaps.md G-4"
   - name: codex
     availability: available
     print: "codex exec --json"
