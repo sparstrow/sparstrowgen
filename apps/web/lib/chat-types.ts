@@ -25,12 +25,18 @@ export type Model = {
   label: string;
 };
 
+/** What claude's rate_limit_event actually carries.
+ *
+ *  There is no percentage in it. The first design showed "62%" behind a
+ *  capacity bar and that figure was invented — the real payload is a status, a
+ *  reset timestamp and a window name. So we can say honestly *when the window
+ *  resets*, and never *how much is left*. See docs/Decisions.md D-018. */
 export type Headroom = {
-  /** Percent of the current window remaining. */
-  pct: number;
-  /** Human label for when the window resets, e.g. "4h 12m". */
-  resetsIn: string;
-  /** Which window this is — claude reports "five_hour". */
+  /** "allowed" is the only value ever observed. */
+  status: string;
+  /** Unix seconds. Counted down on the client so it stays live. */
+  resetsAt: number;
+  /** e.g. "five_hour". */
   window: string;
 };
 

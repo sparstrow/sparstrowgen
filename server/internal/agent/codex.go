@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -22,20 +23,21 @@ type Codex struct{}
 
 func (Codex) ID() string { return "codex" }
 
-func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
-	// `resume` takes the thread id and the prompt positionally; a fresh run
-	// takes the prompt alone. The flags are otherwise identical.
+func codexArgs(prompt string, opts ExecOptions) []string {
 	args := []string{"exec", "--json", "--ignore-user-config", "--skip-git-repo-check"}
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)
 	}
+	// `resume` takes the thread id and the prompt positionally; a fresh run
+	// takes the prompt alone.
 	if opts.ResumeSessionID != "" {
-		args = append(args, "resume", opts.ResumeSessionID, prompt)
-	} else {
-		args = append(args, prompt)
+		return append(args, "resume", opts.ResumeSessionID, prompt)
 	}
+	return append(args, prompt)
+}
 
-	cmd := command(ctx, opts.Cwd, "codex", args...)
+func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
+	cmd := command(ctx, opts.Cwd, "codex", codexArgs(prompt, opts)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -52,48 +54,17 @@ func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*S
 
 	go func() {
 		defer close(result)
-
-		var (
-			full      strings.Builder
-			sessionID string
-			tokens    int64
-			apiErr    string
-		)
-
-		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-		for scanner.Scan() {
-			var ev codexEvent
-			if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
-				continue
-			}
-			switch ev.Type {
-			case "thread.started":
-				// This is the resume handle: `codex exec resume <thread_id>`.
-				if ev.ThreadID != "" {
-					sessionID = ev.ThreadID
-					messages <- Message{Type: MessageStarted, SessionID: sessionID}
-				}
-			case "item.completed":
-				if ev.Item.Type == "agent_message" && ev.Item.Text != "" {
-					full.WriteString(ev.Item.Text)
-				}
-			case "turn.completed":
-				tokens = ev.Usage.total()
-			case "error":
-				apiErr = ev.Message
-			}
-		}
+		p := parseCodex(stdout, messages)
 		close(messages)
 
 		waitErr := cmd.Wait()
-		if apiErr != "" {
-			waitErr = fmt.Errorf("codex: %s", apiErr)
+		if p.Err != nil {
+			waitErr = p.Err
 		}
 		result <- Result{
-			Text:      full.String(),
-			SessionID: sessionID,
-			Tokens:    tokens,
+			Text:      p.Text,
+			SessionID: p.SessionID,
+			Tokens:    p.Tokens,
 			// codex reports tokens only, never currency. Leaving SpendTicks at
 			// zero is what makes "no cost data" distinguishable from "free".
 			Err: waitErr,
@@ -101,6 +72,41 @@ func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*S
 	}()
 
 	return &Session{Messages: messages, Result: result}, nil
+}
+
+func parseCodex(r io.Reader, out chan<- Message) parsed {
+	var (
+		p    parsed
+		full strings.Builder
+	)
+
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for scanner.Scan() {
+		var ev codexEvent
+		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case "thread.started":
+			// This is the resume handle: `codex exec resume <thread_id>`.
+			if ev.ThreadID != "" {
+				p.SessionID = ev.ThreadID
+				send(out, Message{Type: MessageStarted, SessionID: p.SessionID})
+			}
+		case "item.completed":
+			if ev.Item.Type == "agent_message" && ev.Item.Text != "" {
+				full.WriteString(ev.Item.Text)
+			}
+		case "turn.completed":
+			p.Tokens = ev.Usage.total()
+		case "error":
+			p.Err = fmt.Errorf("codex: %s", ev.Message)
+		}
+	}
+
+	p.Text = full.String()
+	return p
 }
 
 type codexEvent struct {

@@ -35,11 +35,11 @@
   --provider-codex: oklch(0.82 0.012 250);
   --provider-agy: oklch(0.7 0.115 255);
 
-  /* Capacity + availability. "unknown" is deliberately not a shade of the ok/low
-     ramp: a provider that reports nothing must not read as a provider doing fine.
-     See docs/Capabilities.md — only claude emits a rate-limit signal. */
-  --capacity-ok: oklch(0.72 0.15 155);
-  --capacity-low: oklch(0.76 0.15 75);
+  /* Availability. There is no healthy→empty ramp any more: the rate-limit
+     payload carries no percentage, so nothing can be shaded by how full it is
+     (D-018). "out" marks a window a provider says is not allowed; "unknown"
+     marks a provider that reports nothing, and is deliberately its own colour —
+     silence must never read as a provider doing fine. */
   --capacity-out: oklch(0.63 0.2 25);
   --capacity-unknown: oklch(0.55 0.01 250);
 
@@ -73,8 +73,6 @@
   --provider-codex: oklch(0.86 0.01 250);
   --provider-agy: oklch(0.74 0.12 255);
 
-  --capacity-ok: oklch(0.76 0.16 155);
-  --capacity-low: oklch(0.8 0.15 75);
   --capacity-out: oklch(0.68 0.2 25);
   --capacity-unknown: oklch(0.48 0.01 250);
 
@@ -112,8 +110,6 @@
   --color-provider-codex: var(--provider-codex);
   --color-provider-agy: var(--provider-agy);
 
-  --color-capacity-ok: var(--capacity-ok);
-  --color-capacity-low: var(--capacity-low);
   --color-capacity-out: var(--capacity-out);
   --color-capacity-unknown: var(--capacity-unknown);
 

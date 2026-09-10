@@ -313,3 +313,34 @@ So `buf` is **not installed** and the protocol starts as Go structs with JSON ta
 Revisit once real message shapes exist and the cost of hand-maintaining them is observable rather
 than predicted. `sqlc` and `goose` were installed — Multica confirms sqlc; on goose we deliberately
 diverge, since writing our own runner is ~900 lines of infrastructure before anything works.
+
+## D-018 — The usage strip shows when a window resets, never how much is left
+
+**2026-09-10.** Rejected: the percentage-and-capacity-bar readout the design shot showed and the
+mock implemented (`claude 62% ▓▓▓░░ resets 4h 12m`).
+
+That percentage does not exist. `claude`'s `rate_limit_event` — the only usage signal any of the
+three providers emits — carries exactly this:
+
+```json
+{"status":"allowed","resetsAt":1789083000,"rateLimitType":"five_hour",
+ "overageStatus":"rejected","isUsingOverage":false}
+```
+
+A status, a reset timestamp, a window name. Nothing about consumption. The 62% was invented for the
+mock, survived the image round because a generated picture will draw whatever it is told, and was
+still there when the surface was wired.
+
+**Time remaining is not capacity remaining**, and a bar is read as the second. The elapsed fraction
+of a five-hour window is computable, but showing it as a filled bar would state something we cannot
+measure — the owner could be at 5% of his quota or 95% and it would look identical.
+
+So the strip reads `claude · 5-hour resets 2h 25m`, counted down on the client so it stays true
+without the server pushing. `codex` and `agy` keep "no limit data" against a dashed rule, which
+remains a distinct state from "plenty left". The `--capacity-ok` / `--capacity-low` tokens and
+`capacityClass()` are deleted: with no proportion, there is nothing to shade.
+
+**This is the feasibility gate failing and then working.** The rule is "never design what the
+backend can't deliver", and a design got approved with a number no provider emits. What caught it
+was building the adapter — which is late, but not too late, and is why the backend step is allowed
+to send a design back.

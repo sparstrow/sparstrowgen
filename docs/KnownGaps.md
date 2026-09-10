@@ -132,26 +132,6 @@ is account-dependent (`"not supported when using Codex with a ChatGPT account"`)
   as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
   this way and stays curated.
 
-## G-10 — Provider headroom is never populated
-
-**Kind:** unproved
-**Raised:** 2026-09-10, wiring the surface to real data.
-
-`Provider.Headroom` is always nil, so the strip shows "no limit data" for all
-three providers. For `codex` and `agy` that is the truth. **For `claude` it is
-not** — it emits a verified `rate_limit_event` with percent and reset time, and
-the adapter simply does not parse it yet.
-
-The design's whole honesty argument was that "no limit data" must be
-distinguishable from "plenty left". That still holds, but claude is currently
-being shown as unknowable when it is merely unparsed, which is its own kind of
-lie.
-
-- **If wrong:** the owner cannot see his claude headroom, which is the one place
-  it exists — and US3 of the spec is about exactly that.
-- **Clears when:** the claude adapter reads `rate_limit_event` and populates
-  Headroom, and the strip shows a real percentage against a real reset time.
-
 ## G-11 — Server state is held in `useState`, not TanStack Query
 
 **Kind:** caveat
@@ -174,25 +154,3 @@ and this code is inside that class rather than outside it.
 - **Clears when:** TanStack Query owns the server state, websocket events patch
   its cache, and `useState` in `chat-surface.tsx` holds only draft, pending
   switch and selection.
-
-## G-12 — The Go server and daemon have no tests
-
-**Kind:** unproved
-**Raised:** 2026-09-10, first backend slice.
-
-Everything was verified by running it — a real conversation moved codex → agy →
-codex, with the replay quoted, charged and recorded correctly. That is real
-evidence and it is what the owner cares about. But there is not one `_test.go`
-file, so none of it is protected against the next change.
-
-Multica's rule is the one to adopt when they are written: **no default test may
-execute a real agent CLI.** We drive the same binaries on the same machine, and
-a test that resolves `claude` from PATH spends the owner's quota. Fake
-executable paths by default; real-agent smoke behind a build tag and an env var.
-
-- **If wrong:** a regression in replay, seq allocation or seen_seq lands silently.
-  The seen_seq high-water logic is the sharpest edge — it is the difference
-  between replaying two messages and replaying two hundred.
-- **Clears when:** `go test ./...` covers the store's seq and seen_seq rules, the
-  three stream parsers against captured JSONL fixtures, and the turn lifecycle
-  with a fake backend.

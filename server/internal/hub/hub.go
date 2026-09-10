@@ -133,6 +133,27 @@ func (h *Hub) SetProviders(p []protocol.Provider) {
 	h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: p})
 }
 
+// SetHeadroom records a usage window for one provider and tells every browser.
+//
+// It arrives mid-turn because that is the only time a provider mentions one, so
+// this is the one piece of provider state that is learned by doing work rather
+// than by probing.
+func (h *Hub) SetHeadroom(provider string, head *protocol.Headroom) {
+	h.mu.Lock()
+	changed := false
+	for i := range h.providers {
+		if h.providers[i].ID == provider {
+			h.providers[i].Headroom = head
+			changed = true
+			break
+		}
+	}
+	h.mu.Unlock()
+	if changed {
+		h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers()})
+	}
+}
+
 func (h *Hub) Providers() []protocol.Provider {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

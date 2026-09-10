@@ -39,11 +39,26 @@ type Model struct {
 	Label string `json:"label"`
 }
 
-// Headroom is how much of a usage window is left. Only claude reports one.
+// Headroom is what claude's rate_limit_event actually carries. Only claude
+// emits one at all.
+//
+// There is NO percentage in it. The mock and the design shots both showed
+// "62%" with a capacity bar, and that number was invented — the real payload is
+// a status, a reset timestamp and a window name:
+//
+//	{"status":"allowed","resetsAt":1789083000,"rateLimitType":"five_hour", ...}
+//
+// So the surface can honestly say *when the window resets* and never *how much
+// is left*. Time remaining is not capacity remaining, and a bar would be read
+// as the second. See docs/Decisions.md D-018.
 type Headroom struct {
-	Pct      int    `json:"pct"`
-	ResetsIn string `json:"resetsIn"`
-	Window   string `json:"window"`
+	// "allowed" is the only value ever observed. See KnownGaps G-4.
+	Status string `json:"status"`
+	// Unix seconds. Sent raw so the client can count it down without the server
+	// having to push a new value every minute.
+	ResetsAt int64 `json:"resetsAt"`
+	// The window this applies to, e.g. "five_hour".
+	Window string `json:"window"`
 }
 
 type Provider struct {
@@ -168,6 +183,10 @@ const (
 	DaemonDelta  = "delta"
 	DaemonDone   = "done"
 	DaemonFailed = "failed"
+	// DaemonLimit reports a provider's usage window. It arrives mid-turn,
+	// because that is the only time a provider mentions one — there is no way
+	// to ask.
+	DaemonLimit = "limit"
 	// DaemonStarted reports the provider's session id as soon as it is known,
 	// so a resume pointer survives a turn that later fails.
 	DaemonStarted = "started"
@@ -188,6 +207,10 @@ type DaemonMessage struct {
 
 	// started
 	SessionID string `json:"sessionId,omitempty"`
+
+	// limit
+	Provider string    `json:"provider,omitempty"`
+	Headroom *Headroom `json:"headroom,omitempty"`
 
 	// done
 	Full       string `json:"full,omitempty"`

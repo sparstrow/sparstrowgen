@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
 
 type MessageType string
@@ -24,12 +26,16 @@ const (
 	// MessageStarted carries the provider's own session id as soon as it is
 	// known, so a resume pointer survives a turn that later fails.
 	MessageStarted MessageType = "started"
+	// MessageLimit reports a usage window. Only claude emits one, and only
+	// during a turn — there is no way to ask a provider for it.
+	MessageLimit MessageType = "limit"
 )
 
 type Message struct {
 	Type      MessageType
 	Text      string
 	SessionID string
+	Headroom  *protocol.Headroom
 }
 
 type Result struct {
@@ -47,6 +53,33 @@ type Result struct {
 type Session struct {
 	Messages <-chan Message
 	Result   <-chan Result
+}
+
+// parsed is what one turn's stream yielded. Every provider's parser returns
+// this, which is what lets them be tested against captured output instead of a
+// live CLI.
+type parsed struct {
+	Text       string
+	SessionID  string
+	Tokens     int64
+	SpendTicks int64
+	// Err is a failure the PROVIDER reported, as distinct from the process
+	// exiting badly. A turn can fail cleanly with exit code 0.
+	Err error
+}
+
+// send blocks until the consumer takes the message.
+//
+// Dropping instead would be worse than waiting: a discarded delta is text the
+// reader never sees arrive, and back-pressure through to the CLI's stdout pipe
+// is the correct response to a slow consumer. Execute's caller always drains
+// Messages until it is closed, so this cannot deadlock in production. A nil
+// channel is allowed so a parser can run with nobody listening.
+func send(out chan<- Message, msg Message) {
+	if out == nil {
+		return
+	}
+	out <- msg
 }
 
 type ExecOptions struct {

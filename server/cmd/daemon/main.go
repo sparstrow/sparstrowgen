@@ -180,6 +180,11 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 			_ = d.send(protocol.DaemonMessage{
 				Type: protocol.DaemonDelta, TurnID: t.TurnID, Text: msg.Text,
 			})
+		case agent.MessageLimit:
+			_ = d.send(protocol.DaemonMessage{
+				Type: protocol.DaemonLimit, TurnID: t.TurnID,
+				Provider: t.Provider, Headroom: msg.Headroom,
+			})
 		}
 	}
 

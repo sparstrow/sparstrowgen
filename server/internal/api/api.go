@@ -341,6 +341,11 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 	case protocol.DaemonHello:
 		a.hub.SetProviders(msg.Providers)
 		return
+	case protocol.DaemonLimit:
+		// Not tied to a turn's lifecycle: the window belongs to the provider,
+		// and it stays true after the turn that happened to report it ends.
+		a.hub.SetHeadroom(msg.Provider, msg.Headroom)
+		return
 	}
 
 	a.mu.Lock()
