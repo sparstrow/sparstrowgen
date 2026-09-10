@@ -1,6 +1,6 @@
 # docs/
 
-Everything that isn't code but needs to survive a session. Five files and three folders — if you're
+Everything that isn't code but needs to survive a session. Five files and four folders — if you're
 unsure where something goes, it's one of these.
 
 ```
@@ -10,6 +10,7 @@ docs/
 ├── KnownGaps.md       built-but-unproved, and caveats noticed in passing
 ├── Bugs.md            wrong behaviour in the running app
 ├── Later.md           questions, parked work, and ideas — one file, one format
+├── feedback/          what he said after looking at a built surface, verbatim
 ├── specs/             what the owner wants and why, in his words
 ├── runbooks/          steps only he can do — dashboards, DNS, secrets
 └── templates/         spec, runbook
@@ -42,6 +43,7 @@ server/migrations/                                  the schema it needed
 | "This is behaving wrong" | `Bugs.md` |
 | "Later" / "just an idea" / "I'm not answering that now" | `Later.md` |
 | "Here's what I want and how I'd use it" | `specs/` |
+| Several changes at once, after looking at something built | `feedback/` — capture verbatim, triage after |
 | "Only a human can do this part" | `runbooks/` |
 
 Each file states its own format at the top. Only specs and runbooks have templates, because only

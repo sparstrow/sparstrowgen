@@ -182,11 +182,17 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | Behaving wrong | [`Bugs.md`](docs/Bugs.md) |
 | Question, parked, or just an idea | [`Later.md`](docs/Later.md) |
 | What he wants and why | [`docs/specs/`](docs/specs/) |
+| Several changes at once, after he looks at something built | [`docs/feedback/`](docs/feedback/) |
 | Only a human can do it — dashboard, DNS, secrets | [`docs/runbooks/`](docs/runbooks/) |
 
 Skills carry procedure so this file doesn't: `design-driven-feature`, `writing-specs`,
 `design-shots`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,
-`design-brief`, `design-system`.
+`design-brief`, `design-system`, `feedback-round`.
 
 When he says "park it", "later", or "just an idea", write it down in the same turn. Chat is not read
 by the next session.
+
+**When he starts numbering feedback, invoke `feedback-round` and stop building.** Capture every item
+verbatim as it arrives, triage the lot once he says he's finished, then work. Fixing item 1 while
+item 4 is still coming wastes both — his list goes unfinished, and item 4 often changes what item 1
+meant.
