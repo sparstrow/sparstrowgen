@@ -44,7 +44,7 @@ not "ready or not", but *whether waiting is a plan*.
 | **Blocked** | Nothing will happen until a human acts | `gemini` — installed, **no account access** |
 
 **`gemini` is `Blocked`, not `not built`.** The CLI is present (`gemini` 0.49.0 on PATH, confirmed
-2026-09-10), but the owner has no account signed into it. Building an adapter for it is pointless
+2026-09-09), but the owner has no account signed into it. Building an adapter for it is pointless
 until that changes — a UI must never silently omit a blocked provider the way an unbuilt one is
 omitted; it should say why, the way Multica's `RuntimeUnusableNotice` does. Tracked as
 [`Later.md`](Later.md) L-6. Do not build a `gemini` adapter against this entry — build it against a
@@ -53,7 +53,7 @@ real capture once he has access.
 ## What the agent CLIs emit
 
 This is the hard ceiling on what a chat UI can show. We drive these CLIs; we don't control what
-they report. Captured 2026-09-10 by running each with a trivial prompt and reading the real
+they report. Captured 2026-09-09 by running each with a trivial prompt and reading the real
 output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G-4.
 
 | | `claude` 2.1.90 | `codex` 0.153.4 | `agy` 1.1.27 |
@@ -76,7 +76,7 @@ the fields differ but all three exist and are real.
 
 ### The rate-limit signal — the mechanism this entire product depends on
 
-**Verified, from a real `claude -p` capture, 2026-09-10.** Every turn emits a
+**Verified, from a real `claude -p` capture, 2026-09-09.** Every turn emits a
 `rate_limit_event` alongside the assistant message:
 
 ```json
@@ -121,7 +121,7 @@ arrive on the `state:"ACTIVE"` updates; the final usage total is on `state:"DONE
 
 ### Incremental streaming differs per provider — and the design must absorb it
 
-**Verified 2026-09-10 by capturing a 400-word answer from each.** This is not a uniform capability,
+**Verified 2026-09-09 by capturing a 400-word answer from each.** This is not a uniform capability,
 and a chat design that assumes it is will look broken on one provider:
 
 - **`agy` streams.** 93 `step_update` events with `state:"ACTIVE"`, each carrying a `text_delta` of
@@ -143,12 +143,12 @@ the design from the first draft, not retrofitted when codex is wired up.
 `gemini` 0.49.0 is installed but blocked (no account) — see above. Not captured, and not worth
 capturing until it is.
 
-## Real caveats found while capturing (2026-09-10)
+## Real caveats found while capturing (2026-09-09)
 
 - **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`
   fixes it.** An unscoped run emitted `AuthRequired` stderr noise for Supabase and GitHub Copilot
   MCP servers unrelated to this app. `codex exec --json --ignore-user-config` was re-captured
-  2026-09-10 and produced **zero** MCP noise while still authenticating (the flag skips
+  2026-09-09 and produced **zero** MCP noise while still authenticating (the flag skips
   `config.toml` but keeps using `CODEX_HOME` for auth). **The daemon's `codex` adapter passes
   `--ignore-user-config`** — codex's equivalent of `claude --bare`. Not optional, for the same
   scope-leak reason as G-3.

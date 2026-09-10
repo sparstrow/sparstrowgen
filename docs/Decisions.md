@@ -142,7 +142,7 @@ place to forget. Entries carry a `Kind:` of `unproved` or `caveat` so both stay 
 
 ## D-011 — Provider availability is three-valued: available / waitable / blocked
 
-**2026-09-10.** Rejected: a plain online/offline boolean.
+**2026-09-09.** Rejected: a plain online/offline boolean.
 
 Adopted from Multica's `AgentAvailability` (`server/internal/service/agent_ready.go`): the
 distinction that matters is not "ready or not" but *whether waiting is a plan*. A daemon whose

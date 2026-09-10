@@ -56,7 +56,7 @@ to it" are different situations and the reader needs to know which.>
 ## G-3 — `claude -p` inherits the entire personal Claude Code environment, with working tool access
 
 **Kind:** caveat
-**Raised:** 2026-09-10, sandboxed capture attempt. **Escalated:** 2026-09-10, real-terminal capture.
+**Raised:** 2026-09-09, sandboxed capture attempt. **Escalated:** 2026-09-09, real-terminal capture.
 
 Two captures, same finding, worse the second time. The sandboxed attempt showed a `system.init`
 payload listing 60+ personal skills and MCP servers in `"pending"` status. The real-terminal
@@ -78,7 +78,7 @@ not to use it this time is not a boundary — it's luck.
 ## G-4 — What a *hit* rate limit looks like, on any provider
 
 **Kind:** unproved
-**Raised:** 2026-09-10, after closing G-1. **Narrowed:** 2026-09-10, streaming half split out to G-5.
+**Raised:** 2026-09-09, after closing G-1. **Narrowed:** 2026-09-09, streaming half split out to G-5.
 
 Two related unknowns, neither closable by running anything:
 
@@ -100,7 +100,7 @@ feature: switching provider mid-conversation is user-initiated and works regardl
 ## G-5 — `claude`'s incremental streaming is unverified
 
 **Kind:** unproved
-**Raised:** 2026-09-10, split from G-4 once codex and agy were verified.
+**Raised:** 2026-09-09, split from G-4 once codex and agy were verified.
 
 `agy` streams (93 delta chunks for a 400-word answer) and `codex` provably does not (no delta event
 type exists in `--json`). `claude` sits between them unverified: plain `stream-json` gives one

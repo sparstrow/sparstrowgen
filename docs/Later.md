@@ -95,7 +95,7 @@ an app that isn't built.
 
 ## L-6 — Gemini adapter
 
-**Status:** parked **Raised:** 2026-09-10
+**Status:** parked **Raised:** 2026-09-09
 
 `gemini` 0.49.0 is installed on the machine but the owner has no account signed in — **blocked**,
 not merely unbuilt, per the three-state model in [`Capabilities.md`](Capabilities.md). Writing an
