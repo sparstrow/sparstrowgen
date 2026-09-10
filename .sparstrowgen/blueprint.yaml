@@ -137,4 +137,5 @@ build_tools:
     caveats:
       - "one image per run — asking for several returns one image and prose about the rest"
       - "prompts regress to the category mean; name the product-specific elements or you get a stock design"
-      - "ask for greeked placeholder bars instead of text — generated pseudo-words dominate every reaction"
+      - "write the REAL content into the prompt — actual names, labels, numbers, message text. Greeked placeholder bars were tried first and rejected by the owner: a screen of grey rectangles cannot be judged. Imperfect generated text is the cheaper failure."
+      - "prompts need 200-300 words, region by region; short prompts return stock designs"

@@ -32,8 +32,12 @@ carry:
 
 Recorded so the next round's prompts start better:
 
-- **Greeked placeholder bars worked.** No garbled pseudo-text in any of the four, and reactions
-  stay on layout rather than copy.
+- **Greeked placeholder bars were wrong, and this round is why.** The first pass asked for neutral
+  bars instead of text, to avoid garbled AI pseudo-words. It avoided them and produced four images
+  the owner could not judge: *"I dont need empty image with boxes and charts, I want more real and
+  acutal image."* Regenerated with real product names, real numbers, real message text and filler
+  prose that reads as sentences. The skill's rule is reversed accordingly — imperfect text costs a
+  glance, an abstract mockup costs the round.
 - **Naming the product-specific elements works, and this round proved it.** The same generator, on
   the same machine, returned a generic Telegram clone when asked for "a chat app UI" during the
   capability test, and returned A — headroom strip, per-message agent badges, a three-dot provider
@@ -41,13 +45,14 @@ Recorded so the next round's prompts start better:
   Keep doing this; it is the difference between a useful round and a wasted one.
 - **A took roughly three times as long as B/C/D** because it fell back to a slower generation path.
   Budget for one straggler in a parallel round rather than treating it as a failure.
-- **D over-read "editorial, airy"** and produced far more whitespace than a working tool wants, and
-  five agent colours where the product has three. The direction is legible; the density is the
-  generator's interpretation, not a proposal.
-- **B is austere to the point of abstraction** — it reads the density idea correctly but shows
-  almost no structure beyond the rules and the divider.
-- Judge these on composition, hierarchy, and density only. None of them show interaction, real
-  data, or the four states — the prototype settles all of that.
+- **Two prompt bugs, mine not the tool's.** (1) I wrote the word `dollar` instead of `$` to dodge
+  shell escaping, and A, B and D rendered it literally as "dollar 0.03"; C alone interpreted it.
+  Escape the `$` properly instead. (2) C's prompt enumerated only three provider cards — claude,
+  codex, gemini — so `agy` is missing from that direction entirely. Take the roster from
+  `blueprint.yaml`, not from memory.
+- **Judge these on composition, hierarchy, density and whether the information shown is the right
+  information.** They still do not show interaction, behaviour at real volume, or the four states —
+  the prototype settles all of that.
 
 ## What this told us about taste
 

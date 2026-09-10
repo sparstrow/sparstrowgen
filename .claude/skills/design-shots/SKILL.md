@@ -52,6 +52,7 @@ re-litigating a settled question, and the whole ordering falls apart.
 | Layout and composition | Any interaction |
 | Information hierarchy — what dominates | Real component behaviour |
 | Density: airy or packed | Real data: long names, empty fields, 200 rows |
+| Whether the information shown is the *right* information | Whether it stays right at real volume |
 | Mood, weight, temperature | The four states |
 | Whether an idea is worth coding | Whether it actually works |
 
@@ -102,12 +103,27 @@ two directions. Say so and generate two — a real two beats a padded three.
 
 ### 2. Prompts — the two things that decide whether this round is useful
 
-**Greek the text deliberately.** Ask for placeholder bars instead of words:
-*"no readable text, use neutral placeholder bars for all labels and content"*.
-Image models write garbled pseudo-words, and garbled text is the single loudest
-thing in a mockup — it drags every reaction toward "the text looks wrong" and
-away from the layout, which is the only thing you are actually asking about. It
-also makes the directions comparable, because none of them win on copywriting.
+**Write the real content into the prompt.** Real product names, real labels, real
+numbers, real message text. `claude 62% resets 4:12`, not "a status indicator".
+`gemini — no account signed in`, not "a disabled state". A message that actually
+says something, not a bubble.
+
+This was learned by getting it wrong. The first version of this skill said to
+greek everything — ask for neutral placeholder bars, on the theory that garbled
+AI pseudo-text would hijack every reaction. It does avoid that, and the images
+were still useless: **the owner cannot judge a screen made of grey rectangles.**
+His words, on the first round that shipped: *"I dont need empty image with boxes
+and charts, I want more real and acutal image."*
+
+A wireframe of bars answers "where do the blocks go", which is the least
+interesting question and the one you can already answer in your head. A realistic
+screen answers whether the thing is worth building — whether four provider chips
+across the top is reassuring or oppressive, whether a cost figure per message
+reads as useful or nagging. Those only appear with real content in place.
+
+Imperfect text is an acceptable price. A slightly wrong word in a filler sentence
+costs a glance; an abstract mockup costs the whole round. Filler prose is fine —
+say so in the prompt — as long as it reads as real sentences rather than bars.
 
 **Name the product-specific parts explicitly, or you get stock.** Asked for "a
 chat app UI", the generator returns Telegram — verified, that is exactly what
@@ -117,20 +133,40 @@ out what is unusual about *this* screen: the provider being switched, the limit
 running out, the two agents in one thread. If nothing in the prompt is specific
 to the product, the image will not be either, and the round is wasted.
 
-A workable prompt shape:
+A prompt that works is long — 200–300 words, region by region. Short prompts get
+stock designs; this is where the specificity actually goes in:
 
 ```
-A UI mockup of <the specific screen, including its unusual elements>.
-Layout: <the structural idea that makes this direction different>.
-Style: flat vector UI mockup, <light|dark> theme, <density>.
-No readable text — neutral placeholder bars for all labels and content.
-No logos, no watermark, no browser chrome, no phone frame.
-<viewport: desktop 16:10 | mobile portrait>
+A realistic high-fidelity screenshot of <app name>, a <what it is>.
+
+Layout: <region 1 — its position, and the REAL text in it: names,
+labels, values, timestamps>.
+<region 2 — same treatment>.
+<region 3 — same treatment, including the one state that makes this
+direction different from the others>.
+
+Style: realistic polished product screenshot of a real shipping app,
+<light|dark> theme, crisp legible <sans-serif|monospace> UI text, the
+quality of a developer tool marketing site screenshot. Render ACTUAL
+READABLE TEXT for every label, name, number and status. Body text may
+be generic filler but must read as real sentences. Absolutely no grey
+placeholder bars, no wireframe rectangles standing in for text.
+No logos, no watermark, no browser chrome. <viewport>
 ```
+
+Walk the screen region by region and give each one its actual content. If you
+cannot say what a region says, you do not yet know what the region is for — and
+that is worth discovering here rather than in the prototype.
 
 Keep style, theme, and viewport **identical across directions**. The only thing
 varying is the idea. If one is dark and one is light, the owner is choosing a
 theme, not a direction.
+
+**Pull the real content from the spec and `Capabilities.md`, not from
+imagination.** Provider names, the fields a provider actually emits, the states
+that actually exist. An image showing a cost figure for a provider that reports
+none is the undeliverable-design failure in miniature, and it is easier to commit
+here than anywhere else because nobody reads a mockup sceptically.
 
 ### 3. Generate
 
