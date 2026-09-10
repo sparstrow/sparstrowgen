@@ -113,3 +113,27 @@ is account-dependent (`"not supported when using Codex with a ChatGPT account"`)
 - **Clears when:** the daemon asks `claude` and `agy` at runtime and treats an unknown-model error
   as a reason to refresh, with a static catalogue only as the fallback. `codex` cannot be closed
   this way and stays curated.
+
+## G-13 — Syntax highlighting covers only lowlight's `common` set
+
+**Kind:** caveat
+**Raised:** 2026-09-10, while adding the language header to code blocks (B-4)
+
+`rehype-highlight` registers lowlight's `common` languages by default — roughly 37, including go,
+python, typescript, sql, bash, java, rust, json, yaml, xml. Not included: **powershell**,
+dockerfile, toml, protobuf. A block in one of those is labelled correctly and rendered as plain
+text; rehype-highlight emits a `missing-language` message and moves on, so nothing is thrown and
+nothing is lost.
+
+Verified: a ```` ```powershell ```` block renders with the header "PowerShell" and zero `hljs-*`
+spans (`apps/web/components/chat/markdown.tsx`).
+
+Left alone deliberately. Registering more languages needs `highlight.js` as a direct dependency —
+lowlight only re-exports it, and importing through it would be a phantom dependency — and the choice
+of which to add is a question about what the owner actually writes in, not one to answer by guessing.
+PowerShell is the likely first, on a Windows machine whose own commands are PowerShell.
+
+- **If wrong:** a PowerShell or Dockerfile answer is monochrome. Cosmetic; the code is complete,
+  correct, copyable and correctly labelled.
+- **Clears when:** the owner says which languages matter, and `highlight.js` is added with just
+  those registered.

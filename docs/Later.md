@@ -129,3 +129,20 @@ The obvious approach costs a model call per conversation. The cheap one is the f
 first message, truncated, which is free and right most of the time.
 
 **Unblocks when:** the sidebar holds enough conversations that finding one by eye stops working.
+
+## L-10 — The raw view shows the stored text, not the provider's event stream
+
+**Status:** idea **Raised:** 2026-09-10
+
+The Raw toggle (`components/chat/raw-transcript.tsx`) prints the transcript exactly as it is stored,
+which is what the markdown renderer is handed — so any difference between the two views is the
+renderer's doing, and that is the question it was built to answer.
+
+It cannot answer the question one layer down. A CLI emits far more than its answer: reasoning
+events, tool calls, file edits, per-turn metadata. The daemon parses those, keeps the text and the
+usage, and discards the rest — so if a provider *said* something we never stored, no view in the app
+can show it. Seeing that needs the daemon to retain the raw event stream per turn, which is a
+storage decision (how much, for how long) rather than a UI one.
+
+**Unblocks when:** an answer looks wrong in a way the stored text cannot explain — most likely a
+turn that used tools, where what the agent *did* is invisible and only what it said survives.

@@ -15,11 +15,124 @@ import { Check, Copy } from "lucide-react";
    characters — but it stops every OTHER message in the transcript re-parsing
    alongside it, which is where the cost would actually have been. */
 
-function CodeBlock({ children }: { children: React.ReactNode }) {
+/* ── The fence's own words ────────────────────────────────────────────────────
+   A fence carries more than code: ```go says the language, and anything after
+   it (```go title="main.go") is the meta string. Both were being dropped on the
+   floor (docs/Bugs.md B-4).
+
+   The language has to be captured BEFORE rehype-highlight runs. remark turns
+   ```go into class="language-go", and when `detect` is on the highlighter adds
+   a class of exactly that shape to untagged fences after GUESSING at them — so
+   afterwards the agent's word and the machine's guess are indistinguishable.
+   Labelling a guess as if the agent had written it is the kind of quiet lie
+   that makes a header worse than no header, so the declared value is stashed
+   while it is still known to be declared.
+
+   Minimal local node types rather than @types/mdast: three fields are used, and
+   importing a transitive dependency's types directly is a phantom import. */
+
+type MdastNode = {
+  type: string;
+  lang?: string | null;
+  data?: { hProperties?: Record<string, string> };
+  children?: MdastNode[];
+};
+
+function walk(node: MdastNode, fn: (n: MdastNode) => void) {
+  fn(node);
+  for (const child of node.children ?? []) walk(child, fn);
+}
+
+function remarkDeclaredLanguage() {
+  return (tree: MdastNode) => {
+    walk(tree, (node) => {
+      if (node.type !== "code" || !node.lang) return;
+      const data = (node.data ??= {});
+      data.hProperties = { ...data.hProperties, "data-lang": node.lang };
+    });
+  };
+}
+
+/** The `<code>` element inside a `<pre>`, as react-markdown hands the node over.
+ *  `data.meta` is set by mdast-util-to-hast itself; `data-lang` is ours. */
+type CodeNode = {
+  type?: string;
+  properties?: Record<string, unknown>;
+  data?: { meta?: string | null };
+};
+
+function fenceOf(node: unknown): { lang?: string; info?: string } {
+  const code = (node as { children?: CodeNode[] } | undefined)?.children?.[0];
+  if (!code || code.type !== "element") return {};
+  const lang = code.properties?.["data-lang"];
+  const info = code.data?.meta;
+  return {
+    lang: typeof lang === "string" ? lang : undefined,
+    info: typeof info === "string" && info.trim() ? info.trim() : undefined,
+  };
+}
+
+/** Display names for the tags agents actually write. Anything not listed shows
+ *  the tag verbatim — a language we have never seen is still worth naming, and
+ *  a wrong expansion would be worse than the tag itself. */
+const LANGUAGE_NAMES: Record<string, string> = {
+  bash: "Bash",
+  c: "C",
+  cpp: "C++",
+  cs: "C#",
+  css: "CSS",
+  diff: "Diff",
+  dockerfile: "Dockerfile",
+  go: "Go",
+  html: "HTML",
+  java: "Java",
+  js: "JavaScript",
+  javascript: "JavaScript",
+  json: "JSON",
+  jsx: "JSX",
+  kotlin: "Kotlin",
+  makefile: "Makefile",
+  md: "Markdown",
+  markdown: "Markdown",
+  php: "PHP",
+  ps1: "PowerShell",
+  powershell: "PowerShell",
+  proto: "Protobuf",
+  py: "Python",
+  python: "Python",
+  rb: "Ruby",
+  ruby: "Ruby",
+  rs: "Rust",
+  rust: "Rust",
+  sh: "Shell",
+  shell: "Shell",
+  sql: "SQL",
+  swift: "Swift",
+  toml: "TOML",
+  ts: "TypeScript",
+  typescript: "TypeScript",
+  tsx: "TSX",
+  xml: "XML",
+  yaml: "YAML",
+  yml: "YAML",
+};
+
+function CodeBlock({
+  lang,
+  info,
+  children,
+}: {
+  lang?: string;
+  info?: string;
+  children: React.ReactNode;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy(e: React.MouseEvent<HTMLButtonElement>) {
-    const code = e.currentTarget.parentElement?.querySelector("code")?.textContent ?? "";
+    const code =
+      e.currentTarget
+        .closest("[data-slot='code-block']")
+        ?.querySelector("code")?.textContent ?? "";
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
@@ -31,22 +144,45 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="group/code relative my-3">
-      <button
-        type="button"
-        onClick={copy}
-        aria-label={copied ? "Copied" : "Copy code"}
-        className="absolute right-2 top-2 rounded-md border bg-background/80 p-1.5 opacity-0 backdrop-blur transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
-      >
-        {copied ? (
-          <Check className="size-3.5 text-foreground" />
-        ) : (
-          <Copy className="size-3.5 text-muted-foreground" />
+    <div
+      data-slot="code-block"
+      className="my-3 overflow-hidden rounded-lg border"
+    >
+      {/* The bar exists for the copy button whether or not a language was
+          declared, so an untagged fence simply leaves the left side empty
+          rather than being labelled with a guess. */}
+      <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
+        {lang && (
+          <span className="font-mono text-xs text-foreground">
+            {LANGUAGE_NAMES[lang.toLowerCase()] ?? lang}
+          </span>
         )}
-      </button>
+        {info && (
+          <span className="truncate font-mono text-xs text-muted-foreground">
+            {info}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={copy}
+          className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {copied ? (
+            <>
+              <Check className="size-3.5" aria-hidden />
+              Copied
+            </>
+          ) : (
+            <>
+              <Copy className="size-3.5" aria-hidden />
+              Copy
+            </>
+          )}
+        </button>
+      </div>
       {/* Wide code scrolls inside its own box; the transcript column never
           scrolls sideways. */}
-      <pre className="overflow-x-auto rounded-lg border bg-background/60 p-3.5 text-[13px] leading-relaxed">
+      <pre className="overflow-x-auto bg-background/60 p-3.5 text-[13px] leading-relaxed">
         {children}
       </pre>
     </div>
@@ -57,12 +193,19 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="text-[15px] leading-relaxed">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkDeclaredLanguage]}
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
         components={{
-          // `pre` carries the copy button; `code` inside it is left alone so
-          // the highlighter's spans survive.
-          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+          // `pre` carries the header and the copy button; `code` inside it is
+          // left alone so the highlighter's spans survive.
+          pre: ({ node, children }) => {
+            const { lang, info } = fenceOf(node);
+            return (
+              <CodeBlock lang={lang} info={info}>
+                {children}
+              </CodeBlock>
+            );
+          },
           code: ({ className, children, ...props }) => {
             const fenced = /language-/.test(className ?? "");
             if (fenced) {

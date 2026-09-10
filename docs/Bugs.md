@@ -78,3 +78,30 @@ no way to change it afterwards.
 **Why it matters more than it looks:** the folder is what the agent can see. A conversation about
 the clinic project that silently runs against this repo gives confidently wrong answers about the
 wrong codebase, with nothing on screen saying so.
+
+## B-4 — Fenced code blocks threw away the language and everything else on the fence line
+
+**Found:** 2026-09-10, owner, reading the first markdown-rendered answers **Status:** fixed 2026-09-10
+**Repro:** Ask any provider for code in several languages. Every block renders identically, with
+nothing saying which language it is.
+**Expected / Actual:** A block declared ```` ```go ```` is labelled Go, and anything else on that
+fence line (```` ```go title="main.go" ````) is shown / both were parsed and then dropped.
+
+B-2 rendered the block but not what the agent said *about* the block. The information was never
+missing from the reply — remark parses the fence's language into a `language-go` class and its meta
+string into `data.meta`, and the renderer read neither.
+
+**Fixed** in `components/chat/markdown.tsx`: a header bar on each block carrying the language, the
+meta string when there is one, and the copy button (previously floating, and revealed only on
+hover).
+
+**The part worth not undoing:** the language is captured by a remark plugin *before*
+rehype-highlight runs. With `detect` on, the highlighter guesses a language for untagged fences and
+records the guess as a class of exactly the same shape — after it has run, the agent's word and the
+machine's guess are indistinguishable. Verified on a real untagged SQL block: it was guessed as CSS.
+A header presenting that as the language would be worse than no header, so an untagged fence gets no
+label and keeps its (still useful) highlighting.
+
+Verified in the browser against four fences — `go` with a meta string, untagged, `zsh` (no display
+name, shown verbatim), `powershell`: labels correct in both themes, each copy button copying its own
+block. See G-13 for what stays uncoloured.

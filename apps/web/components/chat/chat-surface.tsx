@@ -16,10 +16,11 @@ import {
   useRenameConversation,
   useSendMessage,
 } from "@/lib/queries";
-import { useChatView } from "@/lib/store";
+import { useChatView, type TranscriptView } from "@/lib/store";
 import { ConversationList } from "./conversation-list";
 import { ProviderStrip } from "./provider-strip";
 import { MessageList, MessageSkeleton, WorkingIndicator } from "./message-list";
+import { RawTranscript } from "./raw-transcript";
 import { Composer } from "./composer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,6 +32,51 @@ import { formatTokens, formatUsd } from "./provider-meta";
    The only useState left is the wall clock that drives the elapsed counter and
    the daemon-reachable flag, neither of which is server data. */
 
+const VIEWS: { id: TranscriptView; label: string }[] = [
+  { id: "rendered", label: "Rendered" },
+  { id: "raw", label: "Raw" },
+];
+
+/** Two buttons rather than one that flips: a single toggle never says what it
+ *  would switch to, and this one is reached for precisely when you already
+ *  distrust what is on screen. */
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: TranscriptView;
+  onChange: (v: TranscriptView) => void;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5"
+      role="group"
+      aria-label="Transcript view"
+    >
+      {VIEWS.map((v) => (
+        <Button
+          key={v.id}
+          variant="ghost"
+          size="xs"
+          // Selection is a surface lifted out of the track, not a tint: in the
+          // light theme `secondary` and the ghost hover resolve to the same
+          // value, so a tinted selection is invisible the moment the cursor is
+          // over either half.
+          className={
+            value === v.id
+              ? "bg-background text-foreground shadow-sm hover:bg-background"
+              : "text-muted-foreground"
+          }
+          aria-pressed={value === v.id}
+          onClick={() => onChange(v.id)}
+        >
+          {v.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export function ChatSurface() {
   const selectedId = useChatView((s) => s.selectedId);
   const select = useChatView((s) => s.select);
@@ -39,6 +85,8 @@ export function ChatSurface() {
   const setPending = useChatView((s) => s.setPending);
   const inFlight = useChatView((s) => s.inFlight);
   const setInFlight = useChatView((s) => s.setInFlight);
+  const transcriptView = useChatView((s) => s.transcriptView);
+  const setTranscriptView = useChatView((s) => s.setTranscriptView);
   const drafts = useChatView((s) => s.drafts);
   const setDraft = useChatView((s) => s.setDraft);
   const clearDraft = useChatView((s) => s.clearDraft);
@@ -276,6 +324,7 @@ export function ChatSurface() {
                     {selected.folder}
                   </p>
                 </div>
+                <ViewToggle value={transcriptView} onChange={setTranscriptView} />
                 <div className="shrink-0 text-right font-mono text-xs text-muted-foreground">
                   {/* Only claude states a dollar figure, so zero spend on a
                       conversation answered by the others means "not reported",
@@ -302,7 +351,14 @@ export function ChatSurface() {
                     </div>
                   ) : (
                     <>
-                      <MessageList entries={visibleEntries} streamingId={streamingId} />
+                      {transcriptView === "raw" ? (
+                        <RawTranscript entries={visibleEntries} />
+                      ) : (
+                        <MessageList
+                          entries={visibleEntries}
+                          streamingId={streamingId}
+                        />
+                      )}
                       {inFlight && (
                         <div className="mt-8">
                           <WorkingIndicator

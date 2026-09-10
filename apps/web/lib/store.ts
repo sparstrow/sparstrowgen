@@ -12,6 +12,8 @@ import type { Model, PendingSwitch, ProviderId } from "./chat-types";
  * been typed, what switch is being contemplated, what is in the search box.
  * None of it survives a refresh, and none of it should. */
 
+export type TranscriptView = "rendered" | "raw";
+
 type ChatView = {
   /** Which conversation is open. An id, not the conversation — the object
    *  belongs to the Query cache. */
@@ -47,6 +49,12 @@ type ChatView = {
   search: string;
   setSearch: (q: string) => void;
 
+  /** Rendered markdown, or the stored text verbatim. A view mode rather than a
+   *  per-message toggle: it is used to check what the renderer is dropping,
+   *  and that question is asked of a conversation, not of one reply. */
+  transcriptView: TranscriptView;
+  setTranscriptView: (v: TranscriptView) => void;
+
   /** Archived conversations are hidden behind a disclosure unless searching. */
   showArchived: boolean;
   toggleArchived: () => void;
@@ -77,6 +85,9 @@ export const useChatView = create<ChatView>((set, get) => ({
   search: "",
   setSearch: (search) => set({ search }),
 
+  transcriptView: "rendered",
+  setTranscriptView: (transcriptView) => set({ transcriptView }),
+
   showArchived: false,
   toggleArchived: () => set((s) => ({ showArchived: !s.showArchived })),
 }));
@@ -89,3 +100,4 @@ export const selectSelectedId = (s: ChatView) => s.selectedId;
 export const selectPending = (s: ChatView) => s.pending;
 export const selectInFlight = (s: ChatView) => s.inFlight;
 export const selectSearch = (s: ChatView) => s.search;
+export const selectTranscriptView = (s: ChatView) => s.transcriptView;
