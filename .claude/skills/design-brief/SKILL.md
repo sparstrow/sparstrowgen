@@ -251,7 +251,7 @@ argued for.
 ## Scope boundaries
 
 - **No production UI code.** This skill produces a document. Building against
-  it is `frontend-wiring`'s job, and seeing it is
+  it is the `frontend-builder` agent's job, and seeing it is
   `interactive-prototype`'s.
 - **Don't decide for the owner.** Recommending strongly is good; picking
   silently because they were vague is how the original problem happened. If

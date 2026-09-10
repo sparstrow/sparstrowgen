@@ -59,3 +59,32 @@ work.
   recoverable through git.
 - **Unpark when:** an agent needs to run against a directory the owner does not fully trust, or a
   second person uses the app.
+
+---
+
+## D-4 — Skills deliberately not imported from the previous attempt
+
+**Parked:** 2026-09-09, while importing the process system from the earlier
+sparstrowgen attempt.
+
+Ten skills and two agents were imported and scrubbed. These were left behind
+because their *mechanics* described the old codebase, not because their ideas
+were wrong. Each needs writing fresh against this repo, at the moment the
+thing it describes actually exists — writing them earlier would mean
+documenting an app that isn't built, which `AGENTS.md` §3 forbids.
+
+| Not imported | Why | Write it when |
+| --- | --- | --- |
+| `frontend-wiring` | Described a router mock, Zod contracts, and an in-app docs surface none of which exist here | `apps/web` is scaffolded and has real wiring to describe |
+| `designing-shared-contracts` | Was TypeScript-to-TypeScript via Zod; ours is Go-to-TypeScript via Protobuf | The first `proto/` message is written |
+| `data-modeling-and-rls` | Built around Supabase row-level security; we are single-user on self-hosted Postgres | The first migration is written, as a sqlc/pgvector skill with no RLS |
+| `release` | Vercel-specific | Deploying to Coolify |
+| `worktree-orchestration` | Assumed an integration-branch tier and several agents in parallel | More than one agent runs on a feature at once |
+| `migrate-radix-to-base` | Migration skill; this repo is greenfield shadcn | Never, most likely |
+| `shadcn` | A global skill and MCP server already cover it | Never |
+| `antigravity-guide`, `agy-customizations` | About using Antigravity as an IDE; we only drive its CLI | Never |
+| `architect`, `scout`, `coordinator` agents | Orchestration roles; the lifecycle skills run fine in the main session for one person | Work is routinely handed to parallel agents |
+
+- **If wrong:** an agent improvises a procedure that used to be written down.
+- **Unpark when:** the "write it when" condition in the row is met. The
+  originals are at `D:\My Setup\.claude\skills\` for reference.
