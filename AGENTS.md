@@ -7,31 +7,45 @@ Mandatory workflow, safety rules, and engineering standards for every AI coding 
 
 ## 1. How work happens here: design-driven development
 
-**Nothing starts with a document. It starts with something the owner can look at.**
+A previous attempt at this app was plan-driven — a spec, then a plan, then tasks. The planning took
+the time, the coding and testing didn't, and it never shipped. The order is now inverted, and this
+is the single most important rule in this file.
 
-A previous attempt at this app was plan-driven — a spec, then a plan, then tasks. The planning
-took the time, the coding and testing didn't, and it never shipped. The order is now inverted, and
-this is the single most important rule in this file.
-
-**The design is the specification.** There are no spec documents and no plan documents. There is a
-rendered design the owner has approved, and a backend built to serve it.
+**Two documents survive, and each has exactly one author.** The owner writes the spec: what he
+wants and why, in his terms. The design answers what it looks like, and he picks it from rendered
+options. Nothing else gets written before code.
 
 ### The loop
 
 ```
-1  Feasibility   what can the backend actually deliver here?
-2  Options       2–3 genuinely different directions, rendered
-3  Owner picks   one direction, or a mix
-4  Wire it       into the real app, on placeholder data
-5  Confirm       owner uses it in the app, not a mockup
-6  Contract      what the backend must provide, derived from the locked design
-7  Backend       built to that contract, nothing speculative
-8  Swap          placeholder data out, real data in
-9  Verify        frontend-verify, against the real thing
+ 1  Spec          what the owner wants and why, in his words — he approves it
+ 2  Feasibility   what can the backend actually deliver here?
+ 3  Options       2–3 genuinely different directions, rendered
+ 4  Pick          owner chooses one, or a mix
+ 5  Wire it       into the real app, on placeholder data
+ 6  Confirm       owner uses it in the app, not a mockup
+ 7  Contract      what the backend must provide, derived from the locked design
+ 8  Backend       built to that contract, nothing speculative
+ 9  Swap          placeholder data out, real data in
+10  Verify        frontend-verify, against the real thing
 ```
 
 **Invoke the `design-driven-feature` skill** for any feature work — it carries the procedure. This
 section is the rule; that skill is the how.
+
+### The spec says what; the design says what it looks like
+
+Keep these from overlapping, because the failure is quiet. **A spec must not describe an
+interface.** "A sidebar showing recent conversations" is a design decision smuggled into prose,
+and it silently pre-empts the options the owner is supposed to choose between. A spec says what
+someone needs to *do* and what is *true afterwards*; the design answers everything visual.
+
+A spec also carries no technology — no tables, endpoints, or frameworks. `writing-specs` has the
+procedure, and the short version is: **draft it from what the owner already said and hand it back
+for correction**, rather than interviewing him for it.
+
+**Skip the spec** for bug fixes, backend-only work, and small specific changes. It earns its place
+when the owner has something to explain, not as a formality.
 
 ### The rule that makes it work
 

@@ -22,9 +22,10 @@ Agent CLIs are driven, not shipped: `claude`, `codex`, `agy`, `gemini`.
 
 ## How it gets built
 
-Design-driven. A feature starts with two or three rendered directions, not a document — the owner
-picks one, it gets wired into the real app on placeholder data, and only once it's confirmed does
-the backend get built to serve exactly that.
+Design-driven. A feature starts with a short spec — what the owner wants and why, in his words —
+and then two or three *rendered* directions rather than a description of one. He picks one, it
+gets wired into the real app on placeholder data, and only once it's confirmed does the backend
+get built to serve exactly that. There is no plan document.
 
 The guardrail is [`docs/Capabilities.md`](docs/Capabilities.md): never design something the
 backend can't deliver. Full workflow in [`AGENTS.md` §1](AGENTS.md).

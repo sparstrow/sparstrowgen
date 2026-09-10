@@ -1,10 +1,12 @@
 # docs/
 
-Everything that isn't code but needs to survive a session. There are no spec or plan documents —
-see [`AGENTS.md` §1](../AGENTS.md); the design is the specification.
+Everything that isn't code but needs to survive a session. There are no plan documents — see
+[`AGENTS.md` §1](../AGENTS.md). A spec says what the owner wants; the design answers what it
+looks like.
 
 ```
 docs/
+├── specs/             what the owner wants and why, in his words. No technology, no layouts.
 ├── Capabilities.md    what the backend can deliver — READ BEFORE DESIGNING
 ├── Decisions.md       load-bearing choices, and what they beat
 ├── Bugs.md            wrong behaviour in the running app
@@ -13,7 +15,7 @@ docs/
 ├── OpenQuestions.md   decisions waiting on the owner
 ├── Ideas.md           unscoped, may never be built
 ├── runbooks/          steps only the owner can do — dashboards, DNS, secrets
-└── templates/         one skeleton, for runbooks
+└── templates/         skeletons — spec, runbook
 ```
 
 ## Where a feature actually lives
@@ -21,6 +23,7 @@ docs/
 Not here. A feature's record is the design the owner approved and the code that serves it:
 
 ```
+docs/specs/<date>-<slug>.md                         what the owner asked for, approved
 design-system/designs/<Category>/<name>.dc.html     the locked design
 design-system/designs/<Category>/<name>.handoff.md  what the backend must provide
 proto/                                              the shapes crossing Go ↔ TypeScript
@@ -52,9 +55,15 @@ lines, never a document.
 | "Let's do that later" | `Deferred.md` |
 | "I'm not answering that right now" | `OpenQuestions.md` |
 | "Might be nice one day" | `Ideas.md` |
+| "Here's what I want and why, and how I'd use it" | `specs/` |
 | "Only a human can do this — dashboard, DNS, secrets" | `runbooks/` |
 
-Each register states its own format at the top. No templates, no ceremony.
+Each register states its own format at the top. Only specs and runbooks have templates, because
+only they are long enough to need one.
+
+**A spec never describes an interface.** "A sidebar showing recent conversations" is a design
+decision smuggled into prose, and it pre-empts the options the owner is meant to choose between.
+Say what someone needs to do and what is true afterwards; the design answers the rest.
 
 ## Two rules worth repeating
 

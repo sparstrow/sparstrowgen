@@ -7,38 +7,61 @@ description: >-
   it confirmed, and only then build the backend to serve exactly that design.
   Use this for every feature request, every "can we add", every "I want a
   screen that", and any time work is about to start on something the owner
-  will see. Do NOT write a spec or plan document first — the design is the
-  spec.
+  will see. A spec captures what the owner wants in his words and is approved
+  before designing; there is no plan document — the design answers what it
+  looks like.
 ---
 
 # Design-driven feature work
 
-Nothing here starts with a document. It starts with something the owner can
-look at.
+A previous attempt at this app was plan-driven: the planning took the time, the
+coding and testing didn't, and it never shipped. So the order is inverted, and
+the number of documents is small and fixed.
 
-A previous attempt at this app was plan-driven: the planning took the time,
-the coding and testing didn't, and it never shipped. So the order is inverted.
-The design is the specification — it communicates what the owner wants better
-than prose ever did, and it is the thing they can actually judge.
+**Two documents, each with exactly one author.** The owner writes the spec —
+what he wants and why, in his terms, as scenarios he can elaborate. The design
+answers what it looks like, and he picks it from rendered options rather than
+reading a description of it. Nothing else is written before code: no plan, no
+tasks.
+
+Anything visual is decided by looking at it, never by prose.
 
 ## The loop
 
 ```
-1  Feasibility   what can the backend actually deliver here?
-2  Options       2–3 genuinely different directions, rendered
-3  Owner picks   one direction, or a mix
-4  Wire it       into the real app, on placeholder data
-5  Confirm       owner uses it in the app, not a mockup
-6  Contract      what the backend must provide, derived from the locked design
-7  Backend       built to that contract, nothing speculative
-8  Swap          placeholder data out, real data in
-9  Verify        frontend-verify, against the real thing
+ 1  Spec          what the owner wants and why, in his words — he approves it
+ 2  Feasibility   what can the backend actually deliver here?
+ 3  Options       2–3 genuinely different directions, rendered
+ 4  Pick          owner chooses one, or a mix
+ 5  Wire it       into the real app, on placeholder data
+ 6  Confirm       owner uses it in the app, not a mockup
+ 7  Contract      what the backend must provide, derived from the locked design
+ 8  Backend       built to that contract, nothing speculative
+ 9  Swap          placeholder data out, real data in
+10  Verify        frontend-verify, against the real thing
 ```
 
-Steps 1–5 are cheap and fast. Step 7 is the expensive one, and it does not
-start until step 5 is done. That ordering is the whole point.
+Steps 1–6 are cheap and fast. Step 8 is the expensive one, and it does not
+start until step 6 is done. That ordering is the whole point.
 
-## 1 — Feasibility comes first, always
+## 1 — The spec, when there is something to explain
+
+The owner's statement of what he wants and why, as user scenarios. `writing-specs`
+carries the procedure; the short version is **draft it from what he already
+said and hand it back for correction** rather than interviewing him for it.
+
+Two things a spec must never contain: technology, and interface design. The
+second is the one that gets broken — "a sidebar showing recent conversations"
+is a design decision in prose, and it pre-empts the options he is supposed to
+choose between at step 3.
+
+Nothing designs against a Draft. `Status: Approved <date>` first.
+
+**Skip this step** for bug fixes, backend-only work, and small specific
+changes. A spec earns its place when he has something to explain, not as a
+formality.
+
+## 2 — Feasibility comes first, always
 
 **Read [`docs/Capabilities.md`](../../../docs/Capabilities.md) before designing
 anything.** It says what the backend can and cannot produce.
@@ -57,7 +80,7 @@ If the design needs something not in `Capabilities.md`, pick one — never
 - **Cut it.** Record it in `Deferred.md` with a trigger and ship the design
   without that piece.
 
-## 2 — Show, don't describe
+## 3 — Show, don't describe
 
 Two or three directions, **genuinely different** — different layout, different
 information hierarchy, different interaction model. Three variations on one
@@ -82,7 +105,7 @@ That framework is for decisions with no picture — a protocol choice, a
 tradeoff between two libraries. For design, seeing them *is* the comparison.
 Say what each direction is optimising for in a line, then let them look.
 
-## 3–5 — Lock it, wire it, confirm it
+## 4–6 — Lock it, wire it, confirm it
 
 The owner picks a direction, or asks for pieces of two. Fine — merge and
 re-show rather than arguing for one.
@@ -105,7 +128,7 @@ All four states are present before the owner confirms (`AGENTS.md` §4.9).
 Judging a design on its populated state alone is how empty states end up
 designed by accident.
 
-## 6 — The contract falls out of the locked design
+## 7 — The contract falls out of the locked design
 
 The design now says exactly what data it needs. Write that down as the
 prototype's handoff contract — `interactive-prototype` produces one, and its
@@ -115,10 +138,11 @@ State, per surface: the fields, their types, whether they stream or arrive
 whole, what "loading" and "empty" and "error" actually mean here, and what
 must survive a refresh.
 
-This replaces the plan document. It is derived from something the owner has
-already approved, so it cannot describe a feature nobody asked for.
+This is what a plan document used to be, except it is derived from a design
+the owner has already approved — so it cannot describe a feature nobody asked
+for. Tie it back to the spec's `SC-n` criteria where they apply.
 
-## 7–8 — Backend, then swap
+## 8–9 — Backend, then swap
 
 Build to the contract. **Nothing speculative** — no field the design doesn't
 show, no endpoint nothing calls. If building reveals the contract was wrong,
@@ -133,7 +157,7 @@ document.
 Then delete the mocks and wire the real data. Grep for `*.mock.ts` to prove
 none are left.
 
-## 9 — Verify
+## 10 — Verify
 
 `frontend-verify`, against the real app on real data. A green typecheck is not
 evidence that a feature works.
@@ -141,7 +165,7 @@ evidence that a feature works.
 ## When this workflow does not apply
 
 - **Backend-only work with no surface** — the daemon connection, a migration,
-  a protocol change. Build it; there is nothing to design.
+  a protocol change. Build it; there is nothing to spec or design.
 - **A bug fix.** Fix it.
 - **The owner asks for something specific and small.** "Make that button
   secondary" does not need three directions. Read the room: this workflow is

@@ -75,15 +75,20 @@ owner's desktop apps, and the daemon enforces the boundary rather than trusting 
 approve/deny UI is **additive** — a second mode alongside auto — which is why building auto first
 is not throwaway work. Parked as [`Deferred.md`](Deferred.md) D-3.
 
-## D-008 — Design-driven development, no spec or plan documents
+## D-008 — Design-driven development; a spec, then designs, no plan
 
-**2026-09-09.** Rejected: spec → plan → code, which is what the previous attempt did.
+**2026-09-09.** Rejected: spec → plan → tasks → code, which is what the previous attempt did.
 
-The design is the specification. Features start with two or three rendered directions, the chosen
-one gets wired into the real app on placeholder data, and the backend is built only once the owner
-has confirmed it. The guardrail is [`Capabilities.md`](Capabilities.md): design nothing the backend
-cannot deliver.
+Features start with a spec the owner approves, then two or three rendered directions he picks
+from. The chosen one is wired into the real app on placeholder data, and the backend is built only
+once he has confirmed it there. The guardrail is [`Capabilities.md`](Capabilities.md): design
+nothing the backend cannot deliver.
 
-The previous attempt spent its budget on planning documents and never shipped. Written specs and
-plans, their templates, and their skills were removed rather than kept "just in case" — a
-process that exists is a process that gets followed.
+**The plan layer is gone, not the spec.** Cutting both was briefly tried and was wrong: the spec is
+the one document the *owner* authors, where his scenarios get elaborated, and a design cannot
+replace it — a design shows what a thing looks like, not why it should exist or what should be
+true afterwards. What a plan carried moved into the prototype's handoff contract, which is derived
+from an approved design and so cannot describe a feature nobody asked for.
+
+The two must not overlap: a spec that describes an interface pre-empts the options the owner is
+supposed to choose between, and quietly becomes the design decision.

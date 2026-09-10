@@ -19,7 +19,7 @@ prototype is the reference.** When they disagree, the handoff wins.
 | | |
 |---|---|
 | **Prototype** | `<name>.dc.html` |
-| **Provenance** | `<the owner's request, in one line>` |
+| **Provenance** | `docs/specs/<file>.md` — or `<the owner's request, in one line>` |
 | **Mode** | build \| explore |
 | **Status** | draft \| reviewed <date> \| superseded by <x> |
 | **Design system** | mirror \| greenfield, at `design-system/` |

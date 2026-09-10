@@ -116,13 +116,18 @@ is design-driven development — see [`Decisions.md`](Decisions.md) D-008 and `A
 
 | Dropped | Why |
 | --- | --- |
-| `writing-specs` skill, `spec.md`, `docs/specs/` | The design is the specification. A rendered direction the owner can look at communicates intent better than user stories in prose, and they can actually judge it |
 | `writing-plans` skill, `plan.md`, `docs/plans/` | What a plan carried now lives in the prototype's handoff contract, derived from a design the owner already approved — so it cannot describe a feature nobody asked for |
 
 Kept from the plan layer, because they were load-bearing rather than ceremony: the Decisions
 section became [`Decisions.md`](Decisions.md), one running file; and the feasibility discipline
 became [`Capabilities.md`](Capabilities.md), which is now read *before* designing rather than
 discovered during building.
+
+**The spec was cut in this round too, and put back the same day.** That was an over-correction: a
+design shows what a thing looks like, not why it should exist or what should be true afterwards,
+and the spec is the one document the *owner* authors. It returned deliberately leaner — no
+technology, and no interface description, so it cannot pre-empt the design options he is meant to
+choose between. See [`Decisions.md`](Decisions.md) D-008.
 
 - **If wrong:** an agent improvises a procedure that used to be written down. Acceptable — a
   capable agent improvising beats a session spent writing documents nobody reads.
