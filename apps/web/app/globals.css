@@ -46,6 +46,16 @@
   /* Surface used for the owner's own messages, distinct from agent output. */
   --mine: oklch(0.93 0.02 255);
   --mine-foreground: oklch(0.2 0.02 255);
+
+  /* Syntax highlighting. Tokens rather than an imported highlight.js theme,
+     because every one of those ships literal hex and would look correct in
+     exactly one of our two themes. Six roles is enough to read code by. */
+  --code-keyword: oklch(0.52 0.19 300);
+  --code-string: oklch(0.5 0.14 145);
+  --code-number: oklch(0.55 0.15 40);
+  --code-comment: oklch(0.6 0.02 250);
+  --code-function: oklch(0.5 0.16 255);
+  --code-type: oklch(0.52 0.13 195);
 }
 
 .dark {
@@ -78,6 +88,13 @@
 
   --mine: oklch(0.3 0.028 258);
   --mine-foreground: oklch(0.96 0.003 260);
+
+  --code-keyword: oklch(0.75 0.15 300);
+  --code-string: oklch(0.78 0.13 145);
+  --code-number: oklch(0.8 0.12 60);
+  --code-comment: oklch(0.58 0.015 250);
+  --code-function: oklch(0.76 0.12 255);
+  --code-type: oklch(0.78 0.1 195);
 }
 
 @theme inline {
@@ -144,3 +161,43 @@
 }
 .working-dot:nth-child(2) { animation-delay: 0.15s; }
 .working-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* highlight.js token classes, mapped onto our own tokens so code reads correctly
+   in both themes. rehype-highlight emits these class names; anything it emits
+   that is not listed here simply inherits the surrounding text colour, which is
+   a safe default rather than an invisible one. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-name,
+.hljs-strong { color: var(--code-keyword); }
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string { color: var(--code-string); }
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-variable,
+.hljs-template-variable { color: var(--code-number); }
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hljs-meta { color: var(--code-comment); font-style: italic; }
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-built_in { color: var(--code-function); }
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-params,
+.hljs-attr { color: var(--code-type); }

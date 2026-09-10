@@ -91,7 +91,6 @@ export type AgentMessage = {
   model: Model;
   text: string;
   usage?: Usage;
-  code?: { lang: string; body: string };
   /** Set when the turn ended badly. Text may still hold a partial answer. */
   failure?: string;
 };

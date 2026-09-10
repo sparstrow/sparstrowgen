@@ -46,8 +46,11 @@ export function Composer({
     : { provider: activeProvider, model: activeModel };
   const c = providerClasses[shown.provider];
 
-  const shownProvider =
-    providers.find((p) => p.id === shown.provider) ?? providers[0];
+  // The list is empty until the daemon reports what is installed, and on a
+  // first load that is a couple of seconds during which this still renders.
+  // Reaching into providers[0] there threw and took the whole page down.
+  const shownProvider = providers.find((p) => p.id === shown.provider) ??
+    providers[0] ?? { id: shown.provider, label: shown.provider, models: [] };
 
   return (
     <div className="shrink-0 border-t bg-card/40">

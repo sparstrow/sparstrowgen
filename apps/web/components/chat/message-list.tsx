@@ -4,20 +4,13 @@ import { AlertTriangle, ArrowRightLeft } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
 import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
+import { Markdown } from "./markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /* The owner's messages sit right, as a bubble. Agent output runs down the
    centre as a reading column with no bubble at all — it is usually long, often
    contains code, and is the thing actually being read. Giving it a container
    would only narrow it. */
-
-function CodeBlock({ body }: { lang: string; body: string }) {
-  return (
-    <pre className="mt-3 overflow-x-auto rounded-lg border bg-background/60 p-3.5 text-[13px] leading-relaxed">
-      <code className="font-mono">{body}</code>
-    </pre>
-  );
-}
 
 function UserBubble({ text, at }: { text: string; at: string }) {
   return (
@@ -40,7 +33,6 @@ function AgentTurn({
   text,
   at,
   usage,
-  code,
   failure,
   streaming,
 }: {
@@ -49,7 +41,6 @@ function AgentTurn({
   text: string;
   at: string;
   usage?: { tokens: number; usd?: number };
-  code?: { lang: string; body: string };
   failure?: string;
   streaming?: boolean;
 }) {
@@ -63,14 +54,13 @@ function AgentTurn({
         <span className="text-xs text-muted-foreground">· {at}</span>
       </div>
 
-      <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
-        {text}
-        {streaming && (
-          <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 rounded-xs bg-foreground/60" />
-        )}
-      </div>
-
-      {code && <CodeBlock lang={code.lang} body={code.body} />}
+      {/* Rendered as markdown, because that is what every provider actually
+          sends. A dedicated `code` field could only ever hold one block, and
+          real answers interleave prose with several. */}
+      <Markdown text={text} />
+      {streaming && (
+        <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 rounded-xs bg-foreground/60" />
+      )}
 
       {failure && (
         <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-2.5">
@@ -224,7 +214,6 @@ export function MessageList({
             text={e.text}
             at={e.at}
             usage={e.usage}
-            code={e.code}
             failure={e.failure}
             streaming={streamingId === e.id}
           />

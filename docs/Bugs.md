@@ -37,7 +37,7 @@ overriding it converts "fits the screen" into "fixed size, may not fit".
 
 ## B-2 — Agent answers render as plain text; code blocks and markdown are lost
 
-**Found:** 2026-09-10, reviewing what is left to build **Status:** open
+**Found:** 2026-09-10, reviewing what is left to build **Status:** fixed 2026-09-10
 **Repro:** Ask any provider for code. The reply arrives as one unbroken paragraph.
 **Expected / Actual:** Fenced code renders as a code block, as the locked design shows and as
 `AgentMessage.code` in the types provides for / everything renders as plain text, fences and all.
@@ -49,10 +49,18 @@ as one string and `message-list.tsx` prints it with `whitespace-pre-wrap`.
 This is the single biggest functional gap for a **coding**-agent chat — most useful answers are
 mostly markdown, and headings, lists, inline code and fenced blocks are all currently flattened.
 
-**Fix shape:** render the message body as markdown rather than trying to extract a single `code`
-field. The field is a mock-era artefact of a design drawn around one example answer; real replies
-interleave prose and several code blocks, so a dedicated field cannot represent them. Remove it
-when the renderer lands.
+**Fixed** by rendering the body as markdown (`components/chat/markdown.tsx`: react-markdown +
+remark-gfm + rehype-highlight) rather than extracting a single `code` field. That field was a
+mock-era artefact of a design drawn around one example answer — real replies interleave prose with
+several code blocks, which one field cannot represent — so it is deleted from the types.
+
+Syntax colours are our own tokens (`--code-keyword` and five siblings) mapped onto the `hljs-*`
+classes, not an imported highlight.js theme: every one of those ships literal hex and would be
+correct in exactly one of our two themes. Code blocks scroll inside their own box and carry a copy
+button.
+
+Verified against a real codex answer containing a heading, a list, a fenced Go block and a table:
+all rendered, six syntax tokens highlighted, no raw fences left on screen.
 
 ## B-3 — Every conversation runs in the server's working directory
 
