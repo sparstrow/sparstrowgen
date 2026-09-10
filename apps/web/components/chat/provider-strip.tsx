@@ -2,15 +2,16 @@
 
 import type { Provider } from "@/lib/chat-types";
 import { providerClasses, capacityClass } from "./provider-meta";
+import { ProviderIcon } from "./provider-icon";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-/* The honesty surface. Three of four providers report no limit signal at all,
-   so this must distinguish "plenty left" from "we cannot know" — showing an
-   empty or full bar for an unknown would be a lie the backend cannot back up.
+/* The honesty surface. Only claude reports a limit signal at all, so this must
+   distinguish "plenty left" from "we cannot know" — showing an empty or full bar
+   for an unknown would be a lie the backend cannot back up.
    See docs/Capabilities.md. */
 
 function ProviderChip({ provider }: { provider: Provider }) {
@@ -24,7 +25,10 @@ function ProviderChip({ provider }: { provider: Provider }) {
         blocked ? "opacity-55" : ""
       }`}
     >
-      <span className={`size-2 shrink-0 rounded-full ${c.dot}`} aria-hidden />
+      <ProviderIcon
+        provider={provider.id}
+        className={`size-4 shrink-0 ${c.text}`}
+      />
       <span className="text-sm font-medium">{provider.label}</span>
 
       {blocked ? (

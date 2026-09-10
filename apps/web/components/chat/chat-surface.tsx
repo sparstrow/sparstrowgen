@@ -7,6 +7,7 @@ import type {
   AgentMessage,
   Conversation,
   Entry,
+  Model,
   PendingSwitch,
   ProviderId,
 } from "@/lib/chat-types";
@@ -33,6 +34,10 @@ type Surface = "ready" | "loading" | "offline";
 /** Rough cost of catching a provider up. Real figure comes from the daemon. */
 const TOKENS_PER_MESSAGE = 1300;
 
+/** What a brand-new conversation starts on. */
+const DEFAULT_PROVIDER = mockProviders[0];
+const DEFAULT_MODEL = DEFAULT_PROVIDER.model!;
+
 function now() {
   return new Date().toLocaleTimeString([], {
     hour: "2-digit",
@@ -49,7 +54,7 @@ export function ChatSurface() {
   const [draft, setDraft] = useState("");
   const [inFlight, setInFlight] = useState<{
     provider: ProviderId;
-    model: string;
+    model: Model;
     elapsed: number;
     streams: boolean;
   } | null>(null);
@@ -94,12 +99,13 @@ export function ChatSurface() {
       title: "Untitled conversation",
       folder: "D:\\sparstrowgen",
       updated: "now",
-      provider: "claude",
-      model: "Sonnet 5",
+      provider: DEFAULT_PROVIDER.id,
+      model: DEFAULT_MODEL,
       spendUsd: 0,
       tokens: 0,
       entries: [],
       seenBy: {},
+      archived: false,
     };
     setConversations((prev) => [fresh, ...prev]);
     setSelectedId(id);
@@ -114,12 +120,28 @@ export function ChatSurface() {
     toast("Conversation deleted", { description: gone?.title });
   }
 
+  /** Archiving keeps everything and is reversible, so it gets an undo rather
+   *  than a confirmation. Deleting is the one that asks. */
+  function handleSetArchived(id: string, archived: boolean) {
+    const c = conversations.find((x) => x.id === id);
+    patch(id, (x) => ({ ...x, archived }));
+    toast(archived ? "Conversation archived" : "Conversation restored", {
+      description: c?.title,
+      action: {
+        label: "Undo",
+        onClick: () => patch(id, (x) => ({ ...x, archived: !archived })),
+      },
+    });
+  }
+
   /** Selecting a provider is free. It records what a switch *would* cost and
    *  charges nothing until the next message is actually sent. */
-  function handleSelectProvider(provider: ProviderId, model: string) {
+  function handleSelectProvider(provider: ProviderId, model: Model) {
     if (!selected) return;
+    // Changing model within a provider replays nothing — the provider's own
+    // session carries over, and seenBy is keyed by provider, not by model.
     if (provider === selected.provider) {
-      setPending(model === selected.model ? null : null);
+      setPending(null);
       patch(selected.id, (c) => ({ ...c, model }));
       return;
     }
@@ -258,8 +280,8 @@ export function ChatSurface() {
     }
   }
 
-  const activeProvider = selected?.provider ?? "claude";
-  const activeModel = selected?.model ?? "Sonnet 5";
+  const activeProvider = selected?.provider ?? DEFAULT_PROVIDER.id;
+  const activeModel = selected?.model ?? DEFAULT_MODEL;
 
   return (
     <TooltipProvider>
@@ -276,6 +298,7 @@ export function ChatSurface() {
           onCreate={handleCreate}
           onRename={(id, title) => patch(id, (c) => ({ ...c, title }))}
           onDelete={handleDelete}
+          onSetArchived={handleSetArchived}
         />
 
         <main className="flex min-w-0 flex-1 flex-col">

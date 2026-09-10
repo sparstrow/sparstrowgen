@@ -150,11 +150,15 @@ machine is asleep resolves itself — queue the work. A CLI that is installed bu
 account, no execute permission, broken postinstall) will never resolve until a human acts, and a
 caller must refuse and say why rather than queue silently.
 
-This surfaced immediately: `gemini` is installed on the owner's machine but he has no account
-signed in. It is **blocked**, not "not built" — a real, permanent-until-fixed state a provider
-picker UI must show with a reason, the way Multica's `RuntimeUnusableNotice` does, not silently
-omit the way an unbuilt provider is omitted. See [`Capabilities.md`](Capabilities.md) and
-[`Later.md`](Later.md) L-6.
+This surfaced immediately: `gemini` was installed on the owner's machine with no account signed in.
+It was **blocked**, not "not built" — a real, permanent-until-fixed state a provider picker must
+show with a reason, the way Multica's `RuntimeUnusableNotice` does, not silently omit the way an
+unbuilt provider is omitted.
+
+**That example is gone** — gemini was removed from the product on 2026-09-10 (D-014), so `blocked`
+now has no live case. The decision stands: an uninstalled or signed-out CLI is the same shape, and
+the daemon still has to tell it apart from "temporarily out". It is simply an unexercised path now,
+and the first real one should be checked against the design rather than assumed to fit.
 
 ## D-012 — An image round sits between the spec and the prototype
 
@@ -220,3 +224,41 @@ belong in the app yet, or for comparing two layouts side by side without committ
 - Progress must be reportable independently of output text, because `codex` emits no deltas at all.
 - Usage is asymmetric by provider and the UI must not imply otherwise: USD for `claude`, tokens
   only for `codex` and `agy`, and "no limit data" is a distinct state from "plenty left".
+
+## D-014 — `gemini` is removed from the product, not parked
+
+**2026-09-10.** Rejected: keeping it as a permanently `blocked` provider, which is what the surface
+shipped with and what `Later.md` L-6 planned for.
+
+The owner ruled it out directly — *"I don't want gemini to be part of this at all, since we are not
+going to use it"* — so it comes out of `ProviderId`, the colour tokens, the mock and the blueprint,
+and L-6 is deleted rather than left parked. A provider nobody will sign into is not a future
+feature; it is a row that makes every list longer and every switch statement wider for nothing.
+
+**The cost, stated plainly:** `gemini` was the only live example of the three-valued availability
+model (D-011). `blocked` now has no case behind it in the running app. D-011 is *not* reversed —
+the daemon still has to distinguish "installed but unusable" from "temporarily out", and a CLI that
+is uninstalled or signed out is the same shape. But it is now an unexercised path, and the first
+real one should be checked against the design rather than assumed to still fit.
+
+## D-015 — A model is an id and a label, and a transcript stores both
+
+**2026-09-10.** Rejected: `model: string`, which is what the surface shipped with.
+
+`agy models` settled it by printing two columns — `gemini-3.1-pro-high` alongside
+`Gemini 3.1 Pro (High)`. The id is what gets passed to the CLI; the label is the only thing worth
+showing; neither is derivable from the other, and inventing one from the other is how `agy-1`
+ended up in the mock.
+
+Two consequences that are not cosmetic:
+
+- **Effort is part of the id, not a separate axis.** `agy` has eleven Gemini entries because each
+  reasoning effort is its own model. There is no effort control to design — picking
+  "Gemini 3.1 Pro (High)" *is* picking the effort.
+- **The transcript stores the whole model, not a reference to it.** When a provider drops a model
+  from its list, nothing can resolve its label any more, and an old turn would render as a bare id
+  or an empty space. The label is recorded at the moment the turn ran.
+
+Also settled here: **a provider is the CLI we drive, never the vendor of the model.** `agy` serves
+Gemini, Claude *and* GPT models, so `Provider.routes` marks the distinction rather than letting the
+provider's colour imply an owner.

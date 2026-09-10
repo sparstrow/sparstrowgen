@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Plus, Trash2, MessagesSquare } from "lucide-react";
-import type { Conversation } from "@/lib/chat-types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  MessagesSquare,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import type { Conversation, SearchHit } from "@/lib/chat-types";
+import { searchConversations } from "@/lib/conversation-search";
 import { providerClasses } from "./provider-meta";
+import { ProviderIcon } from "./provider-icon";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +28,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -32,19 +44,24 @@ type Props = {
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onSetArchived: (id: string, archived: boolean) => void;
 };
 
 function Row({
   conversation,
+  hit,
   selected,
   onSelect,
   onRename,
+  onSetArchived,
   onAskDelete,
 }: {
   conversation: Conversation;
+  hit?: SearchHit;
   selected: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
+  onSetArchived: (archived: boolean) => void;
   onAskDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -99,9 +116,11 @@ function Row({
           selected ? "bg-accent" : "hover:bg-accent/50"
         }`}
       >
-        <span
-          className={`mt-1.5 size-1.5 shrink-0 rounded-full ${c.dot}`}
-          aria-hidden
+        <ProviderIcon
+          provider={conversation.provider}
+          className={`mt-0.5 size-3.5 shrink-0 ${c.text} ${
+            conversation.archived ? "opacity-60" : ""
+          }`}
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm leading-snug">
@@ -110,6 +129,13 @@ function Row({
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
             {conversation.folder.split("\\").pop()} · {conversation.updated}
           </span>
+          {/* Only ever shown for a match found in the message text — a title
+              match explains itself, and repeating it would say nothing. */}
+          {hit?.excerpt && (
+            <span className="mt-1 block truncate text-xs text-muted-foreground/80 italic">
+              {hit.excerpt}
+            </span>
+          )}
         </span>
       </button>
 
@@ -126,11 +152,22 @@ function Row({
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem onClick={() => setEditing(true)}>
             <Pencil className="size-4" />
             Rename
           </DropdownMenuItem>
+          {conversation.archived ? (
+            <DropdownMenuItem onClick={() => onSetArchived(false)}>
+              <ArchiveRestore className="size-4" />
+              Unarchive
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => onSetArchived(true)}>
+              <Archive className="size-4" />
+              Archive
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem variant="destructive" onClick={onAskDelete}>
             <Trash2 className="size-4" />
             Delete
@@ -149,8 +186,41 @@ export function ConversationList({
   onCreate,
   onRename,
   onDelete,
+  onSetArchived,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
+  const [query, setQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+
+  const searching = query.trim().length > 0;
+  const results = useMemo(
+    () => searchConversations(conversations, query),
+    [conversations, query],
+  );
+
+  const active = results.filter((r) => !r.conversation.archived);
+  const archived = results.filter((r) => r.conversation.archived);
+  const archivedTotal = conversations.filter((c) => c.archived).length;
+
+  // Searching reaches into the archive. Hiding an archived match would make the
+  // archive a place things go to become unfindable, which is what deleting is
+  // for.
+  const archivedOpen = showArchived || searching;
+
+  function rowFor(r: { conversation: Conversation; hit: SearchHit }) {
+    return (
+      <Row
+        key={r.conversation.id}
+        conversation={r.conversation}
+        hit={searching ? r.hit : undefined}
+        selected={r.conversation.id === selectedId}
+        onSelect={() => onSelect(r.conversation.id)}
+        onRename={(title) => onRename(r.conversation.id, title)}
+        onSetArchived={(a) => onSetArchived(r.conversation.id, a)}
+        onAskDelete={() => setPendingDelete(r.conversation)}
+      />
+    );
+  }
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
@@ -167,6 +237,30 @@ export function ConversationList({
         </Button>
       </div>
 
+      <div className="shrink-0 px-3 pb-2">
+        <div className="flex items-center gap-2 rounded-md border bg-background px-2.5 focus-within:ring-2 focus-within:ring-ring">
+          <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            placeholder="Search conversations"
+            aria-label="Search conversations"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+          {searching && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <ul className="space-y-1 px-2" aria-busy="true" aria-label="Loading conversations">
           {[68, 52, 60, 44].map((w, i) => (
@@ -178,10 +272,7 @@ export function ConversationList({
         </ul>
       ) : conversations.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <MessagesSquare
-            className="size-7 text-muted-foreground"
-            aria-hidden
-          />
+          <MessagesSquare className="size-7 text-muted-foreground" aria-hidden />
           <p className="text-sm text-muted-foreground">
             No conversations yet. Start one and it will be saved here — the
             transcript is kept by sparstrowgen, not by whichever agent answered.
@@ -191,20 +282,48 @@ export function ConversationList({
             New conversation
           </Button>
         </div>
+      ) : results.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+          <Search className="size-6 text-muted-foreground" aria-hidden />
+          <p className="text-sm text-muted-foreground">
+            Nothing matches &ldquo;{query.trim()}&rdquo; — titles, folders and
+            message text were all searched, including the archive.
+          </p>
+        </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <ul className="space-y-0.5 pb-3">
-            {conversations.map((c) => (
-              <Row
-                key={c.id}
-                conversation={c}
-                selected={c.id === selectedId}
-                onSelect={() => onSelect(c.id)}
-                onRename={(title) => onRename(c.id, title)}
-                onAskDelete={() => setPendingDelete(c)}
-              />
-            ))}
-          </ul>
+          <ul className="space-y-0.5 pb-3">{active.map(rowFor)}</ul>
+
+          {archivedTotal > 0 && (
+            <div className="pb-3">
+              <button
+                type="button"
+                onClick={() => setShowArchived((v) => !v)}
+                aria-expanded={archivedOpen}
+                className="flex w-full items-center gap-1.5 px-4 py-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight
+                  className={`size-3.5 transition-transform ${archivedOpen ? "rotate-90" : ""}`}
+                  aria-hidden
+                />
+                Archived
+                <span className="tabular-nums">
+                  ({searching ? archived.length : archivedTotal})
+                </span>
+              </button>
+              {archivedOpen && (
+                <ul className="space-y-0.5">
+                  {archived.length > 0 ? (
+                    archived.map(rowFor)
+                  ) : (
+                    <li className="px-6 py-1 text-xs text-muted-foreground">
+                      No archived conversation matches.
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
         </ScrollArea>
       )}
 
@@ -221,16 +340,31 @@ export function ConversationList({
               agent, this cannot be recovered from the provider.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* Archiving is offered here because this dialog is the moment the
+              intent is usually "get it out of my list", not "destroy it". */}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            {!pendingDelete?.archived && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (pendingDelete) onSetArchived(pendingDelete.id, true);
+                  setPendingDelete(null);
+                }}
+              >
+                <Archive className="size-4" />
+                Archive instead
+              </Button>
+            )}
+            <Button
+              variant="destructive"
               onClick={() => {
                 if (pendingDelete) onDelete(pendingDelete.id);
                 setPendingDelete(null);
               }}
             >
               Delete
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

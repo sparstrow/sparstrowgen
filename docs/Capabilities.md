@@ -46,14 +46,19 @@ not "ready or not", but *whether waiting is a plan*.
 |---|---|---|
 | **Available** | Can take work now | `claude`, `codex`, `agy` — signed in, on PATH |
 | **Waitable** | Not runnable right now, nothing broken — resolves itself | Daemon's machine is asleep |
-| **Blocked** | Nothing will happen until a human acts | `gemini` — installed, **no account access** |
+| **Blocked** | Nothing will happen until a human acts | a CLI uninstalled or signed out |
 
-**`gemini` is `Blocked`, not `not built`.** The CLI is present (`gemini` 0.49.0 on PATH, confirmed
-2026-09-09), but the owner has no account signed into it. Building an adapter for it is pointless
-until that changes — a UI must never silently omit a blocked provider the way an unbuilt one is
-omitted; it should say why, the way Multica's `RuntimeUnusableNotice` does. Tracked as
-[`Later.md`](Later.md) L-6. Do not build a `gemini` adapter against this entry — build it against a
-real capture once he has access.
+**`Blocked` currently has no live example.** It used to be `gemini`, which was installed with no
+account behind it. The owner has since ruled gemini out of the product entirely — see
+[`Decisions.md`](Decisions.md) D-014 — so the state remains in the model but is now an unexercised
+path. Keep it: a signed-out or uninstalled CLI is the same shape, and a UI must never silently omit
+a blocked provider the way an unbuilt one is omitted; it should say why, the way Multica's
+`RuntimeUnusableNotice` does. Check the design against the first real case rather than assuming it
+still fits.
+
+**A provider is the CLI we drive, never the vendor of the model.** `agy` is a router: `agy models`
+returns Gemini, Claude *and* GPT-OSS models behind one CLI. Anything that treats a provider's
+identity as the model's maker will be wrong for a third of the roster.
 
 ## What the agent CLIs emit
 
@@ -66,14 +71,15 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
 | Incremental text streaming | *(unverified — needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
-| Config isolation | `--bare` *(mandatory — G-3)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
+| Config isolation | **unsolved** — `--bare` disables OAuth and cannot authenticate a subscription account *(verified 2026-09-10; see G-3)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
 | Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
 | Per-turn USD cost | **verified** — `total_cost_usd`, real dollar figure | no — tokens only | no — tokens only |
 | Rate-limit signal | **verified** — `rate_limit_event`, see below | not observed in this capture | not observed in this capture |
 | Resume a session | `--resume <uuid>` *(verified flag)* | `codex exec resume <id>` *(verified flag)* | `--conversation <id>` *(verified flag)* |
 | We choose the session id | `--session-id <uuid>` *(verified flag)* | no | no |
 | Model override | `--model` *(verified)* | `-m` *(verified)* | `--model` *(verified)* |
-| List available models | no — curated list | no — read config | `agy models` *(verified, returns id + label)* |
+| List available models | **no** — `--model` documents aliases only; an invalid model cannot even be rejected because `--bare` fails to authenticate first | **no** — names scraped from the binary, configured one read from `~/.codex/config.toml`; an invalid model returns a 400 naming no alternatives, and the valid set is **account-dependent** (`"not supported when using Codex with a ChatGPT account"`) | `agy models` *(verified, returns id + label)* |
+| Model carries reasoning effort | not observed | `model_reasoning_effort` in config, separate from the model | **in the model id** *(verified — `gemini-3.1-pro-high` and `-low` are distinct models, not one model with a setting)* |
 
 **All three real providers report usage; `claude` also reports real dollar cost.** This overturns
 what this file originally said. `claude`, `codex` and `agy` each stream a structured usage object;
@@ -145,8 +151,7 @@ design whose only "working" signal is text appearing will read as *frozen* on `c
 indicates "the agent is working" must be independent of text arriving — and it must be present in
 the design from the first draft, not retrofitted when codex is wired up.
 
-`gemini` 0.49.0 is installed but blocked (no account) — see above. Not captured, and not worth
-capturing until it is.
+`gemini` is out of the product entirely (D-014). Nothing here covers it and nothing should.
 
 ## Real caveats found while capturing (2026-09-09)
 
@@ -162,8 +167,11 @@ capturing until it is.
   `system.init` payload showed `clockify`, `square`, and `shadcn` MCP servers all
   `"status":"connected"` — not merely listed, genuinely reachable. A conversation that only asked
   for `"OK"` had *working* access to the owner's time-tracking and invoicing tools. **This is not
-  a performance concern, it is a scope leak.** `--bare` on every spawned `claude` call is mandatory
-  for the daemon's adapter, not an optimization — see [`KnownGaps.md`](KnownGaps.md) G-3.
+  a performance concern, it is a scope leak.** **The fix first recorded here was wrong:** `--bare`
+  never reads OAuth or the keychain (its own `--help` says so), and this account signs in with a
+  subscription rather than an API key, so `claude --bare -p` returns `Not logged in` — verified
+  2026-09-10. The leak is real and currently **unfixed**; `--strict-mcp-config` is the untested
+  candidate. See [`KnownGaps.md`](KnownGaps.md) G-3.
 - **`agy`'s tool list is large** — browser control, subagents, image generation, scheduling, and
   more are all available by default (`init.tools`, real capture). It is closer to a full autonomous
   agent than a text generator. Any chat surface that shows "what the agent can do" needs to reflect
@@ -172,7 +180,9 @@ capturing until it is.
 ## Do not design these yet
 
 - **A live model picker populated for every provider.** Only `agy` lists its models. For the others
-  the list is curated by us and will drift from what the account can actually use.
+  the list is curated by us and will drift from what the account can actually use — and for `codex`
+  the valid set depends on the account behind it, so even a correct list is correct per-account.
+  A picker is fine; treating it as authoritative is not. See [`KnownGaps.md`](KnownGaps.md) G-8.
 - **Anything assuming a shared session across providers.** No CLI can resume another's session.
   Switching provider means replaying history into a fresh session — so a design implying one
   continuous thread with the provider is a lie the backend cannot make true. The *conversation* is
@@ -182,7 +192,6 @@ capturing until it is.
 - **Instant response to a keystroke that requires the machine.** The round trip is too long.
 - **Anything requiring the agent to control the desktop** — mouse, keyboard, screen pixels. Not
   built, and deliberately not planned. See [`Later.md`](Later.md) L-1.
-- **A `gemini` surface of any kind.** Blocked, not merely unbuilt — see above.
 
 ## Safe to design against
 

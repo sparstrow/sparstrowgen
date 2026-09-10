@@ -2,29 +2,27 @@
 
 import { useRef } from "react";
 import { ArrowUp, Check, ChevronDown, Undo2 } from "lucide-react";
-import type { PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
+import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
 import { providerClasses, formatTokens } from "./provider-meta";
+import { ProviderIcon } from "./provider-icon";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 type Props = {
   providers: Provider[];
   activeProvider: ProviderId;
-  activeModel: string;
+  activeModel: Model;
   pending: PendingSwitch | null;
   disabled: boolean;
   disabledReason?: string;
   value: string;
   onChange: (v: string) => void;
-  onSelect: (provider: ProviderId, model: string) => void;
+  onSelect: (provider: ProviderId, model: Model) => void;
   onCancelSwitch: () => void;
   onSend: () => void;
 };
@@ -48,6 +46,9 @@ export function Composer({
     : { provider: activeProvider, model: activeModel };
   const c = providerClasses[shown.provider];
 
+  const shownProvider =
+    providers.find((p) => p.id === shown.provider) ?? providers[0];
+
   return (
     <div className="shrink-0 border-t bg-card/40">
       {/* A switch costs nothing until the next message is sent, so the price is
@@ -56,7 +57,10 @@ export function Composer({
       {pending && (
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 pt-3">
           <div className="flex flex-1 items-center gap-2.5 rounded-lg border border-dashed px-3.5 py-2 text-sm">
-            <span className={`size-2 rounded-full ${c.dot}`} aria-hidden />
+            <ProviderIcon
+              provider={pending.to}
+              className={`size-3.5 shrink-0 ${c.text}`}
+            />
             <span className="flex-1 text-muted-foreground">
               <span className={c.text}>{pending.to}</span> hasn&apos;t seen this
               conversation. It will catch up on{" "}
@@ -92,70 +96,94 @@ export function Composer({
 
       <div className="mx-auto max-w-3xl px-4 py-3">
         <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5"
+          {/* Provider first, then that provider's models. One merged menu was
+              tolerable at two models each; agy alone offers fourteen. */}
+          <div className="flex shrink-0 items-center gap-0.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    aria-label={`Provider: ${shown.provider}`}
+                    className="h-9 gap-1.5 rounded-xl px-2.5"
+                  />
+                }
+              >
+                <ProviderIcon
+                  provider={shown.provider}
+                  className={`size-4 ${c.text}`}
                 />
-              }
-            >
-              <span className={`size-2 rounded-full ${c.dot}`} aria-hidden />
-              <span className="text-sm">{shown.provider}</span>
-              <span className="text-xs text-muted-foreground">
-                {shown.model}
-              </span>
-              <ChevronDown className="size-3.5 text-muted-foreground" />
-            </DropdownMenuTrigger>
+                <span className="text-sm">{shown.provider}</span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="start" className="w-64">
-              {providers.map((p, i) => {
-                const blocked = p.availability === "blocked";
-                const pc = providerClasses[p.id];
-                return (
-                  <DropdownMenuGroup key={p.id}>
-                    {i > 0 && <DropdownMenuSeparator />}
-                    <DropdownMenuLabel className="flex items-center gap-2">
-                      <span
-                        className={`size-2 rounded-full ${pc.dot} ${blocked ? "opacity-50" : ""}`}
-                        aria-hidden
+              {/* Anchored to the bottom of the window, so it opens upward.
+                  Never set a max-height here — the base component already caps
+                  it at --available-height, and overriding that is what makes a
+                  long menu run off the bottom of the screen. */}
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                {providers.map((p) => {
+                  const blocked = p.availability === "blocked";
+                  const pc = providerClasses[p.id];
+                  return (
+                    <DropdownMenuItem
+                      key={p.id}
+                      disabled={blocked}
+                      onClick={() => onSelect(p.id, p.model ?? p.models[0])}
+                    >
+                      <ProviderIcon
+                        provider={p.id}
+                        className={`size-4 ${blocked ? "text-muted-foreground" : pc.text}`}
                       />
-                      <span className={blocked ? "text-muted-foreground" : ""}>
-                        {p.label}
-                      </span>
-                      {blocked && (
-                        <span className="ml-auto text-xs font-normal text-muted-foreground">
+                      <span className="flex-1">{p.label}</span>
+                      {p.id === shown.provider ? (
+                        <Check className="size-4" />
+                      ) : blocked ? (
+                        <span className="text-xs text-muted-foreground">
                           {p.unavailableReason}
                         </span>
-                      )}
-                    </DropdownMenuLabel>
-                    {p.models.map((m) => {
-                      const current =
-                        shown.provider === p.id && shown.model === m;
-                      return (
-                        <DropdownMenuItem
-                          key={m}
-                          disabled={blocked}
-                          onClick={() => onSelect(p.id, m)}
-                          className="pl-7"
-                        >
-                          {current ? (
-                            <Check className="size-4" />
-                          ) : (
-                            <span className="size-4" aria-hidden />
-                          )}
-                          {m}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuGroup>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                      ) : null}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled || shownProvider.models.length === 0}
+                    aria-label={`Model: ${shown.model.label}`}
+                    className="h-9 max-w-52 gap-1.5 rounded-xl px-2.5 text-muted-foreground"
+                  />
+                }
+              >
+                <span className="truncate text-xs">{shown.model.label}</span>
+                <ChevronDown className="size-3.5 shrink-0" />
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent side="top" align="start" className="w-64">
+                {shownProvider.models.map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onClick={() => onSelect(shownProvider.id, m)}
+                  >
+                    {m.id === shown.model.id ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <span className="size-4" aria-hidden />
+                    )}
+                    <span className="flex-1">{m.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           <textarea
             ref={taRef}

@@ -1,53 +1,87 @@
 /* Placeholder data for the chat surface.
    A shipped route must never import this — grep for ".mock" before calling the
    feature done (AGENTS.md §4). Deliberately untidy: a very long title, an
-   untitled conversation, an empty one, uneven message lengths, a failed turn. */
+   untitled conversation, an empty one, uneven message lengths, a failed turn,
+   and two archived.
 
-import type { Conversation, Provider } from "./chat-types";
+   MODEL LISTS ARE REAL, captured 2026-09-10 — see docs/Capabilities.md for how
+   each was obtained and which of them the CLI can actually enumerate. Do not
+   add a model here from memory; that is the mistake this round corrected. */
+
+import type { Conversation, Model, Provider } from "./chat-types";
+
+const claudeModels: Model[] = [
+  { id: "claude-opus-5", label: "Opus 5" },
+  { id: "claude-sonnet-5", label: "Sonnet 5" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+];
+
+const codexModels: Model[] = [
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+];
+
+/* Verbatim from `agy models`. Effort is part of the id, not a separate axis —
+   which is why there is no effort control in the UI: picking "Gemini 3.1 Pro
+   (High)" IS picking the effort. */
+const agyModels: Model[] = [
+  { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash (High)" },
+  { id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash (Medium)" },
+  { id: "gemini-3.8-flash-low", label: "Gemini 3.8 Flash (Low)" },
+  { id: "gemini-3.7-flash-high", label: "Gemini 3.7 Flash (High)" },
+  { id: "gemini-3.7-flash-medium", label: "Gemini 3.7 Flash (Medium)" },
+  { id: "gemini-3.7-flash-low", label: "Gemini 3.7 Flash (Low)" },
+  { id: "gemini-3.6-flash-high", label: "Gemini 3.6 Flash (High)" },
+  { id: "gemini-3.6-flash-medium", label: "Gemini 3.6 Flash (Medium)" },
+  { id: "gemini-3.6-flash-low", label: "Gemini 3.6 Flash (Low)" },
+  { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro (High)" },
+  { id: "gemini-3.1-pro-low", label: "Gemini 3.1 Pro (Low)" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (Thinking)" },
+  { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 (Thinking)" },
+  { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
+];
 
 export const mockProviders: Provider[] = [
   {
     id: "claude",
     label: "claude",
-    models: ["Sonnet 5", "Opus 5", "Haiku 4.5"],
-    model: "Sonnet 5",
+    models: claudeModels,
+    model: claudeModels[1],
     availability: "available",
     headroom: { pct: 62, resetsIn: "4h 12m", window: "five_hour" },
     reportsUsd: true,
     streams: true,
+    routes: false,
   },
   {
     id: "codex",
     label: "codex",
-    models: ["gpt-5.6", "gpt-5.6-sol high"],
-    model: "gpt-5.6",
+    models: codexModels,
+    model: codexModels[0],
     availability: "available",
     headroom: null,
     reportsUsd: false,
     streams: false,
+    routes: false,
   },
   {
     id: "agy",
     label: "agy",
-    models: ["agy-1", "agy-1-mini"],
-    model: "agy-1",
+    models: agyModels,
+    model: agyModels[9],
     availability: "available",
     headroom: null,
     reportsUsd: false,
     streams: true,
-  },
-  {
-    id: "gemini",
-    label: "gemini",
-    models: [],
-    model: null,
-    availability: "blocked",
-    unavailableReason: "No account signed in",
-    headroom: null,
-    reportsUsd: false,
-    streams: false,
+    routes: true,
   },
 ];
+
+const sonnet = claudeModels[1];
+const opus = claudeModels[0];
+const sol = codexModels[0];
+const geminiPro = agyModels[9];
 
 export const mockConversations: Conversation[] = [
   {
@@ -56,10 +90,11 @@ export const mockConversations: Conversation[] = [
     folder: "D:\\sparstrowgen",
     updated: "2m",
     provider: "codex",
-    model: "gpt-5.6",
+    model: sol,
     spendUsd: 0.14,
     tokens: 41700,
     seenBy: { claude: 4, agy: 4, codex: 6 },
+    archived: false,
     entries: [
       {
         id: "m1",
@@ -72,7 +107,7 @@ export const mockConversations: Conversation[] = [
         role: "agent",
         at: "09:12",
         provider: "claude",
-        model: "Sonnet 5",
+        model: sonnet,
         usage: { tokens: 12400, usd: 0.03 },
         text: "The reconnect loop should treat a dropped socket as a transient failure rather than a new session. I'd keep the attempt counter beside the connection state, reset it only once the hub confirms a stable subscription, and add bounded exponential backoff with full jitter so a fleet of sleeping clients doesn't all wake into the same millisecond.",
         code: {
@@ -91,7 +126,7 @@ export const mockConversations: Conversation[] = [
         role: "agent",
         at: "09:17",
         provider: "agy",
-        model: "agy-1",
+        model: geminiPro,
         usage: { tokens: 8100 },
         text: "Then the reconnect state belongs to the transport, not the view. Show a quiet reconnecting line in the status strip, keep existing messages fully readable, and disable only the controls that genuinely need a live socket — the composer and the provider switch. If recovery exceeds the retry window, surface one clear error with a manual retry rather than stacking a notice per attempt.",
       },
@@ -100,7 +135,7 @@ export const mockConversations: Conversation[] = [
         role: "replay",
         at: "09:20",
         to: "codex",
-        toModel: "gpt-5.6",
+        toModel: sol,
         messagesReplayed: 4,
         tokens: 18200,
       },
@@ -109,7 +144,7 @@ export const mockConversations: Conversation[] = [
         role: "agent",
         at: "09:21",
         provider: "codex",
-        model: "gpt-5.6",
+        model: sol,
         usage: { tokens: 12400 },
         text: "I traced the retry path through the daemon and kept cancellation intact end to end. The jitter source is injected rather than read from the global rand, which is what makes the timing test deterministic. Registration and broadcast are single-owner operations inside the hub goroutine, so shutdown has exactly one ordering: stop accepting clients, close subscriptions, drain pending notifications, then close sockets.",
       },
@@ -121,10 +156,11 @@ export const mockConversations: Conversation[] = [
     folder: "D:\\aim-clinic",
     updated: "1h",
     provider: "codex",
-    model: "gpt-5.6",
+    model: sol,
     spendUsd: 0,
     tokens: 96400,
     seenBy: { codex: 22 },
+    archived: false,
     entries: [
       {
         id: "e1",
@@ -137,10 +173,9 @@ export const mockConversations: Conversation[] = [
         role: "agent",
         at: "08:05",
         provider: "codex",
-        model: "gpt-5.6",
+        model: sol,
         usage: { tokens: 9600 },
         text: "It does not. The mapper assumes REF segments are detail-scoped and will silently drop a header-level invoice reference, which is why three of last week's invoices came through without a number. The fix is to resolve REF at both scopes and let the detail value win when both are present.",
-        failure: undefined,
       },
     ],
   },
@@ -150,10 +185,11 @@ export const mockConversations: Conversation[] = [
     folder: "D:\\aim-clinic",
     updated: "yesterday",
     provider: "claude",
-    model: "Opus 5",
+    model: opus,
     spendUsd: 1.82,
     tokens: 210300,
     seenBy: { claude: 2 },
+    archived: false,
     entries: [
       {
         id: "b1",
@@ -166,7 +202,7 @@ export const mockConversations: Conversation[] = [
         role: "agent",
         at: "16:42",
         provider: "claude",
-        model: "Opus 5",
+        model: opus,
         usage: { tokens: 15200, usd: 0.41 },
         text: "Right now, both succeed. The availability check and the insert are separate statements with no constraint behind them, so two requests can both read the slot as free before either writes. The second parent gets a confirmation for a slot that is already taken, and nobody finds out until the clinic opens the day view.",
         failure: "Connection to the daemon was lost before this turn finished.",
@@ -179,10 +215,11 @@ export const mockConversations: Conversation[] = [
     folder: "D:\\sparstrowgen",
     updated: "3d",
     provider: "agy",
-    model: "agy-1",
+    model: geminiPro,
     spendUsd: 0,
     tokens: 54100,
     seenBy: { agy: 1 },
+    archived: false,
     entries: [
       {
         id: "p1",
@@ -198,11 +235,61 @@ export const mockConversations: Conversation[] = [
     folder: "D:\\sparstrowgen",
     updated: "4d",
     provider: "claude",
-    model: "Sonnet 5",
+    model: sonnet,
     spendUsd: 0,
     tokens: 0,
     seenBy: {},
+    archived: false,
     entries: [],
+  },
+  {
+    id: "c6",
+    title: "Untitled conversation",
+    folder: "D:\\aim-clinic",
+    updated: "2w",
+    provider: "claude",
+    model: sonnet,
+    spendUsd: 0.44,
+    tokens: 38200,
+    seenBy: { claude: 2 },
+    archived: true,
+    entries: [
+      {
+        id: "a1",
+        role: "user",
+        at: "10:20",
+        text: "Why does the Clockify export round every entry up to the next quarter hour?",
+      },
+      {
+        id: "a2",
+        role: "agent",
+        at: "10:21",
+        provider: "claude",
+        model: sonnet,
+        usage: { tokens: 11800, usd: 0.09 },
+        text: "Because the rounding is applied per entry on the way out rather than once on the invoice total. Six eight-minute calls become six fifteen-minute lines, which is where the extra 42 minutes on last month's statement came from. Round the summed duration, not each row.",
+      },
+    ],
+  },
+  {
+    id: "c7",
+    title: "NAV item ledger — costing adjustment rerun",
+    folder: "D:\\aim-clinic",
+    updated: "1mo",
+    provider: "agy",
+    model: agyModels[0],
+    spendUsd: 0,
+    tokens: 12600,
+    seenBy: { agy: 1 },
+    archived: true,
+    entries: [
+      {
+        id: "n1",
+        role: "user",
+        at: "14:55",
+        text: "The adjust cost batch job ran for nine hours and still left value entries open. Where do I even start?",
+      },
+    ],
   },
 ];
 

@@ -69,11 +69,32 @@ This is not a performance or noise concern. It is a scope leak: an unscoped `cla
 the model real tool access unrelated to the conversation it's actually in, and the model deciding
 not to use it this time is not a boundary — it's luck.
 
+**The fix we recorded does not work.** `--bare` was written into `blueprint.yaml` as MANDATORY
+scoping on the strength of its name. Its own `--help` says why that was wrong:
+
+> Anthropic auth is strictly `ANTHROPIC_API_KEY` or `apiKeyHelper` via `--settings`
+> (**OAuth and keychain are never read**).
+
+The owner signs in with a subscription, not an API key, so `claude --bare -p "hi"` returns
+`Not logged in · Please run /login` in under a second — verified 2026-09-10. Scoping the adapter
+that way would make claude unusable for him entirely, which is worse than the leak it was meant to
+close.
+
+So this gap now has a **verified problem and no verified fix**. The untried candidate is
+`--strict-mcp-config` ("Only use MCP servers from `--mcp-config`, ignoring all other MCP
+configurations") with an empty config, plus `--setting-sources` to bound settings loading. Both
+leave the OAuth path alone. Neither has been captured.
+
+Noticed alongside it: plain `claude -p` from an agent shell hangs — two runs killed at 120s, with
+stdin attached and closed. Consistent with G-1; capture needs the owner's real terminal.
+
 - **If wrong:** every claude-driven chat turn in production has functional access to whatever MCP
   servers happen to be configured on the machine, not just visibility into them. A future prompt
   or an unexpected model decision could act on that access.
-- **Clears when:** the daemon's `claude` adapter passes `--bare` (or equivalent scoping) and a
-  capture confirms both a minimal `system.init` payload and zero connected MCP servers.
+- **Clears when:** the daemon's `claude` adapter scopes with `--strict-mcp-config` (or another flag
+  that does not disable OAuth) and one capture from a real terminal confirms both a minimal
+  `system.init` payload and zero connected MCP servers — *while still authenticating*. Both halves,
+  or it isn't closed.
 
 ## G-4 — What a *hit* rate limit looks like, on any provider
 
@@ -140,3 +161,45 @@ Two specific things are simulated rather than observed, and both will differ:
   plausible-looking number with no backing.
 - **Clears when:** the daemon and server exist, `chat.mock.ts` is deleted, and a grep for `.mock`
   in `apps/web/app` returns nothing.
+
+## G-7 — Conversation search runs in memory over everything loaded
+
+**Kind:** caveat
+**Raised:** 2026-09-10, feedback round item 6.
+
+`apps/web/lib/conversation-search.ts` scans every conversation and every message on each keystroke.
+That is correct for a prototype holding seven conversations and wrong the moment transcripts are
+real: the client would have to hold every message of every conversation to search them, which is
+exactly what our own database exists to avoid.
+
+The search is deliberately shaped so the move is mechanical — one function, taking a list and a
+query, returning matches with an excerpt. The Postgres version answers the same shape.
+
+- **If wrong:** nothing today. It degrades gradually with transcript volume rather than failing,
+  which is the risk — it will keep seeming fine while quietly loading more than it should.
+- **Clears when:** search is served by a query against Postgres and the client no longer needs the
+  full transcript set in memory to run it.
+
+## G-8 — Only `agy` can enumerate its own models
+
+**Kind:** caveat
+**Raised:** 2026-09-10, feedback round item 1.
+
+The three CLIs are not equal here, and the model lists in the app come from three different grades
+of evidence:
+
+| Provider | How the list was obtained | Grade |
+|---|---|---|
+| `agy` | `agy models` — prints ids and labels | **verified**, re-runnable |
+| `codex` | No list command. Names scraped from the shipped binary's string table, cross-checked against `model = "gpt-5.6-sol"` in `~/.codex/config.toml` | **partial** — the configured one is certain, the siblings are inferred |
+| `claude` | No list command. `--model` documents aliases and "a model's full name"; the example in its own help is already a generation stale | **documentation only** |
+
+An invalid model does not produce a list on either: `codex` returns a 400 from the API (`"not
+supported when using Codex with a ChatGPT account"` — so the valid set is account-dependent), and
+`claude --bare` cannot get far enough to answer (G-3).
+
+- **If wrong:** a model offered in the picker fails at invocation time with a provider-side error.
+  Recoverable and obvious, but it lands on the owner mid-conversation rather than at startup.
+- **Clears when:** the daemon resolves each provider's model list at runtime and treats an
+  unknown-model error as a reason to refresh, rather than shipping a hardcoded list — which is the
+  only version that survives the next release of any of the three.

@@ -22,11 +22,6 @@ export const providerClasses: Record<
     text: "text-provider-agy",
     rule: "bg-provider-agy/40",
   },
-  gemini: {
-    dot: "bg-provider-gemini",
-    text: "text-provider-gemini",
-    rule: "bg-provider-gemini/40",
-  },
 };
 
 /** Headroom colour steps. A provider that reports nothing gets "unknown",

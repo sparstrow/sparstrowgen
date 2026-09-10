@@ -2,11 +2,22 @@
    report — see docs/Capabilities.md. Anything optional here is optional because
    some provider genuinely does not emit it, not for convenience. */
 
-export type ProviderId = "claude" | "codex" | "agy" | "gemini";
+/** gemini is deliberately absent. It is installed on the machine but has no
+ *  account behind it and the owner has ruled it out, so there is no adapter and
+ *  no reason to carry it through the type system. See docs/Decisions.md D-014. */
+export type ProviderId = "claude" | "codex" | "agy";
 
 /** Three states, not two. The distinction is whether waiting is a plan.
  *  See docs/Decisions.md D-011. */
 export type Availability = "available" | "waitable" | "blocked";
+
+/** A model always has both. `agy models` returns `gemini-3.1-pro-high` next to
+ *  "Gemini 3.1 Pro (High)" — the id is what gets passed to the CLI, the label is
+ *  the only thing worth showing. Never derive one from the other. */
+export type Model = {
+  id: string;
+  label: string;
+};
 
 export type Headroom = {
   /** Percent of the current window remaining. */
@@ -20,9 +31,9 @@ export type Headroom = {
 export type Provider = {
   id: ProviderId;
   label: string;
-  models: string[];
+  models: Model[];
   /** null when the provider cannot be used at all. */
-  model: string | null;
+  model: Model | null;
   availability: Availability;
   /** Present only when availability is not "available". */
   unavailableReason?: string;
@@ -34,6 +45,10 @@ export type Provider = {
   /** Whether text arrives incrementally. codex VERIFIED false — one whole
    *  message per turn. See KnownGaps G-5 for claude. */
   streams: boolean;
+  /** True when the provider is a router in front of several vendors' models
+   *  rather than one vendor's own CLI. agy serves Gemini, Claude and GPT models,
+   *  so "provider" here means "the CLI we drive", never "who made the model". */
+  routes: boolean;
 };
 
 export type Usage = {
@@ -54,7 +69,10 @@ export type AgentMessage = {
   role: "agent";
   at: string;
   provider: ProviderId;
-  model: string;
+  /** The whole model, not its id. A transcript has to stay readable after a
+   *  provider drops a model from its list — at that point nothing can resolve
+   *  the label any more, so it is stored at the time the turn ran. */
+  model: Model;
   text: string;
   usage?: Usage;
   code?: { lang: string; body: string };
@@ -70,7 +88,7 @@ export type ReplayMarker = {
   role: "replay";
   at: string;
   to: ProviderId;
-  toModel: string;
+  toModel: Model;
   messagesReplayed: number;
   tokens: number;
 };
@@ -84,19 +102,31 @@ export type Conversation = {
   folder: string;
   updated: string;
   provider: ProviderId;
-  model: string;
+  model: Model;
   spendUsd: number;
   tokens: number;
   entries: Entry[];
   /** Which providers have already seen how much of this conversation, so a
    *  switch back only replays the gap. Keyed by provider id → entries seen. */
   seenBy: Partial<Record<ProviderId, number>>;
+  /** Out of the list but fully intact. Unlike deleting, this is reversible,
+   *  which is why it is offered at the point of deletion. */
+  archived: boolean;
 };
 
 /** What a switch would cost, computed but not yet incurred. */
 export type PendingSwitch = {
   to: ProviderId;
-  toModel: string;
+  toModel: Model;
   messagesToReplay: number;
   estimatedTokens: number;
+};
+
+/** Where a search term was found. A title-only match is not enough to find the
+ *  conversations that most need finding — several are called "Untitled
+ *  conversation". */
+export type SearchHit = {
+  /** The matching line of message text, when the match was not in the title. */
+  excerpt?: string;
+  inTitle: boolean;
 };

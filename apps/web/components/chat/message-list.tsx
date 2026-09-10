@@ -1,8 +1,9 @@
 "use client";
 
 import { AlertTriangle, ArrowRightLeft } from "lucide-react";
-import type { Entry, ProviderId } from "@/lib/chat-types";
+import type { Entry, Model, ProviderId } from "@/lib/chat-types";
 import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
+import { ProviderIcon } from "./provider-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /* The owner's messages sit right, as a bubble. Agent output runs down the
@@ -44,7 +45,7 @@ function AgentTurn({
   streaming,
 }: {
   provider: ProviderId;
-  model: string;
+  model: Model;
   text: string;
   at: string;
   usage?: { tokens: number; usd?: number };
@@ -55,10 +56,10 @@ function AgentTurn({
   const c = providerClasses[provider];
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline gap-2">
-        <span className={`size-2 rounded-full ${c.dot}`} aria-hidden />
+      <div className="mb-1.5 flex items-center gap-2">
+        <ProviderIcon provider={provider} className={`size-4 ${c.text}`} />
         <span className={`text-sm font-medium ${c.text}`}>{provider}</span>
-        <span className="text-xs text-muted-foreground">{model}</span>
+        <span className="text-xs text-muted-foreground">{model.label}</span>
         <span className="text-xs text-muted-foreground">· {at}</span>
       </div>
 
@@ -104,7 +105,7 @@ function ReplayDivider({
   tokens,
 }: {
   to: ProviderId;
-  toModel: string;
+  toModel: Model;
   messagesReplayed: number;
   tokens: number;
 }) {
@@ -114,8 +115,10 @@ function ReplayDivider({
       <span className="h-px flex-1 bg-border" />
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <ArrowRightLeft className="size-3.5" aria-hidden />
-        switched to <span className={c.text}>{to}</span>
-        <span className="text-muted-foreground/70">{toModel}</span>
+        switched to
+        <ProviderIcon provider={to} className={`size-3.5 ${c.text}`} />
+        <span className={c.text}>{to}</span>
+        <span className="text-muted-foreground/70">{toModel.label}</span>
         <span aria-hidden>·</span>
         replayed {messagesReplayed} messages
         <span aria-hidden>·</span>
@@ -136,17 +139,17 @@ export function WorkingIndicator({
   streams,
 }: {
   provider: ProviderId;
-  model: string;
+  model: Model;
   elapsed: number;
   streams: boolean;
 }) {
   const c = providerClasses[provider];
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline gap-2">
-        <span className={`size-2 rounded-full ${c.dot}`} aria-hidden />
+      <div className="mb-1.5 flex items-center gap-2">
+        <ProviderIcon provider={provider} className={`size-4 ${c.text}`} />
         <span className={`text-sm font-medium ${c.text}`}>{provider}</span>
-        <span className="text-xs text-muted-foreground">{model}</span>
+        <span className="text-xs text-muted-foreground">{model.label}</span>
       </div>
       <div
         className="flex items-center gap-2.5 text-sm text-muted-foreground"

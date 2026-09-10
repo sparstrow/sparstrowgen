@@ -100,6 +100,15 @@ project survives closing the app and I am not starting over each session.
   want and pick up where I left off.
 - **Given** I have never used the app before, **when** I open it, **then** it is obvious what to do
   first rather than looking broken or empty.
+- **Given** I have many conversations, **when** I search for something I remember saying, **then** I
+  find it — including when I never gave that conversation a name.
+- **Given** a conversation I am finished with, **when** I want it out of my way, **then** I can put
+  it aside without destroying it, and get it back later.
+- **Given** I am about to delete a conversation, **when** I confirm, **then** setting it aside is
+  offered there too — because that is usually what I actually meant.
+
+*Amended 2026-09-10 from the owner's feedback on the built surface, items 5 and 6 of
+[that round](../feedback/2026-09-10-chat-surface.md). His words, not a rewrite of them.*
 
 ## Edge cases
 
@@ -123,7 +132,8 @@ project survives closing the app and I am not starting over each session.
 - **Switching agents automatically when one runs out.** Wanted, but we cannot yet detect "out of
   limit" reliably on every agent (`KnownGaps.md` G-4). Switching stays my decision for now — and
   US3 exists so I can make it in time.
-- **Gemini.** Installed but I have no account signed in (`Later.md` L-6).
+- **Gemini.** Ruled out entirely on 2026-09-10 — *"I don't want gemini to be part of this at all,
+  since we are not going to use it"* (`Decisions.md` D-014). Not parked; removed.
 - **Approving individual actions before an agent takes them.** Agents work auto-approved inside
   folders I have registered (`Decisions.md` D-007); the approval flow is a later addition
   (`Later.md` L-4).

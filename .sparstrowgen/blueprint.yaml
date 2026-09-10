@@ -64,7 +64,8 @@ agent_clis:
     print_note: "--verbose is REQUIRED with --output-format stream-json in print mode, not obvious from --help"
     resume: "--resume <uuid> / --session-id <uuid>"
     model_flag: "--model"
-    scoping: "MANDATORY --bare — see docs/KnownGaps.md G-3 (unscoped calls get working MCP tool access, verified)"
+    model_list: "NONE — no list command. --model takes aliases (sonnet, opus) or full ids. Curated by us; see docs/KnownGaps.md G-8"
+    scoping: "UNSOLVED — do NOT use --bare: it never reads OAuth or the keychain, so it cannot authenticate a subscription account (verified 2026-09-10, returns 'Not logged in'). The scope leak in docs/KnownGaps.md G-3 is real and open; --strict-mcp-config is the untested candidate."
     usage_verified: true
     usage_fields: [input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens, service_tier, inference_geo]
     cost_verified: true
@@ -81,6 +82,7 @@ agent_clis:
     print: "codex exec --json --ignore-user-config"
     resume: "codex exec resume <session-id> <prompt>"
     model_flag: "-m"
+    model_list: "NONE — no list command. Names scraped from the shipped binary; configured model read from ~/.codex/config.toml. The valid set is ACCOUNT-DEPENDENT — an unsupported model returns 400 'not supported when using Codex with a ChatGPT account'. See docs/KnownGaps.md G-8"
     scoping: "MANDATORY --ignore-user-config — codex's equivalent of claude --bare; verified to silence all global MCP config while auth still works via CODEX_HOME"
     usage_verified: true
     usage_fields: [input_tokens, cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_output_tokens]
@@ -91,15 +93,15 @@ agent_clis:
     print: "-p --output-format stream-json"
     resume: "--conversation <id>"
     model_flag: "--model"
-    model_list: "agy models"
+    model_list: "agy models — VERIFIED, the only one of the three that enumerates. Returns id + label, 14 entries"
+    routes: true
+    routes_note: "agy is a ROUTER, not a vendor: it serves Gemini, Claude and GPT-OSS models behind one CLI. Reasoning effort is baked into the model id (gemini-3.1-pro-high vs -low), not a separate setting — so there is no effort control to build."
     usage_verified: true
     usage_fields: [input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens]
     incremental_streaming: true
     streaming_note: "VERIFIED — step_update events with state=ACTIVE carry text_delta, ~25-35 chars each (93 for a 400-word answer). Short answers may arrive in one chunk; that is size, not absence."
-  - name: gemini
-    availability: blocked
-    blocked_reason: "installed, no account signed in"
-    status: "adapter not written — do not write one until availability changes; see docs/Later.md L-6"
+  # gemini was here. Removed from the product on 2026-09-10 — see docs/Decisions.md D-014.
+  # Do not add it back without the owner asking for it.
 
 commands:
   install: "pnpm install"

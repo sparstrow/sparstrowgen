@@ -3,7 +3,7 @@
 First review of the chat surface built in `apps/web` (commit `36ece44`, direction A from the
 [2026-09-09 shot round](../../design-system/shots/2026-09-09-chat-surface/README.md)).
 
-Captured live during the round, in his words. **Status: open — round still in progress.**
+Captured live during the round, in his words. **Status: closed 2026-09-10 — all six done.**
 Procedure: [`feedback-round`](../../.claude/skills/feedback-round/SKILL.md).
 
 ---
@@ -97,8 +97,80 @@ Postgres); semantic search stays out of scope per the spec.
 
 ## Triage
 
-*Pending — the owner has not finished the round.*
+| # | Item | Destination |
+|---|---|---|
+| 1 | Real model lists | Capability check first — the lists came from the CLIs, not memory. Then code. Findings → [`KnownGaps.md`](../KnownGaps.md) G-8, [`Decisions.md`](../Decisions.md) D-015, `Capabilities.md` |
+| 2 | Provider icons | Code |
+| 2 | Drop gemini | [`Decisions.md`](../Decisions.md) D-014, `Later.md` L-6 **deleted**, blueprint, `Capabilities.md` |
+| 3 | Geist | Verify only — already correct |
+| 4 | Two dropdowns | Code |
+| 5 | Archive | Spec amendment (US4) + code |
+| 6 | Search | Spec amendment (US4) + code. Scaling caveat → [`KnownGaps.md`](../KnownGaps.md) G-7 |
+
+Nothing was refused, deferred, or needed the owner before starting. Item 2's ambiguous last
+sentence is answered under its outcome below.
 
 ## Outcomes
 
-*Pending.*
+**1 — done, and it found more than a wrong list.** `agy models` is the only one of the three that
+enumerates; `codex` has no list command (names read from the shipped binary and its config, and the
+valid set turns out to be *account*-dependent); `claude` has none either. Recorded as G-8. Two
+things fell out of the real data and changed the design rather than just the content:
+
+- A model needs an **id and a label** — `gemini-3.1-pro-high` next to "Gemini 3.1 Pro (High)".
+  Neither is derivable from the other. `Model` is now a type, and a transcript stores the whole
+  thing so an old turn stays readable after a provider drops that model (D-015).
+- **Effort is baked into the model id**, so there is no effort control to build — eleven of agy's
+  fourteen entries are the same three Gemini models at different efforts. The slider in his
+  screenshot is agy's way of picking among them, not a second axis we have to model.
+- **`agy` is a router, not a vendor.** It serves Gemini, Claude and GPT-OSS models. `Provider.routes`
+  records it so nothing infers "who made this model" from which CLI answered.
+
+**2 — done.** Marks for all three providers in `provider-icon.tsx`, drawn rather than imported:
+they must tint from `currentColor` to work in provider, muted and disabled contexts, and DESIGN.md
+forbids a hardcoded colour — which rules out agy's rainbow. They are recognisable approximations,
+not official assets; swap all three at once if that is ever worth doing.
+
+gemini is gone from `ProviderId`, the colour tokens, the mock, `Capabilities.md` and the blueprint,
+and L-6 is deleted rather than left parked (D-014). **The ambiguous sentence, answered:** read as
+*only include providers there is actually an account behind*. The cost is stated in D-014 — gemini
+was the only live example of the three-state availability model, so `blocked` is now an unexercised
+path. The state stays, because a signed-out or uninstalled CLI is the same shape.
+
+**3 — already correct, nothing to change.** Verified in the browser rather than assumed: computed
+`font-family` on `body` is `Geist, "Geist Fallback", …`, `Geist Mono` on code, and a Geist face
+reports `loaded` in `document.fonts`.
+
+**4 — done.** Provider dropdown then model dropdown, the second scoped to the first. Picking a
+provider takes its default model. Changing model *within* a provider replays nothing — `seenBy` is
+keyed by provider, and the provider's own session carries across models.
+
+**5 — done.** Archive on the row menu, an Archived section in the sidebar, and **"Archive instead"**
+in the delete dialog. Archiving is reversible so it gets a toast with Undo rather than a
+confirmation; deleting is the one that asks. Search reaches into the archive — otherwise archiving
+would make things unfindable, which is what deleting is for.
+
+**6 — done.** Matches titles, folders and message text, and shows the matching line when the hit
+was in the text. Verified against the case that justifies it: searching "quarter hour" finds an
+**archived** conversation titled "Untitled conversation" by its message body — a title-only search
+would have missed it completely.
+
+### Two things this round turned up that were not asked about
+
+- **`claude --bare` cannot authenticate this account.** It was recorded in the blueprint as
+  MANDATORY scoping; its own `--help` says OAuth and the keychain are never read, and the owner
+  signs in with a subscription. `claude --bare -p "hi"` → `Not logged in`. Shipping that adapter
+  would have made claude unusable. G-3 is rewritten: the scope leak is real, the fix is **unsolved**,
+  `--strict-mcp-config` is the untested candidate.
+- **B-1**, a real bug found in the browser: agy's 14-model menu rendered 175px below the fold
+  because a `max-h-80` of mine overrode the popup's own `max-h-(--available-height)`. Fixed and
+  re-verified at three viewport heights.
+
+### What this told us about taste
+
+One thing, and it is the same instinct as last round: **he checks the substance behind a surface,
+not just its look.** Four of six items were about whether what is displayed is *true* — real model
+names, real vendor marks, the real font — rather than about layout. The lesson for the next round
+is that plausible filler is not a neutral choice: `agy-1` looked fine and was fiction, and it
+survived a whole design round because nobody checked it against the CLI that was sitting right
+there. Check the cheap facts before showing them.
