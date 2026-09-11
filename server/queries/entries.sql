@@ -28,7 +28,7 @@ RETURNING *;
 
 -- name: FinishAgentEntry :one
 UPDATE entries
-SET body = $2, tokens = $3, spend_ticks = $4, failure = $5
+SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6
 WHERE id = $1
 RETURNING *;
 

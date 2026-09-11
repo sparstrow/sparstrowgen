@@ -1,0 +1,60 @@
+# The Next.js app.
+#
+# Build context is the repository root:
+#   docker build -f Dockerfile.web -t sparstrowgen-web .
+#
+# The pnpm workspace has exactly one real package — apps/web — and it depends on
+# no local packages, so this copies the four files that decide the dependency
+# tree and nothing else. If packages/core or packages/ui ever gain a
+# package.json that web imports, they have to be copied in the deps stage too,
+# or the install will resolve a workspace dependency that is not there.
+
+FROM node:24.14.0-alpine AS base
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+# Pinned to the repository's own packageManager field. A different pnpm can
+# resolve a committed lockfile differently, which turns "works on my machine"
+# into a deployment difference.
+RUN npm install --global pnpm@11.6.0
+WORKDIR /app
+
+# Dependencies alone, so editing a component does not reinstall node_modules.
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/
+# --frozen-lockfile fails rather than silently updating the lockfile, so a
+# deploy can never quietly install something different from what was tested.
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY apps/web/ apps/web/
+# Baked in at build time, not read at runtime: NEXT_PUBLIC_* is substituted into
+# the client bundle during the build, so this is a build argument and changing
+# it means rebuilding. It is the public origin of the API, which the browser
+# calls directly.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter web build
+
+# ---------------------------------------------------------------------------
+# runtime
+# ---------------------------------------------------------------------------
+# `output: "standalone"` produces a self-contained server plus only the modules
+# it actually traced, which is why node_modules is not copied here. Without it
+# this image carries the entire dependency tree, development packages included.
+FROM base AS runtime
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+# The node image ships an unprivileged `node` user; unlike the scratch server
+# image there is an /etc/passwd here, so it can be named.
+USER node
+WORKDIR /app
+
+# standalone lays the server out relative to the workspace root, so these three
+# copies reproduce that layout rather than flattening it.
+COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=node:node /app/apps/web/public ./apps/web/public
+
+ENV PORT=3000 HOSTNAME=0.0.0.0
+EXPOSE 3000
+CMD ["node", "apps/web/server.js"]

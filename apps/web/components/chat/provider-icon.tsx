@@ -18,7 +18,9 @@ import type { ProviderId } from "@/lib/chat-types";
  */
 
 type Props = {
-  provider: ProviderId;
+  /** Widened past ProviderId on purpose: this renders whatever the server
+   *  sent, including a provider added after this build shipped. */
+  provider: ProviderId | string;
   className?: string;
 };
 
@@ -34,11 +36,20 @@ const CODEX_PATH =
 const AGY_PATH =
   "M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z";
 
-const paths: Record<ProviderId, string> = {
+const paths: Record<string, string> = {
   claude: CLAUDE_PATH,
   codex: CODEX_PATH,
   agy: AGY_PATH,
 };
+
+/** A plain ring, for a provider this build has no mark for.
+ *
+ *  `paths[unknown]` is undefined, and `<path d={undefined}>` draws nothing at
+ *  all — which is not a crash but is worse than it looks: the row simply has a
+ *  blank where every other row has an icon, and nothing says why. A neutral
+ *  shape says "a provider, not one I recognise", which is the truth. */
+const UNKNOWN_PATH =
+  "M12 3a9 9 0 100 18 9 9 0 000-18zm0 2a7 7 0 110 14 7 7 0 010-14z";
 
 export function ProviderIcon({ provider, className = "size-4" }: Props) {
   return (
@@ -48,7 +59,7 @@ export function ProviderIcon({ provider, className = "size-4" }: Props) {
       className={className}
       aria-hidden
     >
-      <path d={paths[provider]} />
+      <path d={paths[provider] ?? UNKNOWN_PATH} />
     </svg>
   );
 }

@@ -1,0 +1,49 @@
+# Everything the build does not need, kept out of the context.
+#
+# Two reasons beyond speed: node_modules from a Windows host would be copied in
+# and then shadow the Linux install (native bindings for the wrong platform),
+# and .env files must never be baked into an image layer, where they survive
+# every later deletion and travel with the image.
+
+.git
+.gitignore
+node_modules
+**/node_modules
+.next
+**/.next
+out
+**/out
+dist
+**/dist
+bin
+
+# Secrets. Nothing here is copied deliberately; this is the second line.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Reference checkouts — read-only copies of other systems, never built.
+Reference
+
+# Nothing in the image reads these.
+docs
+design-system
+.claude
+.sparstrowgen
+*.md
+LICENSE
+Makefile
+scripts
+
+# Local tooling and editor state.
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+
+# Go build and test artefacts.
+**/*.exe
+**/*.exe~
+**/*.test

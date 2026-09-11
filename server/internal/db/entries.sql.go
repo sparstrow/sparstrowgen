@@ -21,7 +21,7 @@ INSERT INTO entries (
     (SELECT COALESCE(MAX(seq), 0) + 1 FROM entries WHERE conversation_id = $1),
     $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
 `
 
 type AppendEntryParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Entry
 		&i.SpendTicks,
 		&i.Failure,
 		&i.MessagesReplayed,
+		&i.Stopped,
 	)
 	return i, err
 }
@@ -75,7 +76,7 @@ const appendEntryBody = `-- name: AppendEntryBody :one
 UPDATE entries
 SET body = body || $2::text
 WHERE id = $1
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
 `
 
 type AppendEntryBodyParams struct {
@@ -102,6 +103,7 @@ func (q *Queries) AppendEntryBody(ctx context.Context, arg AppendEntryBodyParams
 		&i.SpendTicks,
 		&i.Failure,
 		&i.MessagesReplayed,
+		&i.Stopped,
 	)
 	return i, err
 }
@@ -119,9 +121,9 @@ func (q *Queries) CountEntries(ctx context.Context, conversationID pgtype.UUID) 
 
 const finishAgentEntry = `-- name: FinishAgentEntry :one
 UPDATE entries
-SET body = $2, tokens = $3, spend_ticks = $4, failure = $5
+SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6
 WHERE id = $1
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
 `
 
 type FinishAgentEntryParams struct {
@@ -130,6 +132,7 @@ type FinishAgentEntryParams struct {
 	Tokens     *int64      `json:"tokens"`
 	SpendTicks *int64      `json:"spend_ticks"`
 	Failure    *string     `json:"failure"`
+	Stopped    bool        `json:"stopped"`
 }
 
 func (q *Queries) FinishAgentEntry(ctx context.Context, arg FinishAgentEntryParams) (Entry, error) {
@@ -139,6 +142,7 @@ func (q *Queries) FinishAgentEntry(ctx context.Context, arg FinishAgentEntryPara
 		arg.Tokens,
 		arg.SpendTicks,
 		arg.Failure,
+		arg.Stopped,
 	)
 	var i Entry
 	err := row.Scan(
@@ -155,12 +159,13 @@ func (q *Queries) FinishAgentEntry(ctx context.Context, arg FinishAgentEntryPara
 		&i.SpendTicks,
 		&i.Failure,
 		&i.MessagesReplayed,
+		&i.Stopped,
 	)
 	return i, err
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed FROM entries
+SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped FROM entries
 WHERE conversation_id = $1
 ORDER BY seq
 `
@@ -188,6 +193,7 @@ func (q *Queries) ListEntries(ctx context.Context, conversationID pgtype.UUID) (
 			&i.SpendTicks,
 			&i.Failure,
 			&i.MessagesReplayed,
+			&i.Stopped,
 		); err != nil {
 			return nil, err
 		}
@@ -200,7 +206,7 @@ func (q *Queries) ListEntries(ctx context.Context, conversationID pgtype.UUID) (
 }
 
 const listEntriesFrom = `-- name: ListEntriesFrom :many
-SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed FROM entries
+SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped FROM entries
 WHERE conversation_id = $1 AND seq > $2
 ORDER BY seq
 `
@@ -234,6 +240,7 @@ func (q *Queries) ListEntriesFrom(ctx context.Context, arg ListEntriesFromParams
 			&i.SpendTicks,
 			&i.Failure,
 			&i.MessagesReplayed,
+			&i.Stopped,
 		); err != nil {
 			return nil, err
 		}

@@ -1,8 +1,8 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CircleSlash } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
-import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
+import { providerStyle, formatTokens, formatUsd } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Markdown } from "./markdown";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +34,7 @@ function AgentTurn({
   at,
   usage,
   failure,
+  stopped,
   streaming,
 }: {
   provider: ProviderId;
@@ -42,9 +43,10 @@ function AgentTurn({
   at: string;
   usage?: { tokens: number; usd?: number };
   failure?: string;
+  stopped?: boolean;
   streaming?: boolean;
 }) {
-  const c = providerClasses[provider];
+  const c = providerStyle(provider);
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-2">
@@ -62,15 +64,49 @@ function AgentTurn({
         <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 rounded-xs bg-foreground/60" />
       )}
 
-      {failure && (
+      {/* Deliberately not the destructive treatment below. Stopping a turn is
+          something the owner chose to do, and putting a red alert box around a
+          deliberate act reads as though something went wrong. */}
+      {stopped && (
+        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-dashed bg-muted/40 px-3.5 py-2.5">
+          <CircleSlash
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <div className="text-sm">
+            <p className="font-medium">You stopped this</p>
+            {/* Two states, and no explanation of why. Twice now a plausible
+                sentence about the provider turned out to be false — claude was
+                said not to stream (it does, it was mid-tool-call) and codex was
+                said to lose everything (it keeps whole messages it finished).
+                What is actually known here is whether text arrived, so that is
+                all this says. */}
+            <p className="mt-0.5 text-muted-foreground">
+              {text
+                ? "What had arrived is kept above."
+                : "Nothing had arrived yet."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* A stopped turn's CLI often complains on its way out, and that
+          complaint is a consequence of the stop rather than a reason worth
+          reading. The stop is the truer account, so it is the one shown. */}
+      {failure && !stopped && (
         <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-2.5">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="text-sm">
             <p className="font-medium text-destructive">Turn did not finish</p>
             <p className="mt-0.5 text-muted-foreground">{failure}</p>
-            <p className="mt-1 text-muted-foreground">
-              What arrived before it stopped is kept above.
-            </p>
+            {/* Only when there is something above to mean. A turn that broke
+                before producing anything used to be told its output had been
+                kept, which is a promise about an empty space. */}
+            {text && (
+              <p className="mt-1 text-muted-foreground">
+                What arrived before it stopped is kept above.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -105,7 +141,7 @@ function ReplayDivider({
    *  nothing switched would be a small lie in the record. */
   switched: boolean;
 }) {
-  const c = providerClasses[to];
+  const c = providerStyle(to);
   return (
     <div className="flex items-center gap-3 py-1" role="separator">
       <span className="h-px flex-1 bg-border" />
@@ -139,7 +175,7 @@ export function WorkingIndicator({
   elapsed: number;
   streams: boolean;
 }) {
-  const c = providerClasses[provider];
+  const c = providerStyle(provider);
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-2">
@@ -234,6 +270,7 @@ export function MessageList({
             at={e.at}
             usage={e.usage}
             failure={e.failure}
+            stopped={e.stopped}
             streaming={streamingId === e.id}
           />
         );

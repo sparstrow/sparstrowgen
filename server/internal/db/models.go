@@ -10,7 +10,7 @@ import (
 
 type Conversation struct {
 	ID         pgtype.UUID        `json:"id"`
-	Title      string             `json:"title"`
+	Title      *string            `json:"title"`
 	Folder     string             `json:"folder"`
 	Provider   string             `json:"provider"`
 	ModelID    string             `json:"model_id"`
@@ -36,6 +36,7 @@ type Entry struct {
 	SpendTicks       *int64             `json:"spend_ticks"`
 	Failure          *string            `json:"failure"`
 	MessagesReplayed *int32             `json:"messages_replayed"`
+	Stopped          bool               `json:"stopped"`
 }
 
 type ProviderSession struct {
@@ -44,4 +45,13 @@ type ProviderSession struct {
 	SessionID      *string            `json:"session_id"`
 	SeenSeq        int32              `json:"seen_seq"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Session struct {
+	TokenHash  []byte             `json:"token_hash"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	UserAgent  string             `json:"user_agent"`
+	Ip         string             `json:"ip"`
 }

@@ -151,3 +151,28 @@ The predicted cost was right too. B-5 mangled text that was all still present; t
 message with nothing on screen to suggest it. Fixed in the same change that closed this entry;
 `claudeMessage.text()` now joins a message's own text blocks with a blank line as well, though that
 path is still unexercised — no capture we hold has two text blocks inside one message.
+
+## G-17 — A confirmed-clean stop cannot tell a zombie from a live process
+
+**Kind:** caveat
+**Raised:** 2026-09-11, running the process-tree tests on Linux for the first time (closing G-15)
+
+`processTree.gone` asks `kill(-pgid, 0)` on Unix, which succeeds for any process in the group that
+still has a PID — **including one that has already exited and is waiting to be reaped**. A zombie is
+dead and holds nothing open, but it answers that question exactly as a running process does.
+
+Normally invisible: an orphaned process is reparented to init, which reaps it immediately, so the
+zombie window is microseconds. It appeared the moment these tests ran in a container, where
+`go test` was PID 1 and PID 1 does not reap orphans — a stop that had genuinely killed everything
+reported "could not be confirmed clean" after 6.5 seconds, against 0.5 with an init present.
+`make test-linux` passes `--init` for exactly this reason.
+
+**The kill is unaffected.** This is the confirmation, not the killing: nothing leaks, the report is
+wrong rather than the outcome.
+
+- **If wrong:** a spurious warning in the daemon log claiming a stop may have left something
+  running when it did not. Cosmetic on a normal host; noisy on a daemon deployed into a bare
+  container with no init, which is plausible given the server is headed for Coolify.
+- **Clears when:** either the daemon is only ever run under an init (worth asserting when it is
+  packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
+  Linux-only and would need a different answer on macOS, which is why it was not done now.

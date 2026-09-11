@@ -13,15 +13,38 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/websocket"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
+// Config is what the deployment decides. Every field is required: there is no
+// value of any of them that means "no authentication", because the one mistake
+// this app cannot afford is being reachable without it.
+type Config struct {
+	// PasswordHash is the argon2id PHC string from `server -hashpw`.
+	PasswordHash string
+	// DaemonToken is the shared secret the owner's machine presents.
+	DaemonToken string
+	// Origin is the exact browser origin allowed to call this API, e.g.
+	// "https://sparstrowgen.example.ts.net". Cross-origin requests from
+	// anywhere else are refused, and so are websocket upgrades.
+	Origin string
+	// SecureCookie marks the session cookie Secure, which makes it unusable
+	// over plain HTTP. On in production, off for http://localhost.
+	SecureCookie bool
+}
+
 type API struct {
-	store *store.Store
-	hub   *hub.Hub
-	log   *slog.Logger
+	store    *store.Store
+	hub      *hub.Hub
+	log      *slog.Logger
+	cfg      Config
+	throttle *auth.Throttle
+	// hashing bounds how many argon2 hashes run at once. Buffered to hashSlots;
+	// a send that would block means the server is already at its limit.
+	hashing chan struct{}
 
 	// turns maps an in-flight turn to the conversation and entry it is writing
 	// into, so a daemon message carrying only a turn id can be routed.
@@ -39,49 +62,101 @@ type turn struct {
 	Streamed string
 }
 
-func New(s *store.Store, h *hub.Hub, log *slog.Logger) *API {
-	a := &API{store: s, hub: h, log: log, turns: map[string]*turn{}}
+func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
+	a := &API{
+		store: s, hub: h, log: log, cfg: cfg,
+		throttle: auth.NewThrottle(),
+		hashing:  make(chan struct{}, hashSlots),
+		turns:    map[string]*turn{},
+	}
 	h.OnDaemonMessage = a.handleDaemonMessage
 	return a
 }
 
-// upgrader accepts any origin: the server is reached over the loopback address
-// in development and behind our own auth in production, and there is no
-// cookie-authenticated state for a foreign page to abuse yet. Revisit the day
-// there is a session cookie.
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(*http.Request) bool { return true },
+// upgrader refuses a websocket from anywhere but the configured origin.
+//
+// This used to accept any origin, with a comment saying to revisit it the day
+// there was a session cookie. That day is this one. A cookie is sent on a
+// websocket handshake exactly as on any other request, and the same-origin
+// policy does NOT apply to websockets — so without this check any page the
+// owner happened to visit could open a socket to this server, be authenticated
+// by his own cookie, and read every conversation in it.
+//
+// A handshake with no Origin header at all is allowed: that is a non-browser
+// client, which has no cookie to abuse and must still present the daemon token
+// or a session of its own.
+func (a *API) upgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return origin == "" || origin == a.cfg.Origin
+		},
+	}
 }
 
 func (a *API) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(cors)
+	r.Use(a.cors)
 
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"ok": true, "daemon": a.hub.DaemonOnline()})
+	// --- open to anyone -----------------------------------------------------
+	// Liveness only. It deliberately does NOT report whether the daemon is
+	// connected: that is a fact about the owner's machine, and an unauthenticated
+	// endpoint should not answer "is he at his desk right now".
+	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"ok": true})
 	})
-	r.Get("/api/providers", a.getProviders)
-	r.Get("/api/conversations", a.listConversations)
-	r.Post("/api/conversations", a.createConversation)
-	r.Get("/api/conversations/{id}", a.getConversation)
-	r.Patch("/api/conversations/{id}", a.patchConversation)
-	r.Delete("/api/conversations/{id}", a.deleteConversation)
-	r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
-	r.Get("/api/directories", a.listDirectories)
-	r.Get("/api/folders/recent", a.recentFolders)
-	r.Post("/api/conversations/{id}/messages", a.postMessage)
+	r.Post("/api/auth/login", a.login)
+	r.Post("/api/auth/logout", a.logout)
+	r.Get("/api/auth/session", a.session)
 
-	r.Get("/ws", a.browserSocket)
+	// The daemon presents its own token on the handshake rather than a session
+	// cookie, so it is not behind requireSession.
 	r.Get("/daemon", a.daemonSocket)
+
+	// --- everything else needs the owner ------------------------------------
+	r.Group(func(r chi.Router) {
+		r.Use(a.requireSession)
+
+		r.Get("/api/providers", a.getProviders)
+		r.Get("/api/conversations", a.listConversations)
+		r.Post("/api/conversations", a.createConversation)
+		r.Get("/api/conversations/{id}", a.getConversation)
+		r.Patch("/api/conversations/{id}", a.patchConversation)
+		r.Delete("/api/conversations/{id}", a.deleteConversation)
+		r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
+		r.Get("/api/directories", a.listDirectories)
+		r.Get("/api/folders/recent", a.recentFolders)
+		r.Post("/api/conversations/{id}/messages", a.postMessage)
+		// Keyed by turn, not by conversation. "Stop whatever this conversation
+		// is running" would be ambiguous the moment a turn ends between the
+		// click and the request, and would then stop the wrong one.
+		r.Post("/api/turns/{turnId}/stop", a.stopTurn)
+
+		r.Get("/ws", a.browserSocket)
+	})
 	return r
 }
 
-func cors(next http.Handler) http.Handler {
+// cors answers exactly one origin, and only with credentials allowed.
+//
+// It used to answer "*", which was survivable while there was nothing to steal.
+// With a session cookie there is: "*" cannot legally be combined with
+// credentials, and a browser enforces that — but the deeper point is that the
+// list of origins allowed to act as the owner should be one, named in the
+// deployment, rather than everything.
+//
+// Vary: Origin because the answer differs per request, and a cache that misses
+// that would hand one origin's permission to another.
+func (a *API) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Add("Vary", "Origin")
+		if origin := r.Header.Get("Origin"); origin != "" && origin == a.cfg.Origin {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -296,10 +371,30 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := a.store.SetProvider(ctx, id, body.Provider, body.Model); err != nil {
+	// Name it from what is being said, before the conversation is broadcast
+	// below — so the name travels with the same event rather than needing a
+	// second one. Only ever fills a blank (docs/Decisions.md D-024).
+	//
+	// A failure here is logged and not returned: the message is what the owner
+	// asked for, and refusing to send it because its conversation could not be
+	// named would trade the thing that matters for the thing that doesn't.
+	if conv.Title == "" {
+		if _, _, err := a.store.NameFrom(ctx, id, body.Text); err != nil {
+			a.log.Warn("could not name the conversation", "conversation", id, "err", err)
+		}
+	}
+
+	// Broadcast it. The conversation really is on the new provider after this,
+	// but without saying so the browser keeps the copy it fetched before the
+	// send and the composer snaps back to the old provider (docs/Bugs.md B-9).
+	switched, err := a.store.SetProvider(ctx, id, body.Provider, body.Model)
+	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
+	a.hub.Broadcast(protocol.ClientEvent{
+		Type: protocol.EventConversation, Conversation: &switched,
+	})
 
 	userEntry, err := a.store.AppendUser(ctx, id, body.Text)
 	if err != nil {
@@ -342,12 +437,42 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if !sent {
-		a.finishTurn(ctx, turnID, "", 0, 0, errDaemonOffline.Error())
+		a.finishTurn(ctx, turnID, "", 0, 0, errDaemonOffline.Error(), false)
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
 		return
 	}
 
 	writeJSON(w, map[string]any{"turnId": turnID, "entry": agentEntry})
+}
+
+// stopTurn ends a turn that is already running.
+//
+// It does not finish the entry itself. The daemon confirms with DaemonStopped
+// and that goes through the same finishTurn as every other ending, so there is
+// one path for "this turn is over" rather than a second one that has to be kept
+// in step with the first.
+func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
+	turnID := chi.URLParam(r, "turnId")
+
+	a.mu.Lock()
+	_, running := a.turns[turnID]
+	a.mu.Unlock()
+	if !running {
+		// The click and the turn ending race by nature, so this is an ordinary
+		// outcome rather than something to alarm anyone about — but it is not a
+		// success either, because nothing was stopped. The client treats it as
+		// "already finished" and says nothing.
+		a.fail(w, errTurnNotRunning, http.StatusConflict)
+		return
+	}
+	if !a.hub.SendToDaemon(protocol.ServerMessage{
+		Type: protocol.ServerStopTurn, TurnID: turnID,
+	}) {
+		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
+		return
+	}
+	// Accepted, not done: the turn ends when the daemon says it has.
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // ---------------------------------------------------------------------------
@@ -395,16 +520,75 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 		})
 
 	case protocol.DaemonDone:
-		a.finishTurn(ctx, msg.TurnID, msg.Full, msg.Tokens, msg.SpendTicks, "")
+		a.finishTurn(ctx, msg.TurnID, msg.Full, msg.Tokens, msg.SpendTicks, "", false)
 
 	case protocol.DaemonFailed:
 		// Whatever arrived before it stopped is kept: a partial answer is still
 		// worth reading, and deleting it would hide what went wrong.
-		a.finishTurn(ctx, msg.TurnID, t.Streamed, 0, 0, msg.Error)
+		//
+		// The daemon's text wins over the deltas we accumulated. A provider that
+		// does not stream sends no deltas at all, so t.Streamed is empty and the
+		// parser's recovered messages are the only copy there is — preferring
+		// the wrong one silently threw away real output (docs/Bugs.md B-10).
+		text := msg.Full
+		if text == "" {
+			text = t.Streamed
+		}
+		a.finishTurn(ctx, msg.TurnID, text, 0, 0, msg.Error, false)
+
+	case protocol.DaemonStopped:
+		// No failure text. The turn ended because it was asked to, and any error
+		// the CLI produced while being killed is a consequence of that rather
+		// than something the owner needs to read.
+		text := msg.Full
+		if text == "" {
+			text = t.Streamed
+		}
+		a.finishTurn(ctx, msg.TurnID, text, msg.Tokens, msg.SpendTicks, "", true)
 	}
 }
 
-func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spendTicks int64, failure string) {
+// abandonTurns closes out every turn still in flight, because the machine
+// running them has gone.
+//
+// Only a message carrying a turn id ever finished a turn, and the process that
+// would have sent one no longer exists — so without this the agent entry stays
+// an empty placeholder, the composer stays locked and the working indicator
+// ticks forever, including after a refresh, since the placeholder is a real row
+// (docs/Bugs.md B-8).
+//
+// Called only when the disconnecting socket was still the current daemon. A
+// daemon that reconnected has already replaced it, and its turns are somebody
+// else's.
+func (a *API) abandonTurns(reason string) {
+	a.mu.Lock()
+	ids := make([]string, 0, len(a.turns))
+	for id := range a.turns {
+		ids = append(ids, id)
+	}
+	a.mu.Unlock()
+	if len(ids) == 0 {
+		return
+	}
+
+	a.log.Warn("machine went away mid-turn", "turns", len(ids))
+	for _, id := range ids {
+		// Text that arrived before the machine went is kept, for the same
+		// reason a failed turn keeps its partial answer: it is still worth
+		// reading, and deleting it would hide how far the turn got. finishTurn
+		// re-reads the turn under the lock and does nothing if it has since
+		// finished on its own.
+		a.mu.Lock()
+		t := a.turns[id]
+		a.mu.Unlock()
+		if t == nil {
+			continue
+		}
+		a.finishTurn(context.Background(), id, t.Streamed, 0, 0, reason, false)
+	}
+}
+
+func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spendTicks int64, failure string, stopped bool) {
 	a.mu.Lock()
 	t := a.turns[turnID]
 	delete(a.turns, turnID)
@@ -413,7 +597,19 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		return
 	}
 
-	entry, err := a.store.FinishAgent(ctx, t.EntryID, text, tokens, spendTicks, failure)
+	// One transaction: the entry and the provider's seen-marker go together, so
+	// nothing can drop the session in between and have the drop undone
+	// (docs/KnownGaps.md G-18).
+	entry, err := a.store.FinishTurn(ctx, store.TurnResult{
+		ConversationID: t.ConversationID,
+		EntryID:        t.EntryID,
+		Provider:       t.Provider,
+		Text:           text,
+		Tokens:         tokens,
+		SpendTicks:     spendTicks,
+		Failure:        failure,
+		Stopped:        stopped,
+	})
 	if err != nil {
 		a.log.Error("finish entry", "err", err)
 		return
@@ -430,9 +626,4 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		}
 	}
 
-	// The provider has now seen everything up to and including its own reply,
-	// so a switch away and back replays only what comes after this point.
-	if seq, err := a.store.LastSeq(ctx, t.ConversationID); err == nil {
-		_ = a.store.MarkSeen(ctx, t.ConversationID, t.Provider, "", seq)
-	}
 }

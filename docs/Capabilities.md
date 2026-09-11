@@ -155,6 +155,33 @@ the design from the first draft, not retrofitted when codex is wired up.
 
 `gemini` is out of the product entirely (D-014). Nothing here covers it and nothing should.
 
+### Files the owner drops into a conversation (2026-09-11)
+
+Checked because nothing here covered attachments, and the answer decides what the feature *is*.
+
+| | `claude` 2.1.90 | `codex` 0.154.0 | `agy` 1.2.0 |
+|---|---|---|---|
+| A flag that attaches a file to the prompt | **no** — `--file` takes Claude's own file-API ids (`file_abc:doc.txt`), not local paths *(verified from `--help`)* | **`-i, --image <FILE>...`**, on `exec` **and** `exec resume` *(verified flag, images only)* | **no** — its `-i` is `--prompt-interactive`, unrelated *(verified from `--help`)* |
+| Reads a file from disk when the prompt names the path | assumed — its read tool handles images, not re-checked here (the token in the checking shell had expired) | **yes, including images** *(verified 2026-09-11 — a PNG containing "SECRET CODE: PELICAN-7429" and "count of rows: 314" was read from cwd and both values returned, with no attachment flag and no vision plumbing from us)* | **no — denied before it tries**, see [`Bugs.md`](Bugs.md) B-11 |
+
+**The consequence for design.** Attaching a file *to the model* is not deliverable across providers
+— one of three has a flag and only for images. Putting the file **on the machine, inside the folder
+the conversation already runs in, and naming it in the prompt** is deliverable, for any file type,
+using the agents' own tools — and it is strictly better than an attachment: the file stays readable
+on later turns, survives a provider switch because it lives in the folder rather than in a session,
+and can be grepped and diffed rather than only looked at.
+
+**Except on `agy`, which can use no tools at all** (B-11). A design that assumes every provider can
+read what was dropped is not deliverable today; one that states plainly what the current provider
+can do with it is.
+
+**Only the daemon can write the file**, per D-020 — and it must be written before the turn starts,
+because the agent has no way to call back for it. That is the one place this differs from
+[Multica](../Reference/multica-main), which ships a CLI on the machine and can therefore tell the
+agent to fetch the bytes itself (`multica attachment download <id>`); its prompt deliberately
+carries the id and filename rather than a URL, because a signed URL can expire before the agent
+gets to it (`server/internal/daemon/prompt.go`). Materialising first has no such failure mode.
+
 ## Real caveats found while capturing (2026-09-09)
 
 - **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`
@@ -229,6 +256,26 @@ the design from the first draft, not retrofitted when codex is wired up.
 - **Provider and model discovery from the machine** — the daemon can probe what's installed and
   report it, including a `Blocked` state with a reason, per the three-state model above.
 - **Daemon online/offline state**, and which directories are registered.
+- **Stopping a turn that is already running, and keeping what it had said.** Verified 2026-09-11 on
+  `claude` and `codex`. The daemon owns each CLI's whole process tree (a Windows Job Object, or a
+  process group elsewhere), so a stop takes the agent's own subprocesses with it: verified against a
+  real turn where `claude` had spawned `bash -c 'sleep 180'`, and both were gone immediately
+  afterwards. The process-group path is verified too, on Linux under `make test-linux`. Text that
+  had already arrived is kept and the turn is recorded as stopped rather than failed.
+- **A turn always ends.** Verified 2026-09-11. It ends because the provider finished, because it
+  failed, because the owner stopped it, or because the machine disconnected — and in every case the
+  entry is closed out, the partial text kept, and the composer released. A machine that stays
+  connected but goes silent is covered too, by an inactivity watchdog in the daemon — 15 minutes of
+  no output at all, tunable with `TURN_IDLE_TIMEOUT`. Note what that does NOT promise: it is
+  silence, not duration, so a turn is never ended for taking a long time while it is still
+  producing.
+- **Partial output survives a stop on `codex` too, despite it not streaming.** Verified 2026-09-11,
+  and it corrects a reasonable-sounding assumption: `Streams: false` means codex emits no
+  incremental *deltas*, NOT that it produces nothing until the end. It completes whole
+  `agent_message` items during a turn, and a stop keeps every one it finished — a codex turn stopped
+  after 6s kept 471 characters the surface had never displayed, because there were no deltas to
+  display them with. So "does not stream" and "has nothing to keep" are different claims, and only
+  the first is true.
 
 ## Keeping this honest
 

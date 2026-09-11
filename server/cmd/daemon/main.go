@@ -8,9 +8,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,12 +28,26 @@ import (
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	// The agent package reports a degraded process-tree stop through the
+	// default logger rather than by threading one through three backends.
+	slog.SetDefault(log)
 	serverURL := env("SERVER_WS", "ws://localhost:8080/daemon")
+
+	// The shared secret proving this is the machine that was installed, not
+	// something else that found the socket. Required, for the same reason the
+	// server requires it: a daemon that silently connects without one would be
+	// refused by the server anyway, and failing here says why in one line
+	// instead of as an endless reconnect loop.
+	token := os.Getenv("DAEMON_TOKEN")
+	if token == "" {
+		log.Error("DAEMON_TOKEN is not set — it must match the server's")
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	d := &daemon{log: log, backends: agent.Backends()}
+	d := &daemon{log: log, backends: agent.Backends(), turns: newRunningTurns()}
 
 	// Bounded exponential backoff with full jitter. The attempt counter resets
 	// only after a connection has actually been established, not after a dial
@@ -39,7 +55,7 @@ func main() {
 	// resetting on the dial is what turns a flapping link into a hot loop.
 	attempt := 0
 	for ctx.Err() == nil {
-		if err := d.run(ctx, serverURL); err != nil && ctx.Err() == nil {
+		if err := d.run(ctx, serverURL, token); err != nil && ctx.Err() == nil {
 			log.Warn("connection lost", "err", err, "attempt", attempt+1)
 		}
 		if ctx.Err() != nil {
@@ -65,6 +81,43 @@ const (
 	backoffMax  = 30 * time.Second
 )
 
+// idleBudget is how long a turn may produce NOTHING before it is ended.
+//
+// Not a total timeout. Multica learned that one the expensive way (MUL-3064):
+// a wall-clock cap kills a session that is working perfectly well and merely
+// taking a while, which on a coding agent is most real tasks. Liveness is a
+// question about silence, not about duration, so a turn streaming for an hour
+// is fine and a turn silent for fifteen minutes is not.
+//
+// **Deliberately generous, and the asymmetry is the reason.** A false positive
+// throws away real work and the quota spent earning it; a false negative just
+// means waiting a bit longer for a safety net that only exists for when nobody
+// is watching — because since the stop button shipped, a person who IS watching
+// can end a turn themselves in one click.
+//
+// The budget is tightest on codex, which emits nothing at all between its
+// session id and its finished answer, so for codex this is effectively a cap on
+// the whole turn rather than a silence detector. That is the honest boundary of
+// what the CLI tells us, and it is why fifteen minutes rather than three.
+var idleBudget = envDuration("TURN_IDLE_TIMEOUT", 15*time.Minute)
+
+// envDuration reads a Go duration like "20m" or "90s". A value that does not
+// parse is worth saying out loud rather than silently ignoring: someone setting
+// it meant something by it, and falling back without a word would hide that the
+// setting did nothing.
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		slog.Warn("ignoring an unusable "+key, "value", raw, "using", fallback)
+		return fallback
+	}
+	return d
+}
+
 // backoff returns a delay in [0, min(base<<attempt, max)]. Full jitter, so a
 // fleet of machines waking from sleep together does not retry in lockstep.
 func backoff(attempt int) time.Duration {
@@ -78,6 +131,7 @@ func backoff(attempt int) time.Duration {
 type daemon struct {
 	log      *slog.Logger
 	backends map[string]agent.Backend
+	turns    *runningTurns
 
 	mu   sync.Mutex
 	conn *websocket.Conn
@@ -87,9 +141,20 @@ type daemon struct {
 	connectedOnce bool
 }
 
-func (d *daemon) run(ctx context.Context, url string) error {
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
+func (d *daemon) run(ctx context.Context, url, token string) error {
+	// In a header rather than the URL: a query string ends up in proxy logs and
+	// in the server's own access log, and a credential that is written down
+	// somewhere by default is a credential that leaks eventually.
+	conn, res, err := websocket.DefaultDialer.DialContext(ctx, url, http.Header{
+		"Authorization": []string{"Bearer " + token},
+	})
 	if err != nil {
+		// 401 is not a connection problem and will not fix itself by retrying,
+		// so say what it actually is rather than letting it look like the
+		// network being down.
+		if res != nil && res.StatusCode == http.StatusUnauthorized {
+			return errors.New("the server rejected this machine: DAEMON_TOKEN does not match the server's")
+		}
 		return err
 	}
 	defer conn.Close()
@@ -99,6 +164,16 @@ func (d *daemon) run(ctx context.Context, url string) error {
 	d.mu.Unlock()
 	d.connectedOnce = true
 	d.log.Info("connected", "server", url)
+
+	// Nothing can be delivered once this socket is gone, and the server gives up
+	// on turns it can no longer hear about (docs/Bugs.md B-8). A CLI still
+	// running past that point is spending the owner's quota on an answer that
+	// has nowhere to go.
+	defer func() {
+		if n := d.turns.cancelAll(); n > 0 {
+			d.log.Warn("cancelled turns with nowhere to report", "turns", n)
+		}
+	}()
 
 	// Report what is installed before anything can be asked of us, so the
 	// surface never offers a provider this machine cannot run.
@@ -127,6 +202,15 @@ func (d *daemon) run(ctx context.Context, url string) error {
 			// Each turn runs on its own goroutine so a long one does not block
 			// the socket, and cancelling the daemon cancels the CLI with it.
 			go d.runTurn(ctx, *msg.Turn)
+		case msg.Type == protocol.ServerStopTurn && msg.TurnID != "":
+			// Deliberately NOT on a goroutine. Stopping is a map write and a
+			// context cancel with no I/O in it, and running it on the read loop
+			// is what keeps it ordered against the run_turn that started it.
+			if !d.turns.stop(msg.TurnID) {
+				// Either it finished a moment ago or its start is still in
+				// flight; stop() has remembered the request either way.
+				d.log.Info("stop for a turn that is not running", "turn", msg.TurnID)
+			}
 		case msg.Type == protocol.ServerListDir:
 			// Off the read loop too: a directory on a cold or network drive can
 			// take a moment, and a turn already streaming must not stall behind
@@ -175,6 +259,20 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		return
 	}
 
+	// Per-turn cancellation, so stopping one turn leaves the others alone. The
+	// connection context stays the parent: losing the socket still stops
+	// everything, which is the behaviour that existed before this.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if !d.turns.begin(t.TurnID, cancel) {
+		// The stop overtook the start. Nothing ran, so there is nothing to kill
+		// and no text to keep — but the turn still has to be closed out, or the
+		// server waits on it forever.
+		log.Info("turn was stopped before it started")
+		_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
+		return
+	}
+
 	prompt := buildPrompt(t)
 	log.Info("running turn", "replay", len(t.Replay), "resume", t.ResumeSessionID != "")
 
@@ -184,44 +282,104 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		ResumeSessionID: t.ResumeSessionID,
 	})
 	if err != nil {
+		if d.turns.end(t.TurnID) {
+			_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
+			return
+		}
 		_ = d.send(protocol.DaemonMessage{
 			Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: err.Error(),
 		})
 		return
 	}
 
-	for msg := range session.Messages {
-		switch msg.Type {
-		case agent.MessageStarted:
-			_ = d.send(protocol.DaemonMessage{
-				Type: protocol.DaemonStarted, TurnID: t.TurnID, SessionID: msg.SessionID,
-			})
-		case agent.MessageDelta:
-			_ = d.send(protocol.DaemonMessage{
-				Type: protocol.DaemonDelta, TurnID: t.TurnID, Text: msg.Text,
-			})
-		case agent.MessageLimit:
-			_ = d.send(protocol.DaemonMessage{
-				Type: protocol.DaemonLimit, TurnID: t.TurnID,
-				Provider: t.Provider, Headroom: msg.Headroom,
-			})
+	// The watchdog. A CLI that wedges produces nothing and never exits, and
+	// before this the turn simply never ended (docs/Bugs.md B-8). Every message
+	// is a sign of life and resets the budget.
+	idle := time.NewTimer(idleBudget)
+	defer idle.Stop()
+	wentQuiet := false
+
+	drain := true
+	for drain {
+		select {
+		case msg, ok := <-session.Messages:
+			if !ok {
+				drain = false
+				break
+			}
+			idle.Reset(idleBudget)
+			switch msg.Type {
+			case agent.MessageStarted:
+				_ = d.send(protocol.DaemonMessage{
+					Type: protocol.DaemonStarted, TurnID: t.TurnID, SessionID: msg.SessionID,
+				})
+			case agent.MessageDelta:
+				_ = d.send(protocol.DaemonMessage{
+					Type: protocol.DaemonDelta, TurnID: t.TurnID, Text: msg.Text,
+				})
+			case agent.MessageLimit:
+				_ = d.send(protocol.DaemonMessage{
+					Type: protocol.DaemonLimit, TurnID: t.TurnID,
+					Provider: t.Provider, Headroom: msg.Headroom,
+				})
+			}
+
+		case <-idle.C:
+			// Cancel, but keep draining. Messages is unbuffered past its
+			// capacity and the parser blocks writing to it, so abandoning the
+			// loop here would wedge the very goroutine we are trying to stop.
+			wentQuiet = true
+			log.Warn("agent went quiet; stopping it", "after", idleBudget)
+			cancel()
 		}
 	}
 
 	result := <-session.Result
-	if result.Err != nil {
-		log.Warn("turn failed", "err", result.Err)
+
+	// One place decides how the turn ended, and it reads the stop flag exactly
+	// once. A killed CLI usually also reports an error on its way out, so this
+	// order matters: asked-to-stop wins over whatever the dying process said,
+	// because that error is a consequence of the stop and not a reason.
+	switch stopped := d.turns.end(t.TurnID); {
+	case stopped: // deliberate, and it outranks everything below
+		// Text that arrived before the stop is kept, and it is usually the
+		// point — a turn is stopped once the answer has gone somewhere
+		// useless, and what came before is still worth reading. A provider
+		// that does not stream (codex) simply has nothing to keep.
+		log.Info("turn stopped", "chars", len(result.Text))
 		_ = d.send(protocol.DaemonMessage{
-			Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: result.Err.Error(),
+			Type: protocol.DaemonStopped, TurnID: t.TurnID,
+			Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
+			SessionID: result.SessionID,
 		})
-		return
+	case wentQuiet:
+		// Ahead of result.Err for the same reason `stopped` is: the error a
+		// killed CLI reports on its way out is a consequence of the kill, and
+		// "it stopped saying anything" is the truer account of what happened.
+		log.Warn("turn abandoned after silence", "after", idleBudget, "chars", len(result.Text))
+		_ = d.send(protocol.DaemonMessage{
+			Type: protocol.DaemonFailed, TurnID: t.TurnID,
+			Full: result.Text,
+			Error: fmt.Sprintf("%s stopped responding — nothing arrived for %s, so it was ended",
+				t.Provider, idleBudget),
+		})
+	case result.Err != nil:
+		log.Warn("turn failed", "err", result.Err)
+		// Full, not just the error: the parser may have recovered whole messages
+		// before the turn died, and on a provider that does not stream those are
+		// the ONLY copy — the server has no deltas to fall back on (B-10).
+		_ = d.send(protocol.DaemonMessage{
+			Type: protocol.DaemonFailed, TurnID: t.TurnID,
+			Full: result.Text, Error: result.Err.Error(),
+		})
+	default:
+		log.Info("turn done", "tokens", result.Tokens, "chars", len(result.Text))
+		_ = d.send(protocol.DaemonMessage{
+			Type: protocol.DaemonDone, TurnID: t.TurnID,
+			Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
+			SessionID: result.SessionID,
+		})
 	}
-	log.Info("turn done", "tokens", result.Tokens, "chars", len(result.Text))
-	_ = d.send(protocol.DaemonMessage{
-		Type: protocol.DaemonDone, TurnID: t.TurnID,
-		Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
-		SessionID: result.SessionID,
-	})
 }
 
 // buildPrompt prepends the catch-up, when there is one.

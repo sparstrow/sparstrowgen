@@ -16,9 +16,11 @@ import {
   useRenameConversation,
   useSendMessage,
   useSetFolder,
+  useStopTurn,
 } from "@/lib/queries";
 import { useChatView, type TranscriptView } from "@/lib/store";
 import { ConversationList } from "./conversation-list";
+import { ConversationName } from "./conversation-name";
 import { ProviderStrip } from "./provider-strip";
 import { MessageList, MessageSkeleton, WorkingIndicator } from "./message-list";
 import { RawTranscript } from "./raw-transcript";
@@ -110,6 +112,7 @@ export function ChatSurface() {
   const remove = useDeleteConversation();
   const setFolder = useSetFolder();
   const send = useSendMessage();
+  const stop = useStopTurn();
 
   const selected = conversation.data ?? null;
   const draft = selectedId ? (drafts[selectedId] ?? "") : "";
@@ -147,14 +150,18 @@ export function ChatSurface() {
     ? Math.max(0, Math.floor((now - inFlight.startedAt) / 1000))
     : 0;
 
-  // The turn is over when its entry stops being empty or reports a failure.
+  // The turn is over when its entry says so: usage means it finished, a failure
+  // means it broke, and stopped means it was called back.
+  //
+  // `stopped` has to be checked on its own rather than folded into "has text or
+  // has a failure". A stopped codex turn has neither — codex sends nothing at
+  // all until the whole answer is ready — so without this the working indicator
+  // would tick forever on the one provider where stopping helps most.
   useEffect(() => {
     if (!inFlight || !selected) return;
     const entry = selected.entries.find((e) => e.id === inFlight.entryId);
-    if (entry && entry.role === "agent" && (entry.text || entry.failure)) {
-      const stillStreaming = !entry.usage && !entry.failure;
-      if (!stillStreaming) setInFlight(null);
-    }
+    if (!entry || entry.role !== "agent") return;
+    if (entry.stopped || entry.failure || entry.usage) setInFlight(null);
   }, [selected, inFlight, setInFlight]);
 
   const activeProvider: ProviderId =
@@ -254,6 +261,22 @@ export function ChatSurface() {
     }
   }
 
+  /** Ends the running turn. Nothing is cleared here: the turn's ending arrives
+   *  over the socket like every other ending, and clearing inFlight now would
+   *  hide the last deltas still on their way. A turn that finished a moment
+   *  before the click resolves false and says nothing — the click and the last
+   *  delta race every time, and there is nothing wrong when the delta wins. */
+  async function handleStop() {
+    if (!inFlight) return;
+    try {
+      await stop.mutateAsync(inFlight.entryId);
+    } catch (err) {
+      toast.error("Could not stop the turn", {
+        description: (err as Error).message,
+      });
+    }
+  }
+
   // -------------------------------------------------------------------------
 
   const streamingId = inFlight?.entryId ?? null;
@@ -322,7 +345,12 @@ export function ChatSurface() {
             <>
               <header className="group/header flex shrink-0 items-center gap-3 border-b px-6 py-3">
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-sm font-medium">{selected.title}</h1>
+                  <h1 className="text-sm font-medium">
+                    <ConversationName
+                      title={selected.title}
+                      className="block truncate"
+                    />
+                  </h1>
                   {/* The folder is what the agent can see, so the place it is
                       displayed is the place to change it — rather than a
                       setting somewhere you would have to know about. */}
@@ -413,6 +441,8 @@ export function ChatSurface() {
                 onSelect={(p, m) => void handleSelectProvider(p, m)}
                 onCancelSwitch={() => setPending(null)}
                 onSend={() => void handleSend()}
+                running={inFlight !== null}
+                onStop={() => void handleStop()}
               />
             </>
           ) : (

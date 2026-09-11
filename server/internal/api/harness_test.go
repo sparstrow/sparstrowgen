@@ -1,0 +1,388 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
+	"github.com/sparstrow/sparstrowgen/server/internal/hub"
+	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
+	"github.com/sparstrow/sparstrowgen/server/internal/store"
+)
+
+/* A real server, a real database, and a websocket pretending to be the daemon.
+
+docs/Later.md L-12 recorded that `postMessage` had no test at all, because
+exercising it needs a database, a hub and something acting as a daemon. It needs
+all three because that is genuinely what the handler touches — it writes rows,
+broadcasts events and sends work to a machine — and any two of them without the
+third tests a mock. B-7 lived in that handler and was caught by hand; B-8 and
+B-9 both live in the same path.
+
+So the harness is the real thing rather than a stand-in: chi routing through
+httptest, pgx against the development database, and a gorilla client dialling
+`/daemon` exactly as the daemon binary does. Nothing here is a fake except the
+agent, and the agent is the one part that must never run in a test — resolving
+`claude` from PATH would spend the owner's quota on every `go test ./...`
+(docs/KnownGaps.md G-12).
+
+These SKIP without a database, matching the store tests, so the suite stays
+useful on a machine with nothing running. Start one with `make db && make
+migrate`. */
+
+// testPassword is the password the harness signs in with. A fixed string in a
+// test file is not a secret — the hash is generated fresh in newRig, so nothing
+// here is a credential that works anywhere but inside this process.
+const testPassword = "correct-horse-battery-staple"
+
+// testDaemonToken must clear the 32-character floor the server enforces.
+const testDaemonToken = "test-daemon-token-0123456789abcdefgh"
+
+// testOrigin is what the harness claims to be. It matters: the API now answers
+// CORS for exactly one origin and refuses websockets from any other.
+const testOrigin = "http://sparstrowgen.test"
+
+type rig struct {
+	t     *testing.T
+	api   *API
+	store *store.Store
+	http  *httptest.Server
+	// client carries the session cookie, so these tests exercise the same path
+	// a browser does rather than quietly bypassing the login.
+	client *http.Client
+}
+
+func newRig(t *testing.T) *rig {
+	t.Helper()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen?sslmode=disable"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("no database: %v", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Skip("no database reachable — run `make db && make migrate`")
+	}
+	t.Cleanup(pool.Close)
+
+	// Discard the log: these tests deliberately provoke disconnections and
+	// failures, and the warnings they produce are the expected outcome rather
+	// than something worth printing.
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := store.New(pool)
+	h := hub.New(quiet)
+
+	hash, err := auth.HashPassword(testPassword)
+	if err != nil {
+		t.Fatalf("hash the test password: %v", err)
+	}
+	a := New(s, h, quiet, Config{
+		PasswordHash: hash,
+		DaemonToken:  testDaemonToken,
+		Origin:       testOrigin,
+		// The harness speaks http://127.0.0.1, and a Secure cookie would never
+		// be stored by the jar — the tests would then all fail as "not signed
+		// in", which is the right behaviour and the wrong test.
+		SecureCookie: false,
+	})
+
+	srv := httptest.NewServer(a.Routes())
+	t.Cleanup(srv.Close)
+
+	r := &rig{t: t, api: a, store: s, http: srv, client: newJarClient(t)}
+	r.signIn()
+	return r
+}
+
+// signIn does what the login screen does, and every later request in the test
+// rides the cookie it returns.
+func (r *rig) signIn() {
+	r.t.Helper()
+	res := r.post("/api/auth/login", map[string]any{"password": testPassword})
+	if res.StatusCode != http.StatusOK {
+		r.t.Fatalf("sign in: %s", res.Status)
+	}
+	if len(r.client.Jar.Cookies(mustURL(r.t, r.http.URL))) == 0 {
+		r.t.Fatal("signing in set no cookie")
+	}
+}
+
+// newJarClient is a fresh browser: its own cookie jar, nothing carried over.
+func newJarClient(t *testing.T) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &http.Client{Jar: jar}
+}
+
+func mustURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+// cookieHeader is what a websocket dial needs, since the gorilla dialler does
+// not share the http.Client's jar.
+func (r *rig) cookieHeader() http.Header {
+	r.t.Helper()
+	var pairs []string
+	for _, c := range r.client.Jar.Cookies(mustURL(r.t, r.http.URL)) {
+		pairs = append(pairs, c.Name+"="+c.Value)
+	}
+	return http.Header{
+		"Cookie": []string{strings.Join(pairs, "; ")},
+		"Origin": []string{testOrigin},
+	}
+}
+
+func (r *rig) ws(path string) string {
+	return "ws" + strings.TrimPrefix(r.http.URL, "http") + path
+}
+
+// conversation makes one and removes it afterwards: this runs against the
+// development database, and leaving rows behind would make the sidebar a
+// graveyard of test runs.
+func (r *rig) conversation(provider string) protocol.Conversation {
+	r.t.Helper()
+	c, err := r.store.Create(context.Background(), "D:\\test", provider,
+		protocol.Model{ID: "m1", Label: "M One"})
+	if err != nil {
+		r.t.Fatalf("create conversation: %v", err)
+	}
+	r.t.Cleanup(func() { _ = r.store.Delete(context.Background(), c.ID) })
+	return c
+}
+
+// createConversation makes one through the API and removes it afterwards.
+//
+// These run against the DEVELOPMENT database. Tests that posted to
+// /api/conversations directly left their rows behind, and because no daemon is
+// connected during a test those rows have no provider at all — seven of them
+// accumulated and then white-screened the real sidebar, which is how this was
+// found rather than by looking (docs/Bugs.md B-13).
+func (r *rig) createConversation() protocol.Conversation {
+	r.t.Helper()
+	res := r.post("/api/conversations", nil)
+	if res.StatusCode != http.StatusOK {
+		r.t.Fatalf("create conversation: %s", res.Status)
+	}
+	var c protocol.Conversation
+	if err := json.NewDecoder(res.Body).Decode(&c); err != nil {
+		r.t.Fatal(err)
+	}
+	r.t.Cleanup(func() { _ = r.store.Delete(context.Background(), c.ID) })
+	return c
+}
+
+func (r *rig) post(path string, body any) *http.Response {
+	r.t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			r.t.Fatal(err)
+		}
+	}
+	req, err := http.NewRequest(http.MethodPost, r.http.URL+path, &buf)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", testOrigin)
+	res, err := r.client.Do(req)
+	if err != nil {
+		r.t.Fatalf("POST %s: %v", path, err)
+	}
+	r.t.Cleanup(func() { _ = res.Body.Close() })
+	return res
+}
+
+// entry re-reads one entry from the database, so an assertion is about what was
+// actually stored rather than about what a handler returned.
+func (r *rig) entry(conversationID, entryID string) protocol.Entry {
+	r.t.Helper()
+	c, err := r.store.Get(context.Background(), conversationID)
+	if err != nil {
+		r.t.Fatalf("get conversation: %v", err)
+	}
+	for _, e := range c.Entries {
+		if e.ID == entryID {
+			return e
+		}
+	}
+	r.t.Fatalf("entry %s is not in the transcript", entryID)
+	return protocol.Entry{}
+}
+
+// awaitEntry polls for an entry to reach a settled state. The turn's ending
+// travels server→daemon→server over real sockets, so it lands a moment after
+// the call that caused it.
+func (r *rig) awaitEntry(conversationID, entryID string, done func(protocol.Entry) bool) protocol.Entry {
+	r.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var last protocol.Entry
+	for time.Now().Before(deadline) {
+		last = r.entry(conversationID, entryID)
+		if done(last) {
+			return last
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	r.t.Fatalf("entry never settled: text=%q failure=%q stopped=%v",
+		last.Text, last.Failure, last.Stopped)
+	return last
+}
+
+// ---------------------------------------------------------------------------
+// a machine that is not there
+// ---------------------------------------------------------------------------
+
+// daemon is a websocket client behaving as the daemon binary does: it says
+// hello, receives work, and reports on it.
+type daemon struct {
+	t    *testing.T
+	conn *websocket.Conn
+	work chan protocol.ServerMessage
+}
+
+func (r *rig) connectDaemon() *daemon {
+	r.t.Helper()
+	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/daemon"), http.Header{
+		"Authorization": []string{"Bearer " + testDaemonToken},
+	})
+	if err != nil {
+		r.t.Fatalf("dial /daemon: %v", err)
+	}
+	d := &daemon{t: r.t, conn: conn, work: make(chan protocol.ServerMessage, 8)}
+	go func() {
+		for {
+			var msg protocol.ServerMessage
+			if err := conn.ReadJSON(&msg); err != nil {
+				close(d.work)
+				return
+			}
+			d.work <- msg
+		}
+	}()
+
+	d.send(protocol.DaemonMessage{
+		Type: protocol.DaemonHello, Machine: "test",
+		Providers: []protocol.Provider{
+			{ID: "claude", Label: "claude", Availability: protocol.Available},
+			{ID: "codex", Label: "codex", Availability: protocol.Available},
+		},
+	})
+	// The hub marks the daemon online when the socket is accepted, but
+	// postMessage is only allowed to proceed once it has; wait for that rather
+	// than sleeping and hoping.
+	deadline := time.Now().Add(3 * time.Second)
+	for !r.api.hub.DaemonOnline() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !r.api.hub.DaemonOnline() {
+		r.t.Fatal("the server never registered the daemon")
+	}
+	return d
+}
+
+func (d *daemon) send(msg protocol.DaemonMessage) {
+	d.t.Helper()
+	if err := d.conn.WriteJSON(msg); err != nil {
+		d.t.Fatalf("daemon send: %v", err)
+	}
+}
+
+// nextTurn returns the next run_turn the server hands over.
+func (d *daemon) nextTurn() protocol.RunTurn {
+	d.t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case msg, ok := <-d.work:
+			if !ok {
+				d.t.Fatal("the daemon socket closed before any work arrived")
+			}
+			if msg.Type == protocol.ServerRunTurn && msg.Turn != nil {
+				return *msg.Turn
+			}
+		case <-deadline:
+			d.t.Fatal("no run_turn arrived")
+		}
+	}
+}
+
+// vanish drops the socket the way a closing laptop does — no goodbye frame,
+// just a connection that stops existing.
+func (d *daemon) vanish() { _ = d.conn.Close() }
+
+// ---------------------------------------------------------------------------
+// a browser watching
+// ---------------------------------------------------------------------------
+
+type browser struct {
+	t      *testing.T
+	conn   *websocket.Conn
+	events chan protocol.ClientEvent
+}
+
+func (r *rig) watch() *browser {
+	r.t.Helper()
+	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/ws"), r.cookieHeader())
+	if err != nil {
+		r.t.Fatalf("dial /ws: %v", err)
+	}
+	b := &browser{t: r.t, conn: conn, events: make(chan protocol.ClientEvent, 64)}
+	r.t.Cleanup(func() { _ = conn.Close() })
+	go func() {
+		for {
+			var ev protocol.ClientEvent
+			if err := conn.ReadJSON(&ev); err != nil {
+				return
+			}
+			b.events <- ev
+		}
+	}()
+	return b
+}
+
+// await returns the first event matching want, ignoring the others. A single
+// action produces several — a message adds an entry, changes a conversation and
+// starts a turn — and a test should say which one it is about.
+func (b *browser) await(what string, want func(protocol.ClientEvent) bool) protocol.ClientEvent {
+	b.t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case ev := <-b.events:
+			if want(ev) {
+				return ev
+			}
+		case <-deadline:
+			b.t.Fatalf("no %s event arrived", what)
+		}
+	}
+}

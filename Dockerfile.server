@@ -1,0 +1,72 @@
+# The API server, and the one-shot job that migrates the database ahead of it.
+#
+# Two targets in one file because they are built from the same source at the
+# same commit — a migration image built separately could drift from the server
+# that expects its schema, which is the one way this pair can go wrong.
+#
+# Build context is the repository root:
+#   docker build -f Dockerfile.server --target server     -t sparstrowgen-server .
+#   docker build -f Dockerfile.server --target migrations -t sparstrowgen-migrations .
+
+# Every tag pinned, never `latest`: a rebuild months from now must produce the
+# same thing as today, and `latest` silently changing the Go version under a
+# deploy is a debugging session nobody enjoys.
+FROM golang:1.27.0-alpine AS go-base
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+
+# Dependencies in their own layer, so editing a .go file does not re-download
+# the module cache.
+FROM go-base AS deps
+WORKDIR /src/server
+COPY server/go.mod server/go.sum ./
+RUN go mod download
+
+FROM deps AS build
+COPY server/ ./
+# -trimpath so the binary carries no build-machine paths; -s -w drops the symbol
+# table and DWARF, which is most of the size and none of the behaviour.
+RUN go build -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w" \
+        -o /out/server ./cmd/server
+
+# goose, built with every driver we do not use tagged out. Without the tags it
+# links Microsoft SQL Server, ClickHouse, Vertica and the rest into an image
+# whose only job is to talk to one Postgres.
+FROM go-base AS goose
+RUN GOBIN=/out go install \
+        -tags="no_mysql no_sqlite3 no_clickhouse no_mssql no_libsql no_vertica no_ydb" \
+        github.com/pressly/goose/v3/cmd/goose@v3.28.0
+
+# ---------------------------------------------------------------------------
+# migrations — runs once per deploy, then exits
+# ---------------------------------------------------------------------------
+# Alpine rather than scratch because this one genuinely needs a shell: the
+# database URL is an environment variable and goose wants it as an argument.
+# `${DATABASE_URL:?...}` fails loudly rather than running goose against an empty
+# string, which is how you get a migration job that "succeeds" having done
+# nothing.
+FROM alpine:3.22 AS migrations
+COPY --from=goose /out/goose /usr/local/bin/goose
+COPY server/migrations/ /migrations/
+USER 65532:65532
+ENTRYPOINT ["/bin/sh", "-ec", \
+    "exec goose -dir /migrations postgres \"${DATABASE_URL:?DATABASE_URL is not set}\" \"$@\"", "goose"]
+CMD ["up"]
+
+# ---------------------------------------------------------------------------
+# server — the default target
+# ---------------------------------------------------------------------------
+# scratch: no shell, no package manager, no libc. There is nothing in this image
+# to exploit except the binary itself, and nothing to exec if something does get
+# in. The CA bundle is the one thing copied in, because a static Go binary has
+# no root certificates of its own and TLS to Postgres would fail without them.
+FROM scratch AS server
+COPY --from=go-base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/server /server
+# Numeric because scratch has no /etc/passwd to resolve a name against.
+USER 65532:65532
+# 0.0.0.0, not localhost: the process must accept connections from the proxy in
+# another container, and Go's default of :8080 already means all interfaces —
+# this is here to say so out loud.
+ENV ADDR=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["/server"]

@@ -116,11 +116,18 @@ commands:
   lint: "pnpm lint"
   typecheck: "pnpm typecheck"
   go_test: "cd server && go test ./..."
+  go_test_linux: "make test-linux   # the Go suite on Linux under -race, in a container. Needed because the daemon only ever runs on Windows and -race needs a C compiler this machine does not have. --init is load-bearing; see docs/KnownGaps.md G-17"
   db: "docker compose up -d      # postgres on :5433"
   migrate: "cd server && goose -dir migrations up"
   server: "cd server && go run ./cmd/server   # :8080"
   daemon: "cd server && go run ./cmd/daemon   # drives the agent CLIs"
   check: "make check"
+
+# Settings the daemon reads at startup. Everything else is compiled in.
+daemon_env:
+  SERVER_WS: "where to dial the server. Default ws://localhost:8080/daemon"
+  CLAUDE_CODE_OAUTH_TOKEN: "required for claude; exempted from env scrubbing on purpose"
+  TURN_IDLE_TIMEOUT: "how long a turn may produce NOTHING before it is ended. Go duration, default 15m. Inactivity, NOT a wall-clock cap — a turn streaming for an hour is fine. Tightest on codex, which is silent between its session id and its finished answer. See docs/Decisions.md D-023"
 
 # How features get built. See AGENTS.md §2 — the owner approves a spec, then
 # picks from rendered designs. There is no plan document.

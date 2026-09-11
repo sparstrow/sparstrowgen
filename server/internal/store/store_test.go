@@ -212,7 +212,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// codex reports tokens but never currency.
-	done, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 0, "")
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: placeholder.ID, Provider: "claude", Text: "answer", Tokens: 1234})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// claude does, and it should come through as real dollars.
-	withCost, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 363094500, "")
+	withCost, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: placeholder.ID, Provider: "claude", Text: "answer", Tokens: 1234, SpendTicks: 363094500})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := s.FinishAgent(ctx, e.ID, "got this far", 0, 0, "connection lost")
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "got this far", Failure: "connection lost"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,6 +256,150 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	}
 	if done.Failure != "connection lost" {
 		t.Errorf("failure = %q", done.Failure)
+	}
+}
+
+// A stopped turn is not a failed one, and the transcript has to be able to tell
+// them apart: one says something went wrong, the other says the owner decided
+// he had seen enough.
+func TestStoppedTurnIsNotAFailure(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "half an answer", Stopped: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done.Stopped {
+		t.Error("stopped = false, want the stop recorded")
+	}
+	if done.Failure != "" {
+		t.Errorf("failure = %q, want nothing: being stopped is not going wrong", done.Failure)
+	}
+	if done.Text != "half an answer" {
+		t.Errorf("text = %q, want what arrived before the stop", done.Text)
+	}
+
+	// And it survives a reload, because that is the whole reason it is a column
+	// rather than something the client remembers.
+	reloaded, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, entry := range reloaded.Entries {
+		if entry.ID == e.ID {
+			found = true
+			if !entry.Stopped {
+				t.Error("stopped did not survive a reload")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the stopped entry is not in the transcript")
+	}
+}
+
+// A turn can be both: a CLI killed mid-answer often complains on its way out.
+// Recording only one of the two would lose either the reason it ended or the
+// detail of how it died.
+func TestATurnCanBeStoppedAndAlsoReportAFailure(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Failure: "signal: killed", Stopped: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done.Stopped || done.Failure != "signal: killed" {
+		t.Errorf("stopped = %v, failure = %q; want both kept", done.Stopped, done.Failure)
+	}
+}
+
+// Finishing a turn also records that the provider has seen the whole
+// transcript, and the two are one write.
+//
+// As two statements this was a real hazard (docs/KnownGaps.md G-18): anything
+// dropping the provider's session in the gap had the drop undone by the marker
+// that followed, and the next turn ran with no history at all.
+func TestFinishingATurnMarksTheProviderSeenInTheSameBreath(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, err := s.AppendUser(ctx, c.ID, "a question"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err := s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) == 0 {
+		t.Fatal("a provider that has been told nothing should have everything unseen")
+	}
+
+	if _, err := s.FinishTurn(ctx, TurnResult{
+		ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "an answer", Tokens: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err = s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) != 0 {
+		t.Errorf("%d entries still unseen; finishing a turn must mark the provider caught up", len(unseen))
+	}
+}
+
+// The consequence that matters: once the session is dropped, nothing re-marks it
+// as seen behind our back. This is the sequence that produced B-7.
+func TestDroppingASessionAfterATurnIsNotUndone(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, err := s.AppendUser(ctx, c.ID, "a question"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FinishTurn(ctx, TurnResult{
+		ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "an answer", Tokens: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Moving the conversation drops provider sessions, because a session built
+	// in another directory is reasoning about the wrong tree.
+	if _, err := s.SetFolder(ctx, c.ID, "/projects/elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err := s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) == 0 {
+		t.Error("the session drop was undone: the next turn would run with no history")
 	}
 }
 
@@ -317,5 +461,58 @@ func TestSetFolderToTheSamePlaceCostsNothing(t *testing.T) {
 	// charge a full replay on the next message.
 	if got := s.ResumeID(ctx, c.ID, "codex"); got != "thread-abc" {
 		t.Errorf("resume id = %q, want it untouched by a no-op move", got)
+	}
+}
+
+// Naming only ever fills a blank, and the rule lives in the statement rather
+// than in the caller — so a rename that lands between a send starting and its
+// naming still wins. That ordering cannot be forced through the API, which is
+// why it is asserted here, where NameFrom can be called directly on a
+// conversation that already has a name.
+func TestNamingNeverReplacesANameThatIsAlreadyThere(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	named, took, err := s.NameFrom(ctx, c.ID, "the first thing said")
+	if err != nil {
+		t.Fatalf("name: %v", err)
+	}
+	if !took || named.Title != "the first thing said" {
+		t.Fatalf("took=%v title=%q, want it named from the message", took, named.Title)
+	}
+
+	_, took, err = s.NameFrom(ctx, c.ID, "something said later")
+	if err != nil {
+		t.Fatalf("second name: %v", err)
+	}
+	if took {
+		t.Error("a conversation that already had a name was renamed by a message")
+	}
+	after, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != "the first thing said" {
+		t.Errorf("title = %q, want the name it already had", after.Title)
+	}
+}
+
+// A message with no words in it leaves the conversation unnamed rather than
+// naming it something worse than nothing — and unnamed means the next message
+// can still name it.
+func TestAMessageWithNoWordsInItLeavesTheConversationUnnamed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, took, err := s.NameFrom(ctx, c.ID, "---\n***"); err != nil || took {
+		t.Fatalf("took=%v err=%v, want it declined", took, err)
+	}
+	if after, err := s.Get(ctx, c.ID); err != nil || after.Title != "" {
+		t.Fatalf("title = %q, want it still unnamed", after.Title)
+	}
+	if _, took, err := s.NameFrom(ctx, c.ID, "and now a real one"); err != nil || !took {
+		t.Fatalf("took=%v err=%v, want the next message to name it", took, err)
 	}
 }

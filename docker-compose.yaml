@@ -1,0 +1,87 @@
+# What Coolify deploys.
+#
+# Three services from one commit: the database migration runs and exits, then
+# the API server starts, and the web app is served alongside it. Postgres is NOT
+# here — it is a separate Coolify resource, because a database should not be
+# torn down and rebuilt every time the application is redeployed.
+#
+# Deployed as a Coolify "Docker Compose" resource pointed at this repository.
+# See docs/runbooks/deploy.md for what has to be set, and in what order.
+
+services:
+  # -------------------------------------------------------------------------
+  # migrate — runs once per deploy, then exits
+  # -------------------------------------------------------------------------
+  # Ahead of the server rather than inside it: a server that migrates on startup
+  # runs the migration again on every restart and every replica, and a failed
+  # migration then looks like a crash loop rather than like a failed migration.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+      target: migrations
+    environment:
+      - DATABASE_URL=${DATABASE_URL:?set this to the Postgres resource internal URL}
+    # It is meant to exit. Without this Coolify restarts it forever, and the
+    # deploy never settles.
+    restart: "no"
+
+  # -------------------------------------------------------------------------
+  # server — the Go API
+  # -------------------------------------------------------------------------
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+      target: server
+    environment:
+      - DATABASE_URL=${DATABASE_URL:?set this to the Postgres resource internal URL}
+      # All three are required and the server refuses to start without them
+      # (docs/Decisions.md D-027). The `:?` makes the deploy fail here, with the
+      # variable named, rather than in a container restart loop.
+      - OWNER_PASSWORD_HASH=${OWNER_PASSWORD_HASH:?generate with `make hashpw`}
+      - DAEMON_TOKEN=${DAEMON_TOKEN:?a long random string, also given to the daemon}
+      # The exact origin the browser loads the app from. Anything else is
+      # refused CORS and refused a websocket.
+      - WEB_ORIGIN=${WEB_ORIGIN:?the full https:// origin of the web app}
+      # Not "false", so the session cookie is Secure and wears the __Host-
+      # prefix. Never set this to false on a deployed instance.
+      - SESSION_SECURE=true
+      - ADDR=0.0.0.0:8080
+    # Declaring this makes Coolify route a domain to this service's port 8080.
+    # Set the actual domain in the Coolify UI; it must match WEB_ORIGIN's
+    # sibling, e.g. https://api.sparstrowgen.example.com
+    labels:
+      - SERVICE_FQDN_SERVER_8080
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The one endpoint that needs no session. It reports liveness only and
+      # deliberately says nothing about whether the owner's machine is
+      # connected.
+      test: ["CMD", "/server", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # web — the Next.js app
+  # -------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # BUILD time, not runtime: NEXT_PUBLIC_* is substituted into the client
+        # bundle during the build. Changing it requires a rebuild, not a
+        # restart — which is why it is an argument here and not an environment
+        # variable below.
+        NEXT_PUBLIC_API_URL: ${API_ORIGIN:?the full https:// origin of the API}
+    labels:
+      - SERVICE_FQDN_WEB_3000
+    depends_on:
+      - server
+    restart: unless-stopped

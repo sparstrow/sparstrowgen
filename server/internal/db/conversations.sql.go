@@ -44,22 +44,23 @@ func (q *Queries) AddConversationUsage(ctx context.Context, arg AddConversationU
 }
 
 const createConversation = `-- name: CreateConversation :one
-INSERT INTO conversations (title, folder, provider, model_id, model_label)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO conversations (folder, provider, model_id, model_label)
+VALUES ($1, $2, $3, $4)
 RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at
 `
 
 type CreateConversationParams struct {
-	Title      string `json:"title"`
 	Folder     string `json:"folder"`
 	Provider   string `json:"provider"`
 	ModelID    string `json:"model_id"`
 	ModelLabel string `json:"model_label"`
 }
 
+// A new conversation has no name. It gets one from the first thing said in it,
+// or from the owner typing one — never from a default that only looks like a
+// title.
 func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error) {
 	row := q.db.QueryRow(ctx, createConversation,
-		arg.Title,
 		arg.Folder,
 		arg.Provider,
 		arg.ModelID,
@@ -169,6 +170,40 @@ func (q *Queries) ListConversations(ctx context.Context) ([]Conversation, error)
 	return items, nil
 }
 
+const nameConversation = `-- name: NameConversation :one
+UPDATE conversations SET title = $2
+WHERE id = $1 AND title IS NULL
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at
+`
+
+type NameConversationParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Title *string     `json:"title"`
+}
+
+// Naming, as opposed to renaming: this only ever fills a blank. The guard is in
+// the statement rather than in Go so that a name the owner typed can never be
+// overwritten by one derived from a message, whatever order the two arrive in.
+// No rows means it already had a name, which is an outcome and not an error.
+func (q *Queries) NameConversation(ctx context.Context, arg NameConversationParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, nameConversation, arg.ID, arg.Title)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Folder,
+		&i.Provider,
+		&i.ModelID,
+		&i.ModelLabel,
+		&i.Archived,
+		&i.SpendTicks,
+		&i.Tokens,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const recentFolders = `-- name: RecentFolders :many
 SELECT folder, max(updated_at) AS last_used
 FROM conversations
@@ -213,7 +248,7 @@ RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ti
 
 type RenameConversationParams struct {
 	ID    pgtype.UUID `json:"id"`
-	Title string      `json:"title"`
+	Title *string     `json:"title"`
 }
 
 func (q *Queries) RenameConversation(ctx context.Context, arg RenameConversationParams) (Conversation, error) {

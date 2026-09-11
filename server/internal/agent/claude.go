@@ -52,7 +52,10 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 	// Print mode reads stdin even with the prompt as an argument; handing it a
 	// closed stdin is what stops it waiting forever.
 	cmd.Stdin = strings.NewReader("")
-	if err := cmd.Start(); err != nil {
+	// launch rather than cmd.Start: a stop has to take the tool subprocesses
+	// with it, not just the CLI (D-021).
+	proc, err := launch(ctx, cmd, stdout)
+	if err != nil {
 		return nil, err
 	}
 
@@ -64,7 +67,7 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 		p := parseClaude(stdout, messages)
 		close(messages)
 
-		waitErr := cmd.Wait()
+		waitErr := proc.Wait()
 		if p.Err != nil {
 			waitErr = p.Err
 		} else if waitErr != nil && p.Text == "" {

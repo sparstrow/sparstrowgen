@@ -384,3 +384,186 @@ once and the daemon may answer them in any sequence.
 picker to the desktop shell that does not exist yet (L-2). What was taken from Multica instead is
 its typed failure reasons — `not_found`, `not_a_directory`, `not_readable` — so the surface renders
 its own wording rather than parsing a sentence.
+
+## D-021 — The daemon owns each agent's whole process tree, not just the CLI
+
+**Decided:** 2026-09-11, building the stop button (L-8)
+
+Stopping a turn kills a Windows Job Object (or a Unix process group) that the CLI and everything it
+spawns belong to, rather than the CLI process alone.
+
+**Rejected: `exec.CommandContext`'s built-in cancel**, which kills the direct child. That is not a
+stop. An agent mid-task is usually running something — a build, an install, an MCP server — and
+those are children of the CLI, not of us. Verified rather than assumed: with a leader-only kill, a
+`ping` the leader had spawned outlived it and went on holding the inherited stdout pipe, which is
+also what wedges the parser
+(`server/internal/agent/tree_windows_test.go:TestKillingOnlyTheLeaderLeavesTheGrandchildRunning`).
+
+**Adopted from [Multica](../Reference/multica-main)** (`server/pkg/agent/proc_windows.go`), which
+drives these same CLIs on this same machine, and carries an ordering that is easy to get wrong and
+expensive to discover: the child is created **suspended**, assigned to the job, and only then
+resumed. Windows grants job membership only to processes created *after* the assignment and never
+retroactively, so assigning after a plain `Start` leaves a window in which the agent has already
+spawned subprocesses outside the job. That is worse than owning nothing — the job then reports an
+empty tree while the escaped processes run on, and a stop gets reported as confirmed when it is not.
+
+Trimmed from Multica's version: its console handling (`CREATE_NEW_CONSOLE`) solves a popup problem
+we do not have, because our daemon runs in a terminal its children inherit.
+
+**Cost:** `golang.org/x/sys` becomes a direct dependency. Accepted over hand-rolled `LazyDLL`
+bindings for the job-object calls, which is precisely the kind of code that fails silently and in
+the wrong direction. Weighed against D-013's preference for few dependencies: x/sys is effectively
+extended-stdlib, and the alternative here is worse code, not less code.
+
+**Failure is degraded, not fatal.** If ownership cannot be taken the child is resumed and runs
+unowned, with a warning naming the consequence — a stop that kills only the CLI. A launch that
+failed outright would take the whole provider down over something environmental.
+
+## D-022 — A stopped turn is a column on the entry, not a fourth entry role
+
+**Decided:** 2026-09-11, building the stop button (L-8)
+
+`entries.stopped boolean` rather than a `stopped` value in `entries.role`.
+
+**Rejected: a new role.** The partial text lives on the agent entry, and a separate marker row would
+put the note somewhere other than the thing it is about. `role` has a CHECK constraint precisely to
+keep the set of things that can appear in a transcript small and meaningful, and "this turn ended
+early" is a property of a turn rather than a new kind of event. This is the same call
+[`Later.md`](Later.md) L-11 reaches for recording a folder move — a column rather than a row.
+
+**Rejected: reusing `failure`.** They are different events and they read differently: a failure is
+something going wrong, a stop is someone deciding they had seen enough. Rendering the second as the
+first puts a red alert box around a deliberate act. The surface leads with the stop when both are
+set, because a CLI's complaint on its way out is a consequence of the stop, not a reason for it.
+
+## D-023 — A turn is bounded by silence, not by duration
+
+**Decided:** 2026-09-11, closing the second half of B-8
+
+A turn is ended when it has produced **nothing** for `TURN_IDLE_TIMEOUT` (default 15 minutes), not
+when it has run for some total length of time.
+
+**Rejected: a wall-clock cap per turn.** It kills a session that is working perfectly well and
+merely taking a while, which on a coding agent is most real tasks. [Multica](../Reference/multica-main)
+has a ticket for exactly this (MUL-3064) and ended up with the same answer: liveness belongs to an
+inactivity watchdog, and a run that keeps emitting events is never killed for running long.
+
+**Rejected: no timeout at all**, which is what we had. A CLI that wedges produces nothing and never
+exits, and the turn then never ends — the composer stays locked and the indicator ticks against
+nothing, through a refresh. Not hypothetical: a nested `claude -p` hanging indefinitely is already
+recorded in D-016, killed by hand at 120 seconds.
+
+**Why the budget is generous.** The asymmetry favours patience. A false positive throws away real
+work and the quota spent earning it; a false negative only means waiting longer for a safety net
+that exists for when nobody is watching — and since the stop button shipped (L-8), somebody who *is*
+watching ends a turn in one click. Fifteen minutes is also set by the worst case rather than the
+typical one: `codex` emits nothing between its session id and its finished answer, so for codex this
+is effectively a cap on the whole turn. That is the limit of what the CLI tells us, and the number
+is chosen to sit well clear of it.
+
+**Ordering, when several things are true at once.** Stopped beats went-quiet beats the process
+error, because a killed CLI's complaint on its way out is a consequence of the kill rather than a
+reason for it, and the transcript should carry the truest account of why a turn ended.
+
+
+---
+
+## D-024 — A conversation with no name has no name
+
+**Decided:** 2026-09-11, building automatic naming (L-9)
+
+`conversations.title` is nullable, and NULL means nobody has named it. The name comes from the first
+thing said in the conversation, taken once, and the placeholder lives in the UI.
+
+**Rejected: a default string in the column** — which is what we had. `'Untitled conversation'` sat in
+the database as though it were a title, so every layer had to treat a description as a name: search
+matched it, a rename compared against it, and nothing could tell a conversation nobody had named
+from one named that on purpose. It is a display decision that had leaked into storage.
+
+**Rejected: a model call per conversation**, which is the version that names them *well*. It costs a
+request, a wait, and a failure mode, per conversation, forever. The first message of a coding
+conversation is nearly always a statement of the task, so the first line of it is right often
+enough — and when it is wrong the owner renames it, which he could always do. The worst case is the
+"Untitled conversation" we have now, with extra steps.
+
+**Named once, never re-derived.** A name says where a conversation started, not where it went. A
+sidebar whose rows rewrite themselves as a conversation drifts is one you cannot learn, and the
+search already covers "where did it end up" by looking inside message bodies.
+
+**The guard is in the statement, not the caller.** `WHERE title IS NULL` on the naming UPDATE, so a
+name the owner typed can never be overwritten by one derived from a message, whatever order the two
+arrive in. The API's own check is a cheap pre-filter over the top of it, not the rule.
+
+**A message with no words in it names nothing.** A row of dashes, a bare code fence: better unnamed
+than named something worse than nothing — and because unnamed is a real state rather than a magic
+string, the next message can still name it.
+
+## D-025 — Authentication lives in the Go server, not in Next.js middleware
+
+The obvious place for a login in a Next.js app is middleware, and it is the wrong one here.
+
+Middleware protects **pages**. The thing that has to be protected is the Go API on its own port,
+and a browser that never loads a page can call it directly — `curl` against `:8080` does not pass
+through Next.js at all. Putting the gate in middleware would produce an app that looks locked and
+is not, which is worse than one that looks open, because nobody goes looking.
+
+So the server is the authority and the web app is only a surface: `app/page.tsx` asks whether it is
+signed in and renders accordingly, and every answer it gets is one the server independently
+enforces on every request.
+
+**Rejected: a reverse proxy doing basic auth.** It would work, and it moves the security boundary
+into a config file that lives somewhere else and is edited by hand. The rule "every route needs the
+owner, except these three" is worth having as code with tests around it.
+
+## D-026 — Sessions are rows in Postgres, not signed tokens
+
+A JWT is the default answer and it cannot be revoked. That is the whole decision.
+
+Behind this login is a daemon that runs coding agents on the owner's machine. The question that
+matters is not *is this token well-formed* but *should this token still work right now* — a laptop
+left somewhere, a session on a phone that was sold. A signed token can only be answered by waiting
+for it to expire. A row can be deleted, and "sign out everywhere" is one `DELETE`.
+
+The cost is a database round trip per request, which for a single-user app on a local network is
+not a cost.
+
+**What is stored is the token's SHA-256, never the token**, so a database dump or a leaked backup
+is a list of hashes rather than a list of working logins. SHA-256 rather than argon2 for this one:
+the input is already 256 bits of randomness, so there is no dictionary to slow an attacker to, and
+unlike the password this runs on every single request.
+
+Two expiries, because they answer different questions: `expires_at` is how old a session may get
+(a week), `last_seen_at` is how long it may go unused (two days). A session used daily for a month
+is not the same risk as one abandoned in a browser tab.
+
+## D-027 — The server refuses to start without its secrets
+
+No default password, no `AUTH_DISABLED` switch, no development shortcut. `OWNER_PASSWORD_HASH`,
+`DAEMON_TOKEN` and `WEB_ORIGIN` are all required, and the process exits naming the ones it is
+missing.
+
+Every convenience considered here was a way for an unauthenticated server to reach production
+quietly. A default password ships as the real one. An "auth off for local dev" flag gets set in a
+Coolify environment at 2am. A server that will not boot is a loud, immediate, local failure; a
+server that boots without a password is a silent, remote one, and the blast radius is a shell on
+the owner's laptop.
+
+The cost is that development needs the variables too, which the `Makefile` and `scripts/dev.ps1`
+supply. That is one line in a file rather than a branch in the program — and it means there is
+exactly **one** code path through authentication, which is the part that actually matters, because
+the second path is the one nobody tests.
+
+## D-028 — The daemon gets its own credential, not the owner's password
+
+The daemon presents `DAEMON_TOKEN` as a bearer header on its websocket handshake; the browser
+presents a session cookie. Two credentials, because they prove two different things: the password
+is a person proving who they are, the token is one machine proving it is the one that was
+installed.
+
+Sharing the password would put it in plain text in a service configuration on a laptop, and
+rotating it would sign the owner out of every device at the same time as re-authorising the
+machine. They should be able to change independently, because they will need to.
+
+The daemon socket is checked **before** the websocket upgrade, so an unauthorised dialler gets a
+plain 401 rather than a working socket that is then closed — and nothing is registered in the hub
+on the strength of a connection that is about to be rejected.

@@ -9,9 +9,13 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
@@ -107,6 +111,110 @@ func command(ctx context.Context, cwd, name string, args ...string) *exec.Cmd {
 	cmd.Dir = cwd
 	cmd.Env = scrubbedEnv()
 	return cmd
+}
+
+const (
+	// terminateGrace is how long a stopped tree gets to disappear — on Unix
+	// between SIGTERM and SIGKILL, and everywhere as the window for confirming
+	// it actually went.
+	terminateGrace = 3 * time.Second
+	// waitDelay is the backstop for a Wait that a descendant is holding open by
+	// still owning an inherited pipe.
+	waitDelay = 10 * time.Second
+)
+
+// process is a launched CLI together with ownership of everything it spawns.
+type process struct {
+	cmd  *exec.Cmd
+	tree *processTree
+	// done is closed once the process has been reaped, so the terminator can
+	// tell "finished on its own" from "cancelled".
+	done chan struct{}
+	// terminated is closed when the terminator goroutine has stopped touching
+	// the tree, which is what makes releasing it safe.
+	terminated chan struct{}
+	// treeGone records whether the tree was CONFIRMED empty after a stop.
+	// False also means "could not be confirmed" — an unowned tree can never be
+	// observed — so it is never read as proof of a leak, only as absence of
+	// proof of a clean stop. Safe to read once Wait has returned.
+	treeGone bool
+}
+
+// launch starts cmd and takes ownership of every process it goes on to create,
+// so cancelling ctx stops the agent AND whatever the agent was itself running —
+// a build, an npm install, an MCP server. Killing the leader alone leaves those
+// behind, which is a stop that visibly stopped and did not (D-021).
+//
+// stdout is closed only AFTER the tree has been terminated. A wedged descendant
+// that inherited the pipe can otherwise keep the parser's scanner blocked
+// forever, and closing it earlier would race the parser against processes still
+// able to write into it.
+func launch(ctx context.Context, cmd *exec.Cmd, stdout io.Closer) (*process, error) {
+	prepare(cmd)
+	// Take cancellation away from os/exec, which would otherwise kill the
+	// leader the instant ctx is done and race the tree-wide stop below.
+	// WaitDelay stays as the hard backstop.
+	cmd.Cancel = func() error { return nil }
+	cmd.WaitDelay = waitDelay
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	tree, err := own(cmd)
+	if err != nil {
+		// Degraded, not failed: an unowned agent still answers, and stopping it
+		// still kills the CLI itself. Said out loud because this warning is the
+		// only signal that stopping on this machine has quietly stopped being
+		// thorough.
+		slog.Warn("could not take ownership of the agent process tree; stopping a turn will kill "+
+			"only the CLI and may leave what it spawned running",
+			"err", err, "pid", cmd.Process.Pid, "exe", cmd.Path)
+	}
+	// Always resume, owned or not — on Windows the child is created suspended,
+	// so skipping this would hang forever on a process that never ran.
+	if err := resume(cmd.Process.Pid); err != nil {
+		tree.release()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("resume suspended child: %w", err)
+	}
+
+	p := &process{
+		cmd: cmd, tree: tree,
+		done: make(chan struct{}), terminated: make(chan struct{}),
+	}
+	go func() {
+		defer close(p.terminated)
+		select {
+		case <-p.done:
+			return // finished on its own; there is nothing to stop
+		case <-ctx.Done():
+		}
+		p.tree.terminate(cmd)
+		// Wait for the tree to actually be gone before unblocking the reader:
+		// until then a survivor could still write into the pipe.
+		p.treeGone = p.tree.gone(terminateGrace)
+		if !p.treeGone {
+			slog.Warn("a stopped turn could not be confirmed clean; something the agent "+
+				"spawned may still be running", "pid", cmd.Process.Pid, "exe", cmd.Path)
+		}
+		if stdout != nil {
+			_ = stdout.Close()
+		}
+	}()
+	return p, nil
+}
+
+// Wait reaps the process and gives up ownership of its tree.
+func (p *process) Wait() error {
+	err := p.cmd.Wait()
+	close(p.done)
+	// The terminator may still be inside terminate/gone, both of which read the
+	// tree handle that release is about to invalidate.
+	<-p.terminated
+	p.tree.release()
+	return err
 }
 
 // keepAnyway are the CLAUDE_* variables that must survive scrubbing.

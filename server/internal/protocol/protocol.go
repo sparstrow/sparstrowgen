@@ -115,6 +115,12 @@ type Entry struct {
 	// agent
 	Usage   *Usage `json:"usage,omitempty"`
 	Failure string `json:"failure,omitempty"`
+	// Stopped is set when the owner ended the turn rather than the provider
+	// finishing it. Separate from Failure because they are different events and
+	// read differently: a failure is something going wrong, a stop is somebody
+	// deciding they have seen enough. Both can be true at once when a CLI
+	// complains on its way out.
+	Stopped bool `json:"stopped,omitempty"`
 
 	// replay
 	ToModel          *Model `json:"toModel,omitempty"`
@@ -124,15 +130,18 @@ type Entry struct {
 }
 
 type Conversation struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Folder   string `json:"folder"`
-	Updated  string `json:"updated"`
-	Provider string `json:"provider"`
-	Model    Model  `json:"model"`
+	ID string `json:"id"`
+	// Empty when nobody has named it: not the owner, and not the first message
+	// sent in it. The surface shows a placeholder, which describes a
+	// conversation with no name rather than pretending to be one.
+	Title    string  `json:"title"`
+	Folder   string  `json:"folder"`
+	Updated  string  `json:"updated"`
+	Provider string  `json:"provider"`
+	Model    Model   `json:"model"`
 	SpendUsd float64 `json:"spendUsd"`
-	Tokens   int64  `json:"tokens"`
-	Archived bool   `json:"archived"`
+	Tokens   int64   `json:"tokens"`
+	Archived bool    `json:"archived"`
 	// Entries is nil in list responses and populated when one is opened.
 	Entries []Entry `json:"entries"`
 	// How much of the transcript each provider has already been told, so a
@@ -153,6 +162,11 @@ const (
 	ServerRunTurn = "run_turn"
 	// ServerProbe asks the daemon to re-report what is installed.
 	ServerProbe = "probe"
+	// ServerStopTurn asks the daemon to end a turn that is already running,
+	// killing the CLI and everything it spawned. Fire-and-forget, like
+	// ServerRunTurn: the turn's actual end still arrives as DaemonStopped, so
+	// there is one path for "this turn is over" rather than two.
+	ServerStopTurn = "stop_turn"
 	// ServerListDir asks the daemon what is inside a directory, and whether it
 	// can be used as a conversation's working directory.
 	//
@@ -165,6 +179,9 @@ const (
 type ServerMessage struct {
 	Type string   `json:"type"`
 	Turn *RunTurn `json:"turn,omitempty"`
+
+	// stop_turn
+	TurnID string `json:"turnId,omitempty"`
 
 	// list_dir
 	RequestID string `json:"requestId,omitempty"`
@@ -213,6 +230,11 @@ const (
 	// DaemonStarted reports the provider's session id as soon as it is known,
 	// so a resume pointer survives a turn that later fails.
 	DaemonStarted = "started"
+	// DaemonStopped reports a turn ended because it was asked to stop, as
+	// distinct from failing. It carries whatever text had arrived, which is
+	// usually the point: stopping is most often done once the answer has gone
+	// somewhere useless, and what came before is still worth keeping.
+	DaemonStopped = "stopped"
 	// DaemonDirListing answers a ServerListDir, echoing its RequestID.
 	DaemonDirListing = "dir_listing"
 )

@@ -38,7 +38,10 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 		return nil, err
 	}
 	cmd.Stdin = strings.NewReader("")
-	if err := cmd.Start(); err != nil {
+	// launch rather than cmd.Start: a stop has to take the tool subprocesses
+	// with it, not just the CLI (D-021).
+	proc, err := launch(ctx, cmd, stdout)
+	if err != nil {
 		return nil, err
 	}
 
@@ -50,7 +53,7 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 		p := parseAgy(stdout, messages)
 		close(messages)
 
-		waitErr := cmd.Wait()
+		waitErr := proc.Wait()
 		if p.Err != nil {
 			waitErr = p.Err
 		}

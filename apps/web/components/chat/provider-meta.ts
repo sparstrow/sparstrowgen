@@ -24,6 +24,34 @@ export const providerClasses: Record<
   },
 };
 
+/** The classes for a provider we have never heard of.
+ *
+ *  Neutral rather than alarming: an unknown provider is not an error, it is a
+ *  server that knows about something this build does not. Colouring it as a
+ *  fault would be a lie about what happened.
+ */
+const unknownProvider = {
+  dot: "bg-muted-foreground",
+  text: "text-muted-foreground",
+  rule: "bg-muted-foreground/40",
+};
+
+/** Provider classes that always return something.
+ *
+ *  Indexing the map directly returns `undefined` for anything not in it, and
+ *  the very next line reads `.text` off it — so ONE row carrying a provider
+ *  this build does not know white-screens the entire surface it appears on.
+ *  That is not hypothetical: a conversation created while the daemon was
+ *  offline has no provider at all, and seven of them took the sidebar down.
+ *
+ *  It is also the case AGENTS.md §3 names directly — an installed daemon will
+ *  one day be older than the server, so a value arriving from outside is
+ *  defaulted deliberately rather than trusted to be in the enum.
+ */
+export function providerStyle(provider: ProviderId | string | undefined) {
+  return providerClasses[provider as ProviderId] ?? unknownProvider;
+}
+
 export function formatTokens(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);

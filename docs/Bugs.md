@@ -64,7 +64,7 @@ all rendered, six syntax tokens highlighted, no raw fences left on screen.
 
 ## B-3 — Every conversation runs in the server's working directory
 
-**Found:** 2026-09-10, reviewing what is left to build **Status:** open
+**Found:** 2026-09-10, reviewing what is left to build **Status:** fixed 2026-09-10
 **Repro:** Create a conversation. Its folder is whatever directory the server process was started
 in, and there is no way to change it.
 **Expected / Actual:** The owner picks the project a conversation is about (spec US1: "in a
@@ -228,3 +228,236 @@ as one string — and the raw view is what made the first one findable.
 
 **Not repaired retroactively:** replies already stored are missing that text for good; it was never
 written down. Only what claude sends from now on is kept whole.
+
+## B-8 — A turn in flight when the daemon disconnects never ends
+
+**Found:** 2026-09-11, building the stop button (L-8) **Status:** fixed 2026-09-11
+**Repro:** Send a message, then kill the daemon before the reply arrives.
+**Expected / Actual:** the turn is reported as broken and the conversation becomes usable again /
+the working indicator ticks forever, the composer stays locked, and the agent entry stays an empty
+placeholder — including after a refresh, because the placeholder is a real row.
+
+`daemonSocket`'s deferred cleanup calls `hub.ClearDaemon` and nothing else, so every entry in
+`api.turns` is orphaned (`server/internal/api/sockets.go:52`). Only a message carrying that turn id
+finishes a turn, and the process that would have sent one is gone.
+
+**Predates the stop button and is not caused by it** — this is what "there is no way to call a turn
+back" looked like even before there was a button. But it is the same shape of problem: a turn that
+cannot end. The fix is small (finish every in-flight turn when the daemon goes, with the failure
+saying the machine went away) and deliberately not bundled into L-8, which is already a protocol
+change, a migration and a process-tree change.
+
+**The second half, fixed 2026-09-11:** a machine that is present but silent. This was the part left
+open, and it is not theoretical — a nested `claude -p` hanging forever is already recorded in D-016,
+killed by hand at 120s. The daemon now runs an inactivity watchdog per turn: `TURN_IDLE_TIMEOUT`,
+15 minutes by default.
+
+**An inactivity watchdog, not a wall-clock cap**, and the distinction is the whole design. Multica
+has a ticket for getting this wrong (MUL-3064): a total timeout kills a session that is working
+perfectly well and merely taking a while, which on a coding agent is most real tasks. A turn
+streaming for an hour is fine; a turn silent for fifteen minutes is not.
+
+**Why fifteen and not three.** The asymmetry favours patience. A false positive throws away real
+work and the quota spent earning it; a false negative just means waiting longer for a net that only
+matters when nobody is watching — and since the stop button shipped, somebody who *is* watching ends
+a turn in one click. The budget is also tightest on codex, which emits nothing between its session
+id and its finished answer, so for codex this is a cap on the whole turn rather than a silence
+detector. That is the honest limit of what the CLI tells us.
+
+**Fixed 2026-09-11, on both sides of the socket.**
+
+- **Server:** `abandonTurns` closes out every turn still in flight when the daemon goes, keeping
+  whatever text had streamed in, for the same reason a failed turn keeps its partial answer. It
+  reads as a failure, not a stop — a laptop closing is not the owner changing their mind.
+- **Daemon:** the CLIs are cancelled too. The server has given up on those turns, so anything still
+  running is spending the owner's quota on an answer with nowhere to go. Deliberately *not*
+  `stop()` in a loop: that would record them as deliberately stopped and put a lie in the
+  transcript.
+
+**A prerequisite that was its own latent bug.** `hub.ClearDaemon` guarded the actual clear with
+`if h.daemon == c` but broadcast "machine offline" unconditionally — so when a daemon reconnected,
+the old socket's late teardown told every browser the machine was unreachable moments after it came
+back. Hanging turn-abandonment off that same teardown would have been far worse: it would have
+killed the *new* daemon's turns. `ClearDaemon` now reports whether the socket was still current, and
+both the broadcast and the abandonment are conditional on it.
+
+Regression tests are the new API harness described under L-12's closure — `TestATurnIsClosedOutWhenTheMachineGoesAway`
+confirmed to fail on the old code with exactly the reported symptom (`entry never settled:
+text="I had started to say" failure="" stopped=false`). The daemon-identity half is tested in the hub
+package instead, because the API-level version passed with the guard removed and a test that cannot
+fail is worse than none.
+
+## B-9 — The composer shows the old provider after sending to a new one
+
+**Found:** 2026-09-11, verifying the stop button (L-8) **Status:** fixed 2026-09-11
+**Repro:** In a conversation on claude, pick codex in the provider dropdown and send a message.
+**Expected / Actual:** the composer says codex, because that is what the conversation is on now /
+it snaps back to claude, and the placeholder reads "Message claude…". A reload corrects it.
+
+Purely a stale cache, and the server is right: `postMessage` calls `store.SetProvider` and the
+conversation really is on codex (verified directly — `provider: codex`, `model: GPT-5.6 Sol`), but
+nothing broadcasts an `EventConversation` for that change, so the browser's copy still says claude
+until something else refetches it.
+
+The transcript is unaffected — the working indicator and the agent entry both name codex correctly,
+because they take the provider from the send rather than from the cached conversation. It is the
+composer alone, which reads `selected.provider`.
+
+**Predates the stop button**; found while verifying it because switching provider and then watching
+the composer is not something the earlier rounds happened to do.
+
+**Fixed 2026-09-11.** `store.SetProvider` now returns the updated conversation — the SQL was already
+`RETURNING *` and the store was discarding it — and `postMessage` broadcasts it, alongside the
+`EventConversation` that `patchConversation` already sends.
+`TestSendingToADifferentProviderAnnouncesTheChange` watches a real browser socket and was confirmed
+to fail on the old code ("no conversation event arrived").
+
+## B-10 — A failed turn threw away everything a non-streaming provider had said
+
+**Found:** 2026-09-11, watching the daemon log while verifying the idle watchdog **Status:** fixed 2026-09-11
+**Repro:** Make a `codex` turn fail or time out after it has produced some output.
+**Expected / Actual:** what it had written is kept, as it is for a stopped turn / the entry is
+stored empty and the output is gone for good.
+
+**Found by a number, not by the screen.** The UI showed a plausible "Turn did not finish" box and
+nothing looked wrong; the daemon log said `chars=425`. The turn had produced 425 characters and
+none of them reached the transcript.
+
+`DaemonFailed` carried only an error message, so `handleDaemonMessage` wrote the failure from
+`t.Streamed` — the deltas the server had accumulated. That is the right source for `claude` and
+`agy`, and **empty for `codex`, which emits no deltas at all**. The text existed the whole time: the
+parser had recovered it into `result.Text`, and the daemon simply never sent it.
+
+The same shape as B-5 and B-6 — a provider difference that is invisible until you look at the one
+provider that behaves differently — and the third time `codex` not streaming has cost something.
+
+**Fixed** by giving `DaemonFailed` a `Full` field like `DaemonDone` and `DaemonStopped` already
+have, and preferring it over the accumulated deltas. Both directions are tested:
+`TestAFailedTurnKeepsTextFromAProviderThatDoesNotStream` (confirmed to fail on the old code with
+`text = ""`) and `TestAFailedTurnStillFallsBackToTheDeltasItStreamed`, so the fix cannot regress the
+streaming case it replaced.
+
+**Predates the watchdog** — any failed codex turn lost its output this way. The watchdog only made
+it easy to produce on demand.
+
+**Also fixed in the same change:** the failure box told every broken turn that "what arrived before
+it stopped is kept above", including turns where nothing had arrived and there was nothing above.
+It now says that only when there is something to mean.
+
+
+---
+
+## B-11 — `agy` cannot use any tool, so it cannot read the codebase it is pointed at
+
+**Found:** 2026-09-11, checking whether an agent can read a dropped file from disk **Status:** open
+**Repro:** In a folder containing `evidence.png`, run the adapter's own command line —
+`agy -p "Read the file evidence.png in this directory..." --output-format stream-json`. No flags
+beyond those in `server/internal/agent/agy.go`.
+**Expected / Actual:** The file is read and described / nothing is produced, and agy says so
+plainly:
+
+> `no output produced — a tool required the "command" permission that headless mode cannot prompt
+> for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g.
+> command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve
+> all tools.`
+
+The other two are not like this. `codex` runs under a `read-only` sandbox by default and read the
+same file without any flag from us; `claude` allows its read-only tools in `-p` without prompting.
+Only `agy` denies everything it cannot prompt for, and headless mode can never prompt.
+
+So agy in this app can answer from what the model already knows and nothing else — it cannot read a
+file, search the tree, or run a command. For a harness whose premise is one chat across every
+*coding* agent, that is the provider not doing the job rather than a missing nicety, and it is
+invisible today because nobody has asked agy to touch the codebase.
+
+**Not fixed here, because the fix is a decision rather than a flag.** The two routes agy documents
+are `--dangerously-skip-permissions` (auto-approve *everything*, which is the opposite of the
+scoping this project treats as a security boundary — see D-018) and an allow-rule in the user's own
+`settings.json`, which is the owner's tooling config rather than ours to write. `--sandbox` exists
+and may be the honest pairing for the first, but the combination is unverified: the check needed to
+confirm it was blocked before it ran, and no claim is made here about what it does.
+
+**Blocks a design that assumes every provider can read an attached file** — see
+[`Capabilities.md`](Capabilities.md).
+
+## B-12 — Simultaneous sign-in attempts all slipped past the login throttle
+
+**Found:** 2026-09-11, codex reviewing the auth code adversarially before it shipped
+**Status:** fixed 2026-09-11
+
+**Repro:** Send a hundred `POST /api/auth/login` requests at the same instant with a wrong
+password. All hundred were admitted.
+
+**Expected / Actual:** The allowance is five attempts before delays begin / it was five attempts
+*per burst*, because the throttle checked and recorded in two separate lock acquisitions and the
+argon2 hash — the slowest thing in the request, ~50ms — sat in the gap between them. Every request
+that reached the check before any of them had finished hashing saw an empty counter and was let
+through.
+
+**Security:** Yes, two ways. An attacker gets as many guesses per round as they care to send in
+parallel, which is most of what a rate limit exists to stop. And each admitted request holds 19 MiB
+of argon2 working memory at once, so a hundred of them is about 1.9 GiB — enough to take the VPS
+down, which locks the owner out just as effectively as guessing the password would let someone in.
+
+Never shipped: found and fixed in the same change that introduced it. Logged because the shape is
+worth remembering rather than because it reached anyone — **check-then-act is not made safe by
+locking each half**, and the tell is a slow operation sitting between the check and the record.
+
+Fixed by making admission reserve the attempt in the same lock acquisition that checks it
+(`Throttle.Begin`), so a request is counted the moment it is let in rather than after it fails.
+Two further hardenings landed with it, both found in the same review: a hash's own parameters are
+now bounded before use (a one-byte key would have verified a password on one byte, and `t=0`
+panics inside argon2 rather than erroring), and the login body is capped at 4 KiB with at most four
+concurrent hashes.
+
+Regression test: `server/internal/auth/race_test.go` — it fails on the old check-then-act shape.
+
+## B-13 — One conversation with an unknown provider white-screened the whole sidebar
+
+**Found:** 2026-09-11, signing in for the first time after auth landed **Status:** fixed 2026-09-11
+
+**Repro:** Have any conversation whose `provider` is not one of claude/codex/agy — creating one
+while the daemon is offline leaves it empty — then load the app.
+
+**Expected / Actual:** That row renders as best it can / `Cannot read properties of undefined
+(reading 'text')` at `conversation-list.tsx:128`, and the entire app fails to render. Not the row:
+the app.
+
+`providerClasses[conversation.provider]` returns `undefined` for anything not in the map, and the
+next line reads `.text` off it. Nine call sites across six components did exactly this, so the same
+one row would have taken down the composer, the message list, the raw view and the provider strip
+just as completely.
+
+This is the case [`AGENTS.md`](../AGENTS.md) §3 names directly — *an installed daemon will one day
+be older than the server* — arriving early and by a different route than expected. The fix is one
+accessor, `providerStyle()`, that always returns something, plus a neutral mark in `ProviderIcon`
+for a provider this build has no logo for. An unknown provider is a build that is behind, not an
+error, and it is not coloured as one.
+
+**How the bad rows got there, which is the other half:** the new auth tests created conversations
+through `POST /api/conversations` and never deleted them. The harness only cleaned up the ones made
+via its own helper. No daemon is connected during a test, so each one was saved with no provider at
+all — seven of them, in the development database the app actually runs against. Fixed by giving the
+harness a `createConversation()` that registers its own cleanup, and the seven empty rows were
+deleted after checking each had zero entries.
+
+## B-14 — Signing out left the app sitting on the signed-out screen's data
+
+**Found:** 2026-09-11, clicking sign out in a browser **Status:** fixed 2026-09-11
+
+**Repro:** Sign in, click Sign out.
+
+**Expected / Actual:** The login form / the request succeeded, the cookie was gone, and the chat
+surface stayed on screen showing a conversation the server would now refuse to hand over. A manual
+reload then showed the login form, which is what made it clear the server side was fine.
+
+Cause was ordering in `useSignOut`: it called `queryClient.clear()` and then set the session flag.
+`clear()` removes the query objects that mounted components are subscribed to, so those observers
+are left watching nothing and the `setQueryData` that follows triggers no re-render at all.
+
+Fixed by setting the session flag FIRST — which re-renders the gate, swaps in the login form and
+unmounts everything watching a query — and only then removing the rest of the cache.
+
+Worth remembering beyond this bug: `clear()` is not "invalidate everything harder". It detaches
+live observers, so anything that must re-render as a result has to be told before the clear, not
+after.
