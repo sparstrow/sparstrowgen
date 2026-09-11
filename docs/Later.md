@@ -104,20 +104,6 @@ would add workspace wiring before anything works. The move is mechanical when it
 **Unblocks when:** a second consumer exists — `apps/desktop` (L-2) or `packages/views` gaining a
 view that the web app and something else both render.
 
-## L-9 — Name conversations automatically
-
-**Status:** idea **Raised:** 2026-09-10
-
-Every conversation is "Untitled conversation" until renamed by hand, so the sidebar is a column of
-identical rows distinguished only by folder and age. Search partly rescues this — it looks inside
-message bodies precisely because titles are unreliable — but a list you cannot scan is still a list
-you cannot scan.
-
-The obvious approach costs a model call per conversation. The cheap one is the first line of the
-first message, truncated, which is free and right most of the time.
-
-**Unblocks when:** the sidebar holds enough conversations that finding one by eye stops working.
-
 ## L-10 — The raw view shows the stored text, not the provider's event stream
 
 **Status:** idea **Raised:** 2026-09-10

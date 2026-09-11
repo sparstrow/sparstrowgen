@@ -10,7 +10,7 @@ import (
 
 type Conversation struct {
 	ID         pgtype.UUID        `json:"id"`
-	Title      string             `json:"title"`
+	Title      *string            `json:"title"`
 	Folder     string             `json:"folder"`
 	Provider   string             `json:"provider"`
 	ModelID    string             `json:"model_id"`

@@ -4,10 +4,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -74,8 +76,10 @@ func relative(t time.Time) string {
 
 func toConversation(c db.Conversation) protocol.Conversation {
 	return protocol.Conversation{
-		ID:       uuidToString(c.ID),
-		Title:    c.Title,
+		ID: uuidToString(c.ID),
+		// Empty means nobody has named it — neither the owner nor its first
+		// message. The surface describes that; it is not a name.
+		Title:    str(c.Title),
 		Folder:   c.Folder,
 		Updated:  relative(c.UpdatedAt.Time),
 		Provider: c.Provider,
@@ -140,8 +144,9 @@ func toEntry(e db.Entry) protocol.Entry {
 // search reach into it.
 //
 // A non-empty query searches titles, folders AND message bodies in Postgres.
-// Searching titles alone would miss the ones that most need finding, since an
-// unnamed conversation stays "Untitled conversation" until somebody renames it.
+// Searching titles alone would miss the ones that most need finding: a name
+// comes from the first message or from the owner, so it says where a
+// conversation started and never where it went.
 func (s *Store) List(ctx context.Context, query string) ([]protocol.Conversation, error) {
 	query = strings.TrimSpace(query)
 	if query != "" {
@@ -253,7 +258,6 @@ func (s *Store) seenBy(ctx context.Context, id pgtype.UUID) (map[string]int32, e
 
 func (s *Store) Create(ctx context.Context, folder, provider string, model protocol.Model) (protocol.Conversation, error) {
 	row, err := s.q.CreateConversation(ctx, db.CreateConversationParams{
-		Title:      "Untitled conversation",
 		Folder:     folder,
 		Provider:   provider,
 		ModelID:    model.ID,
@@ -270,11 +274,38 @@ func (s *Store) Rename(ctx context.Context, id, title string) (protocol.Conversa
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
-	row, err := s.q.RenameConversation(ctx, db.RenameConversationParams{ID: uid, Title: title})
+	row, err := s.q.RenameConversation(ctx, db.RenameConversationParams{ID: uid, Title: &title})
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
 	return toConversation(row), nil
+}
+
+// NameFrom gives an unnamed conversation a name taken from a message, and
+// reports whether it took one.
+//
+// It is not an error for it to decline. A conversation already named keeps the
+// name it has — the statement's own WHERE decides that, so a rename typed at the
+// same moment as a send cannot lose — and a message with no words in it (a bare
+// code block, a row of dashes) leaves the conversation unnamed rather than
+// naming it something worse than nothing.
+func (s *Store) NameFrom(ctx context.Context, id, message string) (protocol.Conversation, bool, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return protocol.Conversation{}, false, err
+	}
+	title := titleFrom(message)
+	if title == "" {
+		return protocol.Conversation{}, false, nil
+	}
+	row, err := s.q.NameConversation(ctx, db.NameConversationParams{ID: uid, Title: &title})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return protocol.Conversation{}, false, nil
+	}
+	if err != nil {
+		return protocol.Conversation{}, false, err
+	}
+	return toConversation(row), true, nil
 }
 
 func (s *Store) SetArchived(ctx context.Context, id string, archived bool) (protocol.Conversation, error) {

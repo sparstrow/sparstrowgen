@@ -463,3 +463,56 @@ func TestSetFolderToTheSamePlaceCostsNothing(t *testing.T) {
 		t.Errorf("resume id = %q, want it untouched by a no-op move", got)
 	}
 }
+
+// Naming only ever fills a blank, and the rule lives in the statement rather
+// than in the caller — so a rename that lands between a send starting and its
+// naming still wins. That ordering cannot be forced through the API, which is
+// why it is asserted here, where NameFrom can be called directly on a
+// conversation that already has a name.
+func TestNamingNeverReplacesANameThatIsAlreadyThere(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	named, took, err := s.NameFrom(ctx, c.ID, "the first thing said")
+	if err != nil {
+		t.Fatalf("name: %v", err)
+	}
+	if !took || named.Title != "the first thing said" {
+		t.Fatalf("took=%v title=%q, want it named from the message", took, named.Title)
+	}
+
+	_, took, err = s.NameFrom(ctx, c.ID, "something said later")
+	if err != nil {
+		t.Fatalf("second name: %v", err)
+	}
+	if took {
+		t.Error("a conversation that already had a name was renamed by a message")
+	}
+	after, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != "the first thing said" {
+		t.Errorf("title = %q, want the name it already had", after.Title)
+	}
+}
+
+// A message with no words in it leaves the conversation unnamed rather than
+// naming it something worse than nothing — and unnamed means the next message
+// can still name it.
+func TestAMessageWithNoWordsInItLeavesTheConversationUnnamed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, took, err := s.NameFrom(ctx, c.ID, "---\n***"); err != nil || took {
+		t.Fatalf("took=%v err=%v, want it declined", took, err)
+	}
+	if after, err := s.Get(ctx, c.ID); err != nil || after.Title != "" {
+		t.Fatalf("title = %q, want it still unnamed", after.Title)
+	}
+	if _, took, err := s.NameFrom(ctx, c.ID, "and now a real one"); err != nil || !took {
+		t.Fatalf("took=%v err=%v, want the next message to name it", took, err)
+	}
+}

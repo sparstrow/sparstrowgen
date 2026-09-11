@@ -17,6 +17,11 @@ import type { Conversation } from "@/lib/chat-types";
 import { useChatView } from "@/lib/store";
 import { providerClasses } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
+import {
+  ConversationName,
+  conversationName,
+  unnamedConversation,
+} from "./conversation-name";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -99,6 +104,7 @@ function Row({
             }
           }}
           aria-label="Conversation title"
+          placeholder={unnamedConversation}
           className="w-full rounded-md border bg-background px-2.5 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </li>
@@ -123,9 +129,10 @@ function Row({
           }`}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm leading-snug">
-            {conversation.title}
-          </span>
+          <ConversationName
+            title={conversation.title}
+            className="block truncate text-sm leading-snug"
+          />
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
             {conversation.folder.split("\\").pop()} · {conversation.updated}
           </span>
@@ -146,7 +153,7 @@ function Row({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Actions for ${conversation.title}`}
+              aria-label={`Actions for ${conversationName(conversation.title)}`}
               className="absolute right-3 top-1.5 size-7 opacity-0 transition-opacity group-hover/row:opacity-100 data-[popup-open]:opacity-100 focus-visible:opacity-100"
             />
           }
@@ -336,7 +343,8 @@ export function ConversationList({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              &ldquo;{pendingDelete?.title}&rdquo; and its full transcript will
+              &ldquo;{conversationName(pendingDelete?.title ?? "")}&rdquo; and its
+              full transcript will
               be removed. Since the transcript lives here rather than with any
               agent, this cannot be recovered from the provider.
             </AlertDialogDescription>

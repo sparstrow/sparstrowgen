@@ -465,3 +465,35 @@ is chosen to sit well clear of it.
 error, because a killed CLI's complaint on its way out is a consequence of the kill rather than a
 reason for it, and the transcript should carry the truest account of why a turn ended.
 
+
+---
+
+## D-024 — A conversation with no name has no name
+
+**Decided:** 2026-09-11, building automatic naming (L-9)
+
+`conversations.title` is nullable, and NULL means nobody has named it. The name comes from the first
+thing said in the conversation, taken once, and the placeholder lives in the UI.
+
+**Rejected: a default string in the column** — which is what we had. `'Untitled conversation'` sat in
+the database as though it were a title, so every layer had to treat a description as a name: search
+matched it, a rename compared against it, and nothing could tell a conversation nobody had named
+from one named that on purpose. It is a display decision that had leaked into storage.
+
+**Rejected: a model call per conversation**, which is the version that names them *well*. It costs a
+request, a wait, and a failure mode, per conversation, forever. The first message of a coding
+conversation is nearly always a statement of the task, so the first line of it is right often
+enough — and when it is wrong the owner renames it, which he could always do. The worst case is the
+"Untitled conversation" we have now, with extra steps.
+
+**Named once, never re-derived.** A name says where a conversation started, not where it went. A
+sidebar whose rows rewrite themselves as a conversation drifts is one you cannot learn, and the
+search already covers "where did it end up" by looking inside message bodies.
+
+**The guard is in the statement, not the caller.** `WHERE title IS NULL` on the naming UPDATE, so a
+name the owner typed can never be overwritten by one derived from a message, whatever order the two
+arrive in. The API's own check is a cheap pre-filter over the top of it, not the rule.
+
+**A message with no words in it names nothing.** A row of dashes, a bare code fence: better unnamed
+than named something worse than nothing — and because unnamed is a real state rather than a magic
+string, the next message can still name it.

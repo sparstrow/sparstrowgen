@@ -1,7 +1,8 @@
 -- name: SearchConversations :many
--- Titles alone would miss the conversations that most need finding: an unnamed
--- one is called "Untitled conversation" until somebody renames it, and those
--- are exactly the ones you go looking for by what was said in them.
+-- Titles alone would miss the conversations that most need finding. A name is
+-- derived from the first message or typed by hand, so it describes where a
+-- conversation started and never where it ended up — and the thing you go
+-- looking for is usually what was said in the middle of it.
 --
 -- The excerpt is the first matching message body, so a hit in a long transcript
 -- is explicable rather than mysterious. A title match returns none — the reason

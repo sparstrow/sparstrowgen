@@ -20,6 +20,7 @@ import {
 } from "@/lib/queries";
 import { useChatView, type TranscriptView } from "@/lib/store";
 import { ConversationList } from "./conversation-list";
+import { ConversationName } from "./conversation-name";
 import { ProviderStrip } from "./provider-strip";
 import { MessageList, MessageSkeleton, WorkingIndicator } from "./message-list";
 import { RawTranscript } from "./raw-transcript";
@@ -344,7 +345,12 @@ export function ChatSurface() {
             <>
               <header className="group/header flex shrink-0 items-center gap-3 border-b px-6 py-3">
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-sm font-medium">{selected.title}</h1>
+                  <h1 className="text-sm font-medium">
+                    <ConversationName
+                      title={selected.title}
+                      className="block truncate"
+                    />
+                  </h1>
                   {/* The folder is what the agent can see, so the place it is
                       displayed is the place to change it — rather than a
                       setting somewhere you would have to know about. */}

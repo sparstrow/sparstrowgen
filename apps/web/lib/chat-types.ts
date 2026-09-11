@@ -118,6 +118,9 @@ export type Entry = UserMessage | AgentMessage | ReplayMarker;
 
 export type Conversation = {
   id: string;
+  /** Empty until it has a name — from the first thing said in it, or from the
+   *  owner typing one. The surface shows a placeholder for that, which
+   *  describes a conversation with no name rather than pretending to be one. */
   title: string;
   /** The directory the agents run in. A conversation is always about somewhere. */
   folder: string;

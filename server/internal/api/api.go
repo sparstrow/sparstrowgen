@@ -300,6 +300,19 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Name it from what is being said, before the conversation is broadcast
+	// below — so the name travels with the same event rather than needing a
+	// second one. Only ever fills a blank (docs/Decisions.md D-024).
+	//
+	// A failure here is logged and not returned: the message is what the owner
+	// asked for, and refusing to send it because its conversation could not be
+	// named would trade the thing that matters for the thing that doesn't.
+	if conv.Title == "" {
+		if _, _, err := a.store.NameFrom(ctx, id, body.Text); err != nil {
+			a.log.Warn("could not name the conversation", "conversation", id, "err", err)
+		}
+	}
+
 	// Broadcast it. The conversation really is on the new provider after this,
 	// but without saying so the browser keeps the copy it fetched before the
 	// send and the composer snaps back to the old provider (docs/Bugs.md B-9).

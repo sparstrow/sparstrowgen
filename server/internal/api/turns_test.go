@@ -237,3 +237,85 @@ func TestAFailedTurnStillFallsBackToTheDeltasItStreamed(t *testing.T) {
 	}
 }
 
+// L-9. Every conversation was "Untitled conversation" until somebody renamed
+// one by hand, so the sidebar was a column of identical rows told apart only by
+// folder and age — and the search had to look inside message bodies precisely
+// because the titles said nothing.
+//
+// The name comes from the first thing said, which is free and right most of the
+// time, and it rides along on the conversation event the send already
+// broadcasts rather than needing one of its own.
+func TestAConversationIsNamedByTheFirstThingSaidInIt(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	b := r.watch()
+	c := r.conversation("claude")
+
+	if c.Title != "" {
+		t.Fatalf("a new conversation arrived named %q; it should have no name yet", c.Title)
+	}
+
+	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
+		"text":     "Name this conversation after me\n\nand not after this second line.",
+		"provider": "claude", "model": protocol.Model{ID: "m1", Label: "M One"},
+	})
+	first := d.nextTurn()
+
+	ev := b.await("conversation", func(ev protocol.ClientEvent) bool {
+		return ev.Type == protocol.EventConversation &&
+			ev.Conversation != nil && ev.Conversation.ID == c.ID &&
+			ev.Conversation.Title != ""
+	})
+	if ev.Conversation.Title != "Name this conversation after me" {
+		t.Errorf("title = %q, want the first line of the first message", ev.Conversation.Title)
+	}
+
+	// The second message is not a second chance. A name describes where a
+	// conversation started, and rewriting it on every send would make the
+	// sidebar move under the owner while he reads it.
+	d.send(protocol.DaemonMessage{
+		Type: protocol.DaemonDone, TurnID: first.TurnID, Full: "done", Tokens: 1,
+	})
+	r.awaitEntry(c.ID, first.EntryID, func(e protocol.Entry) bool { return e.Text != "" })
+
+	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
+		"text": "Something else entirely", "provider": "claude",
+		"model": protocol.Model{ID: "m1", Label: "M One"},
+	})
+	d.nextTurn()
+
+	after, err := r.store.Get(context.Background(), c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != "Name this conversation after me" {
+		t.Errorf("title = %q after a second message; a name is taken once", after.Title)
+	}
+}
+
+// And a name the owner typed outranks any name we would have derived — however
+// the two arrive. The guard is in the statement, so a rename landing between the
+// send and the naming still wins.
+func TestANameTheOwnerTypedIsNeverOverwritten(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("claude")
+
+	if _, err := r.store.Rename(context.Background(), c.ID, "The one about job objects"); err != nil {
+		t.Fatal(err)
+	}
+
+	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
+		"text":     "a first message that would have named it something else",
+		"provider": "claude", "model": protocol.Model{ID: "m1", Label: "M One"},
+	})
+	d.nextTurn()
+
+	after, err := r.store.Get(context.Background(), c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != "The one about job objects" {
+		t.Errorf("title = %q, want the one the owner typed", after.Title)
+	}
+}

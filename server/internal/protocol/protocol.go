@@ -130,15 +130,18 @@ type Entry struct {
 }
 
 type Conversation struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Folder   string `json:"folder"`
-	Updated  string `json:"updated"`
-	Provider string `json:"provider"`
-	Model    Model  `json:"model"`
+	ID string `json:"id"`
+	// Empty when nobody has named it: not the owner, and not the first message
+	// sent in it. The surface shows a placeholder, which describes a
+	// conversation with no name rather than pretending to be one.
+	Title    string  `json:"title"`
+	Folder   string  `json:"folder"`
+	Updated  string  `json:"updated"`
+	Provider string  `json:"provider"`
+	Model    Model   `json:"model"`
 	SpendUsd float64 `json:"spendUsd"`
-	Tokens   int64  `json:"tokens"`
-	Archived bool   `json:"archived"`
+	Tokens   int64   `json:"tokens"`
+	Archived bool    `json:"archived"`
 	// Entries is nil in list responses and populated when one is opened.
 	Entries []Entry `json:"entries"`
 	// How much of the transcript each provider has already been told, so a
