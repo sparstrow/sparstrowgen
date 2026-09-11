@@ -97,10 +97,10 @@ func TestAProviderThatHasNotSeenTheConversationIsCaughtUp(t *testing.T) {
 	d.send(protocol.DaemonMessage{
 		Type: protocol.DaemonDone, TurnID: first.TurnID, Full: "noted", Tokens: 5,
 	})
+	// Waiting for the entry is enough: the seen-marker is written in the same
+	// transaction, so there is no gap to slip into. It used to need a separate
+	// wait, which is how G-18 was found.
 	r.awaitEntry(c.ID, first.EntryID, func(e protocol.Entry) bool { return e.Text != "" })
-	// Wait for the seen-marker, not just the text: dropping sessions in the gap
-	// between the two would be silently undone (docs/KnownGaps.md G-18).
-	r.awaitSeen(c.ID, "claude")
 
 	// The SAME provider, with its session dropped — which is what moving a
 	// conversation to another folder does, because claude keys sessions by
@@ -182,3 +182,58 @@ func TestStoppingATurnAsksTheDaemonAndWaitsForIt(t *testing.T) {
 		t.Errorf("second stop: %s, want 409", res.Status)
 	}
 }
+
+// B-10. A failure used to be written from the deltas the server had accumulated,
+// which is empty on a provider that does not stream — so codex losing a turn
+// lost everything it had produced, silently. The daemon recovers whole messages
+// from the stream it parsed, and on those providers that is the only copy.
+func TestAFailedTurnKeepsTextFromAProviderThatDoesNotStream(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("codex")
+
+	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
+		"text": "something long", "provider": "codex",
+		"model": protocol.Model{ID: "gpt", Label: "GPT"},
+	})
+	turn := d.nextTurn()
+
+	// No deltas at all — that is what "does not stream" means. The whole answer
+	// so far arrives with the failure.
+	d.send(protocol.DaemonMessage{
+		Type: protocol.DaemonFailed, TurnID: turn.TurnID,
+		Full:  "I had got this far before it broke",
+		Error: "codex stopped responding",
+	})
+
+	got := r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Failure != "" })
+	if got.Text != "I had got this far before it broke" {
+		t.Errorf("text = %q, want what the parser recovered — there were no deltas to fall back on", got.Text)
+	}
+}
+
+// And a failure with nothing to show keeps the deltas that did arrive, rather
+// than blanking them because the daemon sent no Full.
+func TestAFailedTurnStillFallsBackToTheDeltasItStreamed(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("claude")
+
+	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
+		"text": "go", "provider": "claude",
+		"model": protocol.Model{ID: "m1", Label: "M One"},
+	})
+	turn := d.nextTurn()
+	d.send(protocol.DaemonMessage{
+		Type: protocol.DaemonDelta, TurnID: turn.TurnID, Text: "streamed this much",
+	})
+	d.send(protocol.DaemonMessage{
+		Type: protocol.DaemonFailed, TurnID: turn.TurnID, Error: "died",
+	})
+
+	got := r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Failure != "" })
+	if got.Text != "streamed this much" {
+		t.Errorf("text = %q, want the deltas kept", got.Text)
+	}
+}
+

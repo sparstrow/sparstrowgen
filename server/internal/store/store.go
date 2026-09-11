@@ -463,25 +463,87 @@ func (s *Store) AppendDelta(ctx context.Context, entryID, text string) error {
 	return err
 }
 
-// FinishAgent closes out a turn, however it ended.
+// TurnResult is everything a finished turn has to record. A struct rather than
+// nine positional arguments, most of which are int64 or string and would be
+// silently swappable.
+type TurnResult struct {
+	ConversationID string
+	EntryID        string
+	Provider       string
+	Text           string
+	Tokens         int64
+	SpendTicks     int64
+	// Failure and Stopped are not alternatives: a CLI killed mid-answer often
+	// complains on its way out, so both can be set. The surface leads with the
+	// stop, because the complaint is a consequence of it rather than a reason.
+	Failure string
+	Stopped bool
+}
+
+// FinishTurn closes a turn out — the entry is completed AND the provider is
+// marked as having seen the transcript up to and including its own reply — in
+// one transaction.
 //
-// stopped and failure are not alternatives: a CLI killed mid-answer often
-// complains on its way out, so a stopped turn can carry an exec error too. Both
-// are recorded and the surface decides which to lead with.
-func (s *Store) FinishAgent(ctx context.Context, entryID, text string, tokens, spendTicks int64, failure string, stopped bool) (protocol.Entry, error) {
-	uid, err := parseUUID(entryID)
+// The atomicity is the point, and it was a real hazard as two statements
+// (docs/KnownGaps.md G-18). Anything dropping provider sessions in the gap
+// between them had its deletion silently undone by the marker that followed;
+// moving a conversation to another folder does exactly that, and the next turn
+// then ran with no history at all — which is B-7's symptom, an agent answering
+// confidently about a conversation it was never told.
+//
+// Marking seen is right for every ending, not just a successful one. A stopped
+// or failed turn still means the CLI received the prompt and holds the exchange
+// in its own session, so replaying it again would be telling it something it
+// already knows.
+func (s *Store) FinishTurn(ctx context.Context, r TurnResult) (protocol.Entry, error) {
+	entryID, err := parseUUID(r.EntryID)
 	if err != nil {
 		return protocol.Entry{}, err
 	}
-	var failPtr *string
-	if failure != "" {
-		failPtr = &failure
+	convID, err := parseUUID(r.ConversationID)
+	if err != nil {
+		return protocol.Entry{}, err
 	}
-	row, err := s.q.FinishAgentEntry(ctx, db.FinishAgentEntryParams{
-		ID: uid, Body: text, Tokens: &tokens, SpendTicks: &spendTicks,
-		Failure: failPtr, Stopped: stopped,
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return protocol.Entry{}, err
+	}
+	defer tx.Rollback(ctx)
+	q := s.q.WithTx(tx)
+
+	var failPtr *string
+	if r.Failure != "" {
+		failPtr = &r.Failure
+	}
+	row, err := q.FinishAgentEntry(ctx, db.FinishAgentEntryParams{
+		ID: entryID, Body: r.Text, Tokens: &r.Tokens, SpendTicks: &r.SpendTicks,
+		Failure: failPtr, Stopped: r.Stopped,
 	})
 	if err != nil {
+		return protocol.Entry{}, err
+	}
+
+	// Read the last seq inside the same transaction, so the marker cannot be
+	// set from a transcript that has since grown.
+	rows, err := q.ListEntries(ctx, convID)
+	if err != nil {
+		return protocol.Entry{}, err
+	}
+	var seq int32
+	if len(rows) > 0 {
+		seq = rows[len(rows)-1].Seq
+	}
+	// No session id: this never invents one, it only moves the seen pointer. The
+	// id was pinned when the turn started, so that a turn which later dies
+	// leaves a reusable session rather than an orphaned one.
+	if _, err := q.UpsertProviderSeen(ctx, db.UpsertProviderSeenParams{
+		ConversationID: convID, Provider: r.Provider, SeenSeq: seq,
+	}); err != nil {
+		return protocol.Entry{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return protocol.Entry{}, err
 	}
 	return toEntry(row), nil

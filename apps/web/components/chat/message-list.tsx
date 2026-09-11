@@ -99,9 +99,14 @@ function AgentTurn({
           <div className="text-sm">
             <p className="font-medium text-destructive">Turn did not finish</p>
             <p className="mt-0.5 text-muted-foreground">{failure}</p>
-            <p className="mt-1 text-muted-foreground">
-              What arrived before it stopped is kept above.
-            </p>
+            {/* Only when there is something above to mean. A turn that broke
+                before producing anything used to be told its output had been
+                kept, which is a promise about an empty space. */}
+            {text && (
+              <p className="mt-1 text-muted-foreground">
+                What arrived before it stopped is kept above.
+              </p>
+            )}
           </div>
         </div>
       )}

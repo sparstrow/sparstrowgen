@@ -151,27 +151,6 @@ func (r *rig) awaitEntry(conversationID, entryID string, done func(protocol.Entr
 	return last
 }
 
-// awaitSeen waits until a provider has been marked as having seen the whole
-// transcript.
-//
-// A finished turn is NOT that moment. finishTurn writes the entry, broadcasts
-// it, and calls MarkSeen afterwards — so a test that acts as soon as the text
-// lands can slip into the gap between them and have its work undone by the
-// trailing MarkSeen (docs/KnownGaps.md G-18). Waiting on the marker itself is
-// waiting on the thing that actually matters.
-func (r *rig) awaitSeen(conversationID, provider string) {
-	r.t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		unseen, err := r.store.Unseen(context.Background(), conversationID, provider)
-		if err == nil && len(unseen) == 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	r.t.Fatalf("%s was never marked as having seen the conversation", provider)
-}
-
 // ---------------------------------------------------------------------------
 // a machine that is not there
 // ---------------------------------------------------------------------------

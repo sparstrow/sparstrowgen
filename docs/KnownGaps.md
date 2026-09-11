@@ -176,29 +176,3 @@ wrong rather than the outcome.
 - **Clears when:** either the daemon is only ever run under an init (worth asserting when it is
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
-
-## G-18 — A turn's completion and its seen-marker are not written atomically
-
-**Kind:** caveat
-**Raised:** 2026-09-11, while a new API test failed intermittently under the race detector
-
-`finishTurn` writes the finished entry, broadcasts it, and only then calls `MarkSeen` to record that
-the provider has seen everything including its own reply. Those are separate statements, and
-anything that deletes provider sessions in the gap between them has its deletion undone by the
-`MarkSeen` that follows.
-
-Found by a test rather than by use: `TestAProviderThatHasNotSeenTheConversationIsCaughtUp` moved a
-conversation's folder as soon as the reply landed, and `SetFolder`'s session-drop was overwritten by
-the trailing `MarkSeen`, so the next turn replayed nothing. The test now waits for the marker before
-moving, because the race it was hitting is not the one it exists to test.
-
-**Not reachable by hand.** The window is the few hundred microseconds between two statements, and
-hitting it needs a folder move inside that gap. It is recorded because a *program* can hit it, and
-the obvious next features are programs: a retry that re-sends immediately ([[L-13]]), or anything
-that moves a conversation automatically.
-
-- **If wrong:** one turn runs without the history it should have had — B-7's symptom, an agent
-  answering confidently with no context and nothing on screen saying so.
-- **Clears when:** `FinishAgent` and `MarkSeen` become one transaction, which is a small change to
-  `store` and the right one whenever that file is next open.
-

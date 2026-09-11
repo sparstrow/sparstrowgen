@@ -441,7 +441,16 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 	case protocol.DaemonFailed:
 		// Whatever arrived before it stopped is kept: a partial answer is still
 		// worth reading, and deleting it would hide what went wrong.
-		a.finishTurn(ctx, msg.TurnID, t.Streamed, 0, 0, msg.Error, false)
+		//
+		// The daemon's text wins over the deltas we accumulated. A provider that
+		// does not stream sends no deltas at all, so t.Streamed is empty and the
+		// parser's recovered messages are the only copy there is — preferring
+		// the wrong one silently threw away real output (docs/Bugs.md B-10).
+		text := msg.Full
+		if text == "" {
+			text = t.Streamed
+		}
+		a.finishTurn(ctx, msg.TurnID, text, 0, 0, msg.Error, false)
 
 	case protocol.DaemonStopped:
 		// No failure text. The turn ended because it was asked to, and any error
@@ -504,7 +513,19 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		return
 	}
 
-	entry, err := a.store.FinishAgent(ctx, t.EntryID, text, tokens, spendTicks, failure, stopped)
+	// One transaction: the entry and the provider's seen-marker go together, so
+	// nothing can drop the session in between and have the drop undone
+	// (docs/KnownGaps.md G-18).
+	entry, err := a.store.FinishTurn(ctx, store.TurnResult{
+		ConversationID: t.ConversationID,
+		EntryID:        t.EntryID,
+		Provider:       t.Provider,
+		Text:           text,
+		Tokens:         tokens,
+		SpendTicks:     spendTicks,
+		Failure:        failure,
+		Stopped:        stopped,
+	})
 	if err != nil {
 		a.log.Error("finish entry", "err", err)
 		return
@@ -521,12 +542,4 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		}
 	}
 
-	// The provider has now seen everything up to and including its own reply,
-	// so a switch away and back replays only what comes after this point. True
-	// of a stopped turn too: the CLI received the prompt and its own session
-	// holds the exchange, so replaying it again would be telling it something
-	// it already knows.
-	if seq, err := a.store.LastSeq(ctx, t.ConversationID); err == nil {
-		_ = a.store.MarkSeen(ctx, t.ConversationID, t.Provider, "", seq)
-	}
 }

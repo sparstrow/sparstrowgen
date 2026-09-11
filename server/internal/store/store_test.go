@@ -212,7 +212,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// codex reports tokens but never currency.
-	done, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 0, "", false)
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: placeholder.ID, Provider: "claude", Text: "answer", Tokens: 1234})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// claude does, and it should come through as real dollars.
-	withCost, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 363094500, "", false)
+	withCost, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: placeholder.ID, Provider: "claude", Text: "answer", Tokens: 1234, SpendTicks: 363094500})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := s.FinishAgent(ctx, e.ID, "got this far", 0, 0, "connection lost", false)
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "got this far", Failure: "connection lost"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestStoppedTurnIsNotAFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := s.FinishAgent(ctx, e.ID, "half an answer", 0, 0, "", true)
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "half an answer", Stopped: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,12 +317,89 @@ func TestATurnCanBeStoppedAndAlsoReportAFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := s.FinishAgent(ctx, e.ID, "", 0, 0, "signal: killed", true)
+	done, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Failure: "signal: killed", Stopped: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !done.Stopped || done.Failure != "signal: killed" {
 		t.Errorf("stopped = %v, failure = %q; want both kept", done.Stopped, done.Failure)
+	}
+}
+
+// Finishing a turn also records that the provider has seen the whole
+// transcript, and the two are one write.
+//
+// As two statements this was a real hazard (docs/KnownGaps.md G-18): anything
+// dropping the provider's session in the gap had the drop undone by the marker
+// that followed, and the next turn ran with no history at all.
+func TestFinishingATurnMarksTheProviderSeenInTheSameBreath(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, err := s.AppendUser(ctx, c.ID, "a question"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err := s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) == 0 {
+		t.Fatal("a provider that has been told nothing should have everything unseen")
+	}
+
+	if _, err := s.FinishTurn(ctx, TurnResult{
+		ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "an answer", Tokens: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err = s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) != 0 {
+		t.Errorf("%d entries still unseen; finishing a turn must mark the provider caught up", len(unseen))
+	}
+}
+
+// The consequence that matters: once the session is dropped, nothing re-marks it
+// as seen behind our back. This is the sequence that produced B-7.
+func TestDroppingASessionAfterATurnIsNotUndone(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, err := s.AppendUser(ctx, c.ID, "a question"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FinishTurn(ctx, TurnResult{
+		ConversationID: c.ID, EntryID: e.ID, Provider: "claude", Text: "an answer", Tokens: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Moving the conversation drops provider sessions, because a session built
+	// in another directory is reasoning about the wrong tree.
+	if _, err := s.SetFolder(ctx, c.ID, "/projects/elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+
+	unseen, err := s.Unseen(ctx, c.ID, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) == 0 {
+		t.Error("the session drop was undone: the next turn would run with no history")
 	}
 }
 

@@ -247,9 +247,22 @@ cannot end. The fix is small (finish every in-flight turn when the daemon goes, 
 saying the machine went away) and deliberately not bundled into L-8, which is already a protocol
 change, a migration and a process-tree change.
 
-**Also worth doing at the same time:** a turn that outlives its own plausible runtime with no
-daemon message at all. There is no timeout anywhere in the path today. **Still true** — the fix
-below covers the machine going away, not a machine that is present and silent.
+**The second half, fixed 2026-09-11:** a machine that is present but silent. This was the part left
+open, and it is not theoretical — a nested `claude -p` hanging forever is already recorded in D-016,
+killed by hand at 120s. The daemon now runs an inactivity watchdog per turn: `TURN_IDLE_TIMEOUT`,
+15 minutes by default.
+
+**An inactivity watchdog, not a wall-clock cap**, and the distinction is the whole design. Multica
+has a ticket for getting this wrong (MUL-3064): a total timeout kills a session that is working
+perfectly well and merely taking a while, which on a coding agent is most real tasks. A turn
+streaming for an hour is fine; a turn silent for fifteen minutes is not.
+
+**Why fifteen and not three.** The asymmetry favours patience. A false positive throws away real
+work and the quota spent earning it; a false negative just means waiting longer for a net that only
+matters when nobody is watching — and since the stop button shipped, somebody who *is* watching ends
+a turn in one click. The budget is also tightest on codex, which emits nothing between its session
+id and its finished answer, so for codex this is a cap on the whole turn rather than a silence
+detector. That is the honest limit of what the CLI tells us.
 
 **Fixed 2026-09-11, on both sides of the socket.**
 
@@ -298,4 +311,36 @@ the composer is not something the earlier rounds happened to do.
 `EventConversation` that `patchConversation` already sends.
 `TestSendingToADifferentProviderAnnouncesTheChange` watches a real browser socket and was confirmed
 to fail on the old code ("no conversation event arrived").
+
+## B-10 — A failed turn threw away everything a non-streaming provider had said
+
+**Found:** 2026-09-11, watching the daemon log while verifying the idle watchdog **Status:** fixed 2026-09-11
+**Repro:** Make a `codex` turn fail or time out after it has produced some output.
+**Expected / Actual:** what it had written is kept, as it is for a stopped turn / the entry is
+stored empty and the output is gone for good.
+
+**Found by a number, not by the screen.** The UI showed a plausible "Turn did not finish" box and
+nothing looked wrong; the daemon log said `chars=425`. The turn had produced 425 characters and
+none of them reached the transcript.
+
+`DaemonFailed` carried only an error message, so `handleDaemonMessage` wrote the failure from
+`t.Streamed` — the deltas the server had accumulated. That is the right source for `claude` and
+`agy`, and **empty for `codex`, which emits no deltas at all**. The text existed the whole time: the
+parser had recovered it into `result.Text`, and the daemon simply never sent it.
+
+The same shape as B-5 and B-6 — a provider difference that is invisible until you look at the one
+provider that behaves differently — and the third time `codex` not streaming has cost something.
+
+**Fixed** by giving `DaemonFailed` a `Full` field like `DaemonDone` and `DaemonStopped` already
+have, and preferring it over the accumulated deltas. Both directions are tested:
+`TestAFailedTurnKeepsTextFromAProviderThatDoesNotStream` (confirmed to fail on the old code with
+`text = ""`) and `TestAFailedTurnStillFallsBackToTheDeltasItStreamed`, so the fix cannot regress the
+streaming case it replaced.
+
+**Predates the watchdog** — any failed codex turn lost its output this way. The watchdog only made
+it easy to produce on demand.
+
+**Also fixed in the same change:** the failure box told every broken turn that "what arrived before
+it stopped is kept above", including turns where nothing had arrived and there was nothing above.
+It now says that only when there is something to mean.
 

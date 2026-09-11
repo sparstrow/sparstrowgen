@@ -237,9 +237,11 @@ the design from the first draft, not retrofitted when codex is wired up.
   had already arrived is kept and the turn is recorded as stopped rather than failed.
 - **A turn always ends.** Verified 2026-09-11. It ends because the provider finished, because it
   failed, because the owner stopped it, or because the machine disconnected — and in every case the
-  entry is closed out, the partial text kept, and the composer released. There is one exception
-  still open, recorded as the tail of B-8: a machine that stays connected but goes permanently
-  silent has no timeout, so that turn does hang.
+  entry is closed out, the partial text kept, and the composer released. A machine that stays
+  connected but goes silent is covered too, by an inactivity watchdog in the daemon — 15 minutes of
+  no output at all, tunable with `TURN_IDLE_TIMEOUT`. Note what that does NOT promise: it is
+  silence, not duration, so a turn is never ended for taking a long time while it is still
+  producing.
 - **Partial output survives a stop on `codex` too, despite it not streaming.** Verified 2026-09-11,
   and it corrects a reasonable-sounding assumption: `Streams: false` means codex emits no
   incremental *deltas*, NOT that it produces nothing until the end. It completes whole

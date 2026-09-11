@@ -436,3 +436,32 @@ something going wrong, a stop is someone deciding they had seen enough. Renderin
 first puts a red alert box around a deliberate act. The surface leads with the stop when both are
 set, because a CLI's complaint on its way out is a consequence of the stop, not a reason for it.
 
+## D-023 — A turn is bounded by silence, not by duration
+
+**Decided:** 2026-09-11, closing the second half of B-8
+
+A turn is ended when it has produced **nothing** for `TURN_IDLE_TIMEOUT` (default 15 minutes), not
+when it has run for some total length of time.
+
+**Rejected: a wall-clock cap per turn.** It kills a session that is working perfectly well and
+merely taking a while, which on a coding agent is most real tasks. [Multica](../Reference/multica-main)
+has a ticket for exactly this (MUL-3064) and ended up with the same answer: liveness belongs to an
+inactivity watchdog, and a run that keeps emitting events is never killed for running long.
+
+**Rejected: no timeout at all**, which is what we had. A CLI that wedges produces nothing and never
+exits, and the turn then never ends — the composer stays locked and the indicator ticks against
+nothing, through a refresh. Not hypothetical: a nested `claude -p` hanging indefinitely is already
+recorded in D-016, killed by hand at 120 seconds.
+
+**Why the budget is generous.** The asymmetry favours patience. A false positive throws away real
+work and the quota spent earning it; a false negative only means waiting longer for a safety net
+that exists for when nobody is watching — and since the stop button shipped (L-8), somebody who *is*
+watching ends a turn in one click. Fifteen minutes is also set by the worst case rather than the
+typical one: `codex` emits nothing between its session id and its finished answer, so for codex this
+is effectively a cap on the whole turn. That is the limit of what the CLI tells us, and the number
+is chosen to sit well clear of it.
+
+**Ordering, when several things are true at once.** Stopped beats went-quiet beats the process
+error, because a killed CLI's complaint on its way out is a consequence of the kill rather than a
+reason for it, and the transcript should carry the truest account of why a turn ended.
+
