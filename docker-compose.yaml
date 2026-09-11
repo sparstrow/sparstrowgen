@@ -48,11 +48,12 @@ services:
       # prefix. Never set this to false on a deployed instance.
       - SESSION_SECURE=true
       - ADDR=0.0.0.0:8080
-    # Declaring this makes Coolify route a domain to this service's port 8080.
-    # Set the actual domain in the Coolify UI; it must match WEB_ORIGIN's
-    # sibling, e.g. https://api.sparstrowgen.example.com
-    labels:
-      - SERVICE_FQDN_SERVER_8080
+      # Coolify's convention for "expose this service, on this port". It is an
+      # ENVIRONMENT VARIABLE, not a label — as a label it is inert and no route
+      # is created, which is a failure that looks like the app being down.
+      # Empty value: the domain itself is set in the Coolify UI
+      # (https://api.sparstrow.com), and a value here would be a URL path.
+      - SERVICE_FQDN_SERVER_8080=
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -80,8 +81,10 @@ services:
         # restart — which is why it is an argument here and not an environment
         # variable below.
         NEXT_PUBLIC_API_URL: ${API_ORIGIN:?the full https:// origin of the API}
-    labels:
-      - SERVICE_FQDN_WEB_3000
+    environment:
+      # As above: an environment variable, not a label. Domain set in the UI
+      # (https://app.sparstrow.com).
+      - SERVICE_FQDN_WEB_3000=
     depends_on:
       - server
     restart: unless-stopped

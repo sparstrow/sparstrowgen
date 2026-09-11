@@ -23,10 +23,10 @@ your PC**, which is why no port forwarding or VPN is involved.
 
 ### Two domains, not one
 
-`app.example.com` for the web app and `api.example.com` for the API.
+`app.sparstrow.com` for the web app and `api.sparstrow.com` for the API.
 
 This looks like it would break the session cookie, and it does not: `SameSite` is
-scoped to the **site** (`example.com`), not the origin, so the cookie is sent on
+scoped to the **site** (`sparstrow.com`), not the origin, so the cookie is sent on
 requests from the app subdomain to the API subdomain. CORS is already configured
 to answer exactly one origin with credentials allowed.
 
@@ -40,8 +40,8 @@ getting that wrong produces 404s that look like application bugs.
 
 - The repository is connected to Coolify (you have not done this yet).
 - The Postgres resource exists in the environment you are deploying to. ✅
-- Two DNS records, both A records pointing at the VPS IP:
-  `app.example.com` and `api.example.com` — substitute your real domain.
+- Two A records pointing at the VPS IP: `app.sparstrow.com` and
+  `api.sparstrow.com`.
 
 ---
 
@@ -53,8 +53,20 @@ On your own machine:
 make hashpw
 ```
 
-It asks twice, hides what you type, and prints one `$argon2id$v=19$...` line.
-**That line is the value; the password itself is never stored anywhere.**
+It asks twice, hides what you type, and prints **two** forms of the same hash.
+
+**Use the second one — the `b64:...` line — in Coolify.** This is not a style
+preference. An argon2id hash is full of `$`, Coolify deploys through Docker
+Compose, and Compose interpolates `$` in env files: the raw hash arrives at the
+container as `=19=19456,t=2,p=1+TsiHSIkx...` with `$argon2id`, `$v` and `$m`
+replaced by undefined variables. The server then refuses every password,
+correctly, for a reason nowhere near the symptom. This was found by running the
+real stack, not by reading it.
+
+The raw `$argon2id$...` form is for a local shell, where nothing eats it. The
+server accepts either.
+
+**The password itself is never stored anywhere** — only the hash.
 
 Keep the password somewhere you will find it — there is no reset flow, and
 changing it means editing the variable below and redeploying.
@@ -112,10 +124,10 @@ itself, rather than producing a container that restarts forever.
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | the internal URL from step 3 |
-| `OWNER_PASSWORD_HASH` | the `$argon2id$...` line from step 1 |
+| `OWNER_PASSWORD_HASH` | the **`b64:...`** line from step 1, not the `$argon2id$` one |
 | `DAEMON_TOKEN` | the random string from step 2 |
-| `WEB_ORIGIN` | `https://app.example.com` |
-| `API_ORIGIN` | `https://api.example.com` |
+| `WEB_ORIGIN` | `https://app.sparstrow.com` |
+| `API_ORIGIN` | `https://api.sparstrow.com` |
 
 > Mark `OWNER_PASSWORD_HASH` and `DAEMON_TOKEN` as secrets / build-time-hidden if
 > your Coolify version offers it.
@@ -131,8 +143,8 @@ and `SERVICE_FQDN_SERVER_8080` so they appear):
 
 | Service | Domain |
 |---|---|
-| `web` | `https://app.example.com` |
-| `server` | `https://api.example.com` |
+| `web` | `https://app.sparstrow.com` |
+| `server` | `https://api.sparstrow.com` |
 
 **These must match `WEB_ORIGIN` and `API_ORIGIN` exactly** — scheme included, no
 trailing slash. A mismatch is not a vague failure: the API refuses the browser's
@@ -140,28 +152,30 @@ requests by CORS and refuses its websocket, so the app loads and nothing in it
 works.
 
 Deploy. Expect, in order: `migrate` runs and exits 0, `server` becomes healthy,
-`web` starts.
+`web` starts. That ordering was verified by running this exact compose file
+locally against a real Postgres, so if it does not happen the cause is Coolify's
+lifecycle rather than the file — see [`KnownGaps.md`](../KnownGaps.md) G-19.
 
 Coolify requests the TLS certificates automatically once DNS resolves.
 
 ### Checking it
 
 ```bash
-curl https://api.example.com/api/health
+curl https://api.sparstrow.com/api/health
 ```
 
 `{"ok":true}` means the server is up. It deliberately reports nothing else —
 whether your machine is connected is not something an unauthenticated caller
 gets told.
 
-Then open `https://app.example.com` and sign in with the password from step 1.
+Then open `https://app.sparstrow.com` and sign in with the password from step 1.
 
 ## 7. Point your daemon at it
 
 On your own machine, set these permanently:
 
 ```powershell
-setx SERVER_WS "wss://api.example.com/daemon"
+setx SERVER_WS "wss://api.sparstrow.com/daemon"
 setx DAEMON_TOKEN "<the same string from step 2>"
 ```
 
@@ -182,6 +196,8 @@ not look like a network problem.
 | `migrate` fails on hostname resolution | Step 3's gotcha — predefined network not enabled, or wrong container name. |
 | App loads, everything inside it fails | `WEB_ORIGIN` does not exactly match the web domain. |
 | Sign-in succeeds, next request says signed out | `SESSION_SECURE` is not `true`, or the site is not on HTTPS. The `__Host-` cookie prefix requires both. |
+| Every password refused, log says the hash cannot be read | The raw `$argon2id$` form was pasted instead of the `b64:` one, and `$`-interpolation ate it. |
+| `server` restarts forever after a deploy | Read its log. It names the variable it is unhappy with on the first line. |
 | Providers show as unavailable | The daemon is not connected. Check step 7 and your machine. |
 
 ## What this deployment does not have yet

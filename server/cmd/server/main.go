@@ -140,7 +140,9 @@ cost of the strictness is one line in a file, not a branch in the program.
 */
 func authConfig(log *slog.Logger) api.Config {
 	cfg := api.Config{
-		PasswordHash: os.Getenv("OWNER_PASSWORD_HASH"),
+		// Accepts either the raw PHC string or its `b64:` form, because the
+		// raw one does not survive Docker Compose env interpolation.
+		PasswordHash: auth.NormaliseHash(os.Getenv("OWNER_PASSWORD_HASH")),
 		DaemonToken:  os.Getenv("DAEMON_TOKEN"),
 		Origin:       os.Getenv("WEB_ORIGIN"),
 		// Secure unless explicitly turned off, so forgetting it is the safe
@@ -236,7 +238,12 @@ func hashPassword(log *slog.Logger) {
 		log.Error("could not hash the password", "err", err)
 		os.Exit(1)
 	}
-	// To stdout, alone, so it can be piped or copied. Everything else this
-	// command says goes to stderr.
+	// Both forms, with the safe one last so it is what a terminal leaves on
+	// screen. Everything explanatory goes to stderr, so piping this command
+	// still yields something usable.
+	fmt.Fprintln(os.Stderr, "\nFor a local shell or the Makefile:")
 	fmt.Println(hash)
+	fmt.Fprintln(os.Stderr, "\nFor Coolify, or anything else that reads env files —")
+	fmt.Fprintln(os.Stderr, "the raw hash above is eaten by $-interpolation, this one is not:")
+	fmt.Println(auth.EncodeHash(hash))
 }

@@ -159,3 +159,40 @@ func TestOurOwnHashPassesTheBounds(t *testing.T) {
 		t.Fatalf("the bounds rejected our own hash: ok=%v err=%v", ok, err)
 	}
 }
+
+// The deployment hazard this exists for, caught by running the real stack: an
+// argon2id hash is full of dollar signs, Docker Compose interpolates `$` in env
+// files, and Coolify uses Docker Compose. `$argon2id$v=19$m=19456,...` arrived
+// at the container as `=19=19456,t=2,p=1+TsiHSIkxFHoxvFtE6g` — every `$name`
+// replaced by an undefined variable — and the server refused every password,
+// correctly, for a reason nowhere near the symptom.
+func TestAHashSurvivesBeingCarriedThroughAnEnvFile(t *testing.T) {
+	hash, err := HashPassword("the real password")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	safe := EncodeHash(hash)
+	if strings.Contains(safe, "$") {
+		t.Fatalf("the safe form still contains a dollar sign: %q", safe)
+	}
+	if got := NormaliseHash(safe); got != hash {
+		t.Errorf("round trip lost the hash:\n got %q\nwant %q", got, hash)
+	}
+	if ok, err := VerifyPassword(NormaliseHash(safe), "the real password"); err != nil || !ok {
+		t.Errorf("the decoded hash did not verify its password: ok=%v err=%v", ok, err)
+	}
+
+	// A raw hash must keep working untouched — local development passes one
+	// straight through, and silently changing it would be worse than the bug.
+	if got := NormaliseHash(hash); got != hash {
+		t.Errorf("a raw hash was altered: %q", got)
+	}
+
+	// Nonsense after the prefix is left alone, so the existing "not a hash I
+	// can read" path reports it rather than a second error for the same thing.
+	broken := B64Prefix + "not base64 at all!!"
+	if ok, _ := VerifyPassword(NormaliseHash(broken), "anything"); ok {
+		t.Error("a broken b64 hash verified something")
+	}
+}
