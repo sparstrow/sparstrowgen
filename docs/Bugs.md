@@ -64,7 +64,7 @@ all rendered, six syntax tokens highlighted, no raw fences left on screen.
 
 ## B-3 — Every conversation runs in the server's working directory
 
-**Found:** 2026-09-10, reviewing what is left to build **Status:** open
+**Found:** 2026-09-10, reviewing what is left to build **Status:** fixed 2026-09-10
 **Repro:** Create a conversation. Its folder is whatever directory the server process was started
 in, and there is no way to change it.
 **Expected / Actual:** The owner picks the project a conversation is about (spec US1: "in a

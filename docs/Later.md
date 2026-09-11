@@ -110,8 +110,11 @@ view that the web app and something else both render.
 
 Once a message is sent there is no way to call it back. An agent that misreads the question runs to
 completion — and on a real task that is minutes, not seconds, plus whatever it spends getting there.
-The daemon already holds a cancellable context per turn, so the mechanism exists; what is missing is
-a way to ask for it and a decision about what the transcript should then say.
+Checked 2026-09-11, and an earlier note here was wrong: the daemon does **not** hold a per-turn
+cancellable context. `runTurn` is handed the connection context (`cmd/daemon/main.go:127`), so the
+only thing that stops a CLI today is the daemon disconnecting — which stops every turn at once.
+Missing: a cancel registry keyed by turn, a message asking for it, and a decision about what the
+transcript should then say.
 
 **Unblocks when:** the owner sends something he wants to take back, or a turn runs long enough that
 waiting it out is worse than losing it.
