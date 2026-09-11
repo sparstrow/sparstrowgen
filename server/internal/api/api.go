@@ -300,10 +300,17 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := a.store.SetProvider(ctx, id, body.Provider, body.Model); err != nil {
+	// Broadcast it. The conversation really is on the new provider after this,
+	// but without saying so the browser keeps the copy it fetched before the
+	// send and the composer snaps back to the old provider (docs/Bugs.md B-9).
+	switched, err := a.store.SetProvider(ctx, id, body.Provider, body.Model)
+	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
+	a.hub.Broadcast(protocol.ClientEvent{
+		Type: protocol.EventConversation, Conversation: &switched,
+	})
 
 	userEntry, err := a.store.AppendUser(ctx, id, body.Text)
 	if err != nil {
@@ -445,6 +452,46 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 			text = t.Streamed
 		}
 		a.finishTurn(ctx, msg.TurnID, text, msg.Tokens, msg.SpendTicks, "", true)
+	}
+}
+
+// abandonTurns closes out every turn still in flight, because the machine
+// running them has gone.
+//
+// Only a message carrying a turn id ever finished a turn, and the process that
+// would have sent one no longer exists — so without this the agent entry stays
+// an empty placeholder, the composer stays locked and the working indicator
+// ticks forever, including after a refresh, since the placeholder is a real row
+// (docs/Bugs.md B-8).
+//
+// Called only when the disconnecting socket was still the current daemon. A
+// daemon that reconnected has already replaced it, and its turns are somebody
+// else's.
+func (a *API) abandonTurns(reason string) {
+	a.mu.Lock()
+	ids := make([]string, 0, len(a.turns))
+	for id := range a.turns {
+		ids = append(ids, id)
+	}
+	a.mu.Unlock()
+	if len(ids) == 0 {
+		return
+	}
+
+	a.log.Warn("machine went away mid-turn", "turns", len(ids))
+	for _, id := range ids {
+		// Text that arrived before the machine went is kept, for the same
+		// reason a failed turn keeps its partial answer: it is still worth
+		// reading, and deleting it would hide how far the turn got. finishTurn
+		// re-reads the turn under the lock and does nothing if it has since
+		// finished on its own.
+		a.mu.Lock()
+		t := a.turns[id]
+		a.mu.Unlock()
+		if t == nil {
+			continue
+		}
+		a.finishTurn(context.Background(), id, t.Streamed, 0, 0, reason, false)
 	}
 }
 

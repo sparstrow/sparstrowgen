@@ -7,7 +7,7 @@ GOOSE_DBSTRING ?= postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowg
 export GOOSE_DRIVER
 export GOOSE_DBSTRING
 
-.PHONY: help db migrate server daemon web build check test clean
+.PHONY: help db migrate server daemon web build check test test-linux clean
 
 help:
 	@echo "make db       - start Postgres in Docker"
@@ -16,6 +16,7 @@ help:
 	@echo "make daemon   - run the daemon (drives the agent CLIs)"
 	@echo "make web      - run the Next.js app on :3000"
 	@echo "make check    - typecheck, lint, vet and build everything"
+	@echo "make test-linux - the Go suite on Linux, under the race detector"
 	@echo ""
 	@echo "First run:  make db && make migrate"
 	@echo "Then, in three terminals: make server / make daemon / make web"
@@ -55,6 +56,31 @@ check:
 
 test:
 	cd server && go test ./...
+
+# The Go suite on Linux, with the race detector.
+#
+# Two things this machine cannot do itself, and both were open gaps until it
+# existed (G-15, G-16). The daemon only ever runs on Windows, so the process
+# GROUP half of stopping a turn — SIGTERM then SIGKILL to -pgid — had never
+# executed anywhere; and -race needs cgo, which needs a C compiler, and there is
+# no gcc on PATH here. A container has both.
+#
+# host.docker.internal reaches the Postgres that `make db` publishes on 5433.
+# Without it the store and api tests SKIP rather than fail, which would quietly
+# turn this into a much weaker check than it looks.
+#
+# --init is load-bearing, not decoration. Without it `go test` is PID 1, and PID
+# 1 in a container does not reap orphaned children — so a process the stop
+# correctly killed lingers as a zombie, and a zombie still answers kill(pid, 0)
+# as though it were alive. The tree tests then report a clean stop as
+# unconfirmed. A real Linux host has an init doing this, so the container needs
+# one to behave like the thing being tested for. See docs/KnownGaps.md G-17.
+test-linux:
+	docker run --rm --init \
+		-v "$(CURDIR)/server:/src" -w /src \
+		-e GOFLAGS=-buildvcs=false -e CGO_ENABLED=1 \
+		-e TEST_DATABASE_URL="postgres://sparstrowgen:sparstrowgen@host.docker.internal:5433/sparstrowgen?sslmode=disable" \
+		golang:1.27 go test ./... -race
 
 clean:
 	rm -rf bin

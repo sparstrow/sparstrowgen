@@ -152,47 +152,53 @@ message with nothing on screen to suggest it. Fixed in the same change that clos
 `claudeMessage.text()` now joins a message's own text blocks with a blank line as well, though that
 path is still unexercised — no capture we hold has two text blocks inside one message.
 
-## G-15 — The process-tree stop is proved on Windows only
+## G-17 — A confirmed-clean stop cannot tell a zombie from a live process
 
-**Kind:** unproved
-**Raised:** 2026-09-11, building the stop button (L-8)
+**Kind:** caveat
+**Raised:** 2026-09-11, running the process-tree tests on Linux for the first time (closing G-15)
 
-`server/internal/agent/tree_windows.go` is verified twice over: a unit test that captures a
-grandchild in the Job Object and confirms the tree empties, and a real `claude` turn that had
-spawned `bash -c 'sleep 180'` — after the stop, neither the CLI nor the bash process existed.
+`processTree.gone` asks `kill(-pgid, 0)` on Unix, which succeeds for any process in the group that
+still has a PID — **including one that has already exited and is waiting to be reaped**. A zombie is
+dead and holds nothing open, but it answers that question exactly as a running process does.
 
-`tree_other.go`, the process-group equivalent for everything else, **has never been run.** It
-compiles under `GOOS=linux` and that is the whole of the evidence. The daemon runs on the owner's
-Windows machine and nothing else has ever run one, so this is not currently reachable — but the
-server and daemon are one module, and the file exists so the module builds for the Coolify
-deployment the *server* is headed for.
+Normally invisible: an orphaned process is reparented to init, which reaps it immediately, so the
+zombie window is microseconds. It appeared the moment these tests ran in a container, where
+`go test` was PID 1 and PID 1 does not reap orphans — a stop that had genuinely killed everything
+reported "could not be confirmed clean" after 6.5 seconds, against 0.5 with an init present.
+`make test-linux` passes `--init` for exactly this reason.
 
-- **If wrong:** on a non-Windows daemon a stop would kill the CLI but possibly not its subprocesses,
-  which is the pre-D-021 behaviour rather than something newly broken. The Unix path also uses a
-  real SIGTERM→SIGKILL escalation that Windows has no equivalent of, so it is the *more* forgiving
-  of the two.
-- **Clears when:** a daemon runs on Linux or macOS and the grandchild test is run there. The test is
-  already written in the Windows-tagged file and would port almost unchanged — `cmd.exe /c ping`
-  becomes `sh -c 'sleep 60'`.
+**The kill is unaffected.** This is the confirmation, not the killing: nothing leaks, the report is
+wrong rather than the outcome.
 
-## G-16 — The concurrency in `launch` has not been through the race detector
+- **If wrong:** a spurious warning in the daemon log claiming a stop may have left something
+  running when it did not. Cosmetic on a normal host; noisy on a daemon deployed into a bare
+  container with no init, which is plausible given the server is headed for Coolify.
+- **Clears when:** either the daemon is only ever run under an init (worth asserting when it is
+  packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
+  Linux-only and would need a different answer on macOS, which is why it was not done now.
 
-**Kind:** unproved
-**Raised:** 2026-09-11, building the stop button (L-8)
+## G-18 — A turn's completion and its seen-marker are not written atomically
 
-`process.treeGone` is written by the terminator goroutine and read by whoever called `Wait`. That is
-safe by the channel close — the terminator's `defer close(p.terminated)` happens after the write,
-and `Wait` reads only after `<-p.terminated` — and the same channel is what stops `release` from
-invalidating the job handle while `terminate`/`gone` are still using it. **That is an argument, not
-a measurement.**
+**Kind:** caveat
+**Raised:** 2026-09-11, while a new API test failed intermittently under the race detector
 
-`go test -race` cannot run on this machine: the race detector needs cgo, and there is no gcc on
-PATH. Reported honestly rather than skipped quietly — the tests themselves pass, but they pass
-without the detector watching.
+`finishTurn` writes the finished entry, broadcasts it, and only then calls `MarkSeen` to record that
+the provider has seen everything including its own reply. Those are separate statements, and
+anything that deletes provider sessions in the gap between them has its deletion undone by the
+`MarkSeen` that follows.
 
-- **If wrong:** a torn read of a bool, which would at worst mislabel a stop as unconfirmed in a log
-  line. The handle-lifetime question is the one that would actually matter, and it is the one the
-  channel most directly guards.
-- **Clears when:** a C toolchain is available anywhere this repo is tested — `go test ./... -race`
-  in CI would do it — or the daemon is built on a machine that has one.
+Found by a test rather than by use: `TestAProviderThatHasNotSeenTheConversationIsCaughtUp` moved a
+conversation's folder as soon as the reply landed, and `SetFolder`'s session-drop was overwritten by
+the trailing `MarkSeen`, so the next turn replayed nothing. The test now waits for the marker before
+moving, because the race it was hitting is not the one it exists to test.
+
+**Not reachable by hand.** The window is the few hundred microseconds between two statements, and
+hitting it needs a folder move inside that gap. It is recorded because a *program* can hit it, and
+the obvious next features are programs: a retry that re-sends immediately ([[L-13]]), or anything
+that moves a conversation automatically.
+
+- **If wrong:** one turn runs without the history it should have had — B-7's symptom, an agent
+  answering confidently with no context and nothing on screen saying so.
+- **Clears when:** `FinishAgent` and `MarkSeen` become one transaction, which is a small change to
+  `store` and the right one whenever that file is next open.
 

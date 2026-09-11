@@ -69,3 +69,28 @@ func (r *runningTurns) end(id string) bool {
 	delete(r.asked, id)
 	return asked
 }
+
+// cancelAll stops every running turn, without recording any of them as
+// deliberately stopped.
+//
+// That distinction is the whole reason this is not just stop() in a loop: the
+// machine losing its connection is not the owner changing their mind, and the
+// transcript should not claim it was. Each turn still reports through its own
+// path — which will fail to send, because the socket is why we are here.
+//
+// The point is quota. The server has already given up on these turns
+// (docs/Bugs.md B-8), so anything still running is work nobody will ever
+// receive, and on an agent CLI that is real money.
+func (r *runningTurns) cancelAll() int {
+	r.mu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(r.cancel))
+	for _, c := range r.cancel {
+		cancels = append(cancels, c)
+	}
+	r.mu.Unlock()
+	// Outside the lock: each cancel wakes a turn that wants this mutex to end.
+	for _, c := range cancels {
+		c()
+	}
+	return len(cancels)
+}

@@ -349,15 +349,23 @@ func (s *Store) RecentFolders(ctx context.Context, limit int32) ([]string, error
 	return out, nil
 }
 
-func (s *Store) SetProvider(ctx context.Context, id, provider string, model protocol.Model) error {
+// SetProvider records which agent a conversation is now on.
+//
+// It returns the updated conversation because the caller has to broadcast it:
+// the browser's cached copy still names the old provider otherwise, and the
+// composer reads that (docs/Bugs.md B-9).
+func (s *Store) SetProvider(ctx context.Context, id, provider string, model protocol.Model) (protocol.Conversation, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return err
+		return protocol.Conversation{}, err
 	}
-	_, err = s.q.SetConversationProvider(ctx, db.SetConversationProviderParams{
+	row, err := s.q.SetConversationProvider(ctx, db.SetConversationProviderParams{
 		ID: uid, Provider: provider, ModelID: model.ID, ModelLabel: model.Label,
 	})
-	return err
+	if err != nil {
+		return protocol.Conversation{}, err
+	}
+	return toConversation(row), nil
 }
 
 // Delete removes the transcript for good. Foreign keys are kept and cascades

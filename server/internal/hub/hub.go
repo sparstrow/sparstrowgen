@@ -123,9 +123,19 @@ func (h *Hub) SetDaemon(c *websocket.Conn) {
 	h.Broadcast(protocol.ClientEvent{Type: protocol.EventDaemon, Online: true})
 }
 
-func (h *Hub) ClearDaemon(c *websocket.Conn) {
+// ClearDaemon drops a daemon connection, and reports whether it was still the
+// current one.
+//
+// The answer matters. A daemon that reconnects has already replaced this socket
+// through SetDaemon, and the old socket's read loop only notices afterwards —
+// so a late teardown from a superseded connection must not announce that the
+// machine has gone, and must not let its caller abandon the new daemon's work
+// (docs/Bugs.md B-8). This used to broadcast offline either way, which told
+// every browser the machine was unreachable moments after it reconnected.
+func (h *Hub) ClearDaemon(c *websocket.Conn) bool {
 	h.mu.Lock()
-	if h.daemon == c {
+	current := h.daemon == c
+	if current {
 		h.daemon = nil
 		// Availability is not knowledge we still have. Reporting the last
 		// providers we saw would claim the machine is answering when it is not.
@@ -133,8 +143,12 @@ func (h *Hub) ClearDaemon(c *websocket.Conn) {
 	}
 	h.mu.Unlock()
 	_ = c.Close()
+	if !current {
+		return false
+	}
 	h.Broadcast(protocol.ClientEvent{Type: protocol.EventDaemon, Online: false})
 	h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers()})
+	return true
 }
 
 func (h *Hub) DaemonOnline() bool {

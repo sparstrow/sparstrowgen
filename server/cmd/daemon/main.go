@@ -104,6 +104,16 @@ func (d *daemon) run(ctx context.Context, url string) error {
 	d.connectedOnce = true
 	d.log.Info("connected", "server", url)
 
+	// Nothing can be delivered once this socket is gone, and the server gives up
+	// on turns it can no longer hear about (docs/Bugs.md B-8). A CLI still
+	// running past that point is spending the owner's quota on an answer that
+	// has nowhere to go.
+	defer func() {
+		if n := d.turns.cancelAll(); n > 0 {
+			d.log.Warn("cancelled turns with nowhere to report", "turns", n)
+		}
+	}()
+
 	// Report what is installed before anything can be asked of us, so the
 	// surface never offers a provider this machine cannot run.
 	providers := agent.Detect(ctx)

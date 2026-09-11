@@ -19,6 +19,15 @@ var errDaemonOffline = errors.New("your machine is unreachable, so nothing new c
 // rather than exceptional: the button and the last delta race every time.
 var errTurnNotRunning = errors.New("that turn has already finished")
 
+// errMachineWentAway is written into the transcript of a turn that was running
+// when the daemon disconnected. Phrased as what happened rather than as a fault:
+// a laptop closing mid-answer is ordinary, and the turn can simply be sent
+// again.
+// Deliberately one clause. The surface already adds "what arrived before it
+// stopped is kept above" under every failure, and saying it here too printed
+// the same reassurance twice in one box.
+var errMachineWentAway = errors.New("your machine disconnected before this turn finished")
+
 func defaultFolder() string {
 	if wd, err := os.Getwd(); err == nil {
 		return wd
@@ -52,7 +61,12 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 	a.hub.SetDaemon(conn)
 	defer func() {
 		a.log.Info("daemon disconnected")
-		a.hub.ClearDaemon(conn)
+		// Only if this socket was still the current daemon. One that has already
+		// reconnected has replaced it, and abandoning turns then would kill the
+		// new connection's work on the strength of the old one's teardown.
+		if a.hub.ClearDaemon(conn) {
+			a.abandonTurns(errMachineWentAway.Error())
+		}
 	}()
 
 	for {

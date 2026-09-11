@@ -231,7 +231,7 @@ written down. Only what claude sends from now on is kept whole.
 
 ## B-8 — A turn in flight when the daemon disconnects never ends
 
-**Found:** 2026-09-11, building the stop button (L-8) **Status:** open
+**Found:** 2026-09-11, building the stop button (L-8) **Status:** fixed 2026-09-11
 **Repro:** Send a message, then kill the daemon before the reply arrives.
 **Expected / Actual:** the turn is reported as broken and the conversation becomes usable again /
 the working indicator ticks forever, the composer stays locked, and the agent entry stays an empty
@@ -248,11 +248,35 @@ saying the machine went away) and deliberately not bundled into L-8, which is al
 change, a migration and a process-tree change.
 
 **Also worth doing at the same time:** a turn that outlives its own plausible runtime with no
-daemon message at all. There is no timeout anywhere in the path today.
+daemon message at all. There is no timeout anywhere in the path today. **Still true** — the fix
+below covers the machine going away, not a machine that is present and silent.
+
+**Fixed 2026-09-11, on both sides of the socket.**
+
+- **Server:** `abandonTurns` closes out every turn still in flight when the daemon goes, keeping
+  whatever text had streamed in, for the same reason a failed turn keeps its partial answer. It
+  reads as a failure, not a stop — a laptop closing is not the owner changing their mind.
+- **Daemon:** the CLIs are cancelled too. The server has given up on those turns, so anything still
+  running is spending the owner's quota on an answer with nowhere to go. Deliberately *not*
+  `stop()` in a loop: that would record them as deliberately stopped and put a lie in the
+  transcript.
+
+**A prerequisite that was its own latent bug.** `hub.ClearDaemon` guarded the actual clear with
+`if h.daemon == c` but broadcast "machine offline" unconditionally — so when a daemon reconnected,
+the old socket's late teardown told every browser the machine was unreachable moments after it came
+back. Hanging turn-abandonment off that same teardown would have been far worse: it would have
+killed the *new* daemon's turns. `ClearDaemon` now reports whether the socket was still current, and
+both the broadcast and the abandonment are conditional on it.
+
+Regression tests are the new API harness described under L-12's closure — `TestATurnIsClosedOutWhenTheMachineGoesAway`
+confirmed to fail on the old code with exactly the reported symptom (`entry never settled:
+text="I had started to say" failure="" stopped=false`). The daemon-identity half is tested in the hub
+package instead, because the API-level version passed with the guard removed and a test that cannot
+fail is worse than none.
 
 ## B-9 — The composer shows the old provider after sending to a new one
 
-**Found:** 2026-09-11, verifying the stop button (L-8) **Status:** open
+**Found:** 2026-09-11, verifying the stop button (L-8) **Status:** fixed 2026-09-11
 **Repro:** In a conversation on claude, pick codex in the provider dropdown and send a message.
 **Expected / Actual:** the composer says codex, because that is what the conversation is on now /
 it snaps back to claude, and the placeholder reads "Message claude…". A reload corrects it.
@@ -267,6 +291,11 @@ because they take the provider from the send rather than from the cached convers
 composer alone, which reads `selected.provider`.
 
 **Predates the stop button**; found while verifying it because switching provider and then watching
-the composer is not something the earlier rounds happened to do. The fix is one broadcast in
-`postMessage`, alongside the one `patchConversation` already does.
+the composer is not something the earlier rounds happened to do.
+
+**Fixed 2026-09-11.** `store.SetProvider` now returns the updated conversation — the SQL was already
+`RETURNING *` and the store was discarding it — and `postMessage` broadcasts it, alongside the
+`EventConversation` that `patchConversation` already sends.
+`TestSendingToADifferentProviderAnnouncesTheChange` watches a real browser socket and was confirmed
+to fail on the old code ("no conversation event arrived").
 
