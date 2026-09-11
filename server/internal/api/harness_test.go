@@ -178,6 +178,27 @@ func (r *rig) conversation(provider string) protocol.Conversation {
 	return c
 }
 
+// createConversation makes one through the API and removes it afterwards.
+//
+// These run against the DEVELOPMENT database. Tests that posted to
+// /api/conversations directly left their rows behind, and because no daemon is
+// connected during a test those rows have no provider at all — seven of them
+// accumulated and then white-screened the real sidebar, which is how this was
+// found rather than by looking (docs/Bugs.md B-13).
+func (r *rig) createConversation() protocol.Conversation {
+	r.t.Helper()
+	res := r.post("/api/conversations", nil)
+	if res.StatusCode != http.StatusOK {
+		r.t.Fatalf("create conversation: %s", res.Status)
+	}
+	var c protocol.Conversation
+	if err := json.NewDecoder(res.Body).Decode(&c); err != nil {
+		r.t.Fatal(err)
+	}
+	r.t.Cleanup(func() { _ = r.store.Delete(context.Background(), c.ID) })
+	return c
+}
+
 func (r *rig) post(path string, body any) *http.Response {
 	r.t.Helper()
 	var buf bytes.Buffer

@@ -102,3 +102,60 @@ func TestAnUnreadableHashIsAnErrorNotAWrongPassword(t *testing.T) {
 		}
 	}
 }
+
+// Codex's finding: the parameters are read from the hash, so the hash must not
+// be allowed to claim anything it likes. A one-byte key would mean the password
+// is verified on one byte — eight bits of guessing, however long the real
+// password is — and t=0 or p=0 panics inside argon2 rather than erroring.
+//
+// None of these is reachable by a remote attacker; the hash comes from the
+// deployment's own configuration. The point is that a typo there must stay a
+// typo rather than becoming a bypass or an outage.
+func TestAHashCannotTalkItsWayIntoBeingWeak(t *testing.T) {
+	cases := []struct {
+		name    string
+		encoded string
+	}{{
+		name:    "a one-byte key verifies on one byte",
+		encoded: "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AA",
+	}, {
+		name:    "a short salt",
+		encoded: "$argon2id$v=19$m=19456,t=2,p=1$AAAA$" + strings.Repeat("A", 43),
+	}, {
+		name:    "no iterations at all, which panics rather than failing",
+		encoded: "$argon2id$v=19$m=19456,t=0,p=1$AAAAAAAAAAAAAAAAAAAAAA$" + strings.Repeat("A", 43),
+	}, {
+		name:    "no parallelism, same",
+		encoded: "$argon2id$v=19$m=19456,t=2,p=0$AAAAAAAAAAAAAAAAAAAAAA$" + strings.Repeat("A", 43),
+	}, {
+		name:    "memory so low the hash is not worth the name",
+		encoded: "$argon2id$v=19$m=8,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$" + strings.Repeat("A", 43),
+	}, {
+		name:    "memory so high every attempt is an out-of-memory",
+		encoded: "$argon2id$v=19$m=4294967295,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$" + strings.Repeat("A", 43),
+	}}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Must not panic, must not verify, must report the hash as unreadable.
+			ok, err := VerifyPassword(c.encoded, "whatever")
+			if ok {
+				t.Error("it verified a password")
+			}
+			if err == nil {
+				t.Error("it was accepted as a readable hash")
+			}
+		})
+	}
+}
+
+// And the hash this program actually writes must survive all of that.
+func TestOurOwnHashPassesTheBounds(t *testing.T) {
+	hash, err := HashPassword("a perfectly ordinary password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := VerifyPassword(hash, "a perfectly ordinary password"); err != nil || !ok {
+		t.Fatalf("the bounds rejected our own hash: ok=%v err=%v", ok, err)
+	}
+}

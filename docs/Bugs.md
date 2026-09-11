@@ -379,3 +379,85 @@ confirm it was blocked before it ran, and no claim is made here about what it do
 
 **Blocks a design that assumes every provider can read an attached file** — see
 [`Capabilities.md`](Capabilities.md).
+
+## B-12 — Simultaneous sign-in attempts all slipped past the login throttle
+
+**Found:** 2026-09-11, codex reviewing the auth code adversarially before it shipped
+**Status:** fixed 2026-09-11
+
+**Repro:** Send a hundred `POST /api/auth/login` requests at the same instant with a wrong
+password. All hundred were admitted.
+
+**Expected / Actual:** The allowance is five attempts before delays begin / it was five attempts
+*per burst*, because the throttle checked and recorded in two separate lock acquisitions and the
+argon2 hash — the slowest thing in the request, ~50ms — sat in the gap between them. Every request
+that reached the check before any of them had finished hashing saw an empty counter and was let
+through.
+
+**Security:** Yes, two ways. An attacker gets as many guesses per round as they care to send in
+parallel, which is most of what a rate limit exists to stop. And each admitted request holds 19 MiB
+of argon2 working memory at once, so a hundred of them is about 1.9 GiB — enough to take the VPS
+down, which locks the owner out just as effectively as guessing the password would let someone in.
+
+Never shipped: found and fixed in the same change that introduced it. Logged because the shape is
+worth remembering rather than because it reached anyone — **check-then-act is not made safe by
+locking each half**, and the tell is a slow operation sitting between the check and the record.
+
+Fixed by making admission reserve the attempt in the same lock acquisition that checks it
+(`Throttle.Begin`), so a request is counted the moment it is let in rather than after it fails.
+Two further hardenings landed with it, both found in the same review: a hash's own parameters are
+now bounded before use (a one-byte key would have verified a password on one byte, and `t=0`
+panics inside argon2 rather than erroring), and the login body is capped at 4 KiB with at most four
+concurrent hashes.
+
+Regression test: `server/internal/auth/race_test.go` — it fails on the old check-then-act shape.
+
+## B-13 — One conversation with an unknown provider white-screened the whole sidebar
+
+**Found:** 2026-09-11, signing in for the first time after auth landed **Status:** fixed 2026-09-11
+
+**Repro:** Have any conversation whose `provider` is not one of claude/codex/agy — creating one
+while the daemon is offline leaves it empty — then load the app.
+
+**Expected / Actual:** That row renders as best it can / `Cannot read properties of undefined
+(reading 'text')` at `conversation-list.tsx:128`, and the entire app fails to render. Not the row:
+the app.
+
+`providerClasses[conversation.provider]` returns `undefined` for anything not in the map, and the
+next line reads `.text` off it. Nine call sites across six components did exactly this, so the same
+one row would have taken down the composer, the message list, the raw view and the provider strip
+just as completely.
+
+This is the case [`AGENTS.md`](../AGENTS.md) §3 names directly — *an installed daemon will one day
+be older than the server* — arriving early and by a different route than expected. The fix is one
+accessor, `providerStyle()`, that always returns something, plus a neutral mark in `ProviderIcon`
+for a provider this build has no logo for. An unknown provider is a build that is behind, not an
+error, and it is not coloured as one.
+
+**How the bad rows got there, which is the other half:** the new auth tests created conversations
+through `POST /api/conversations` and never deleted them. The harness only cleaned up the ones made
+via its own helper. No daemon is connected during a test, so each one was saved with no provider at
+all — seven of them, in the development database the app actually runs against. Fixed by giving the
+harness a `createConversation()` that registers its own cleanup, and the seven empty rows were
+deleted after checking each had zero entries.
+
+## B-14 — Signing out left the app sitting on the signed-out screen's data
+
+**Found:** 2026-09-11, clicking sign out in a browser **Status:** fixed 2026-09-11
+
+**Repro:** Sign in, click Sign out.
+
+**Expected / Actual:** The login form / the request succeeded, the cookie was gone, and the chat
+surface stayed on screen showing a conversation the server would now refuse to hand over. A manual
+reload then showed the login form, which is what made it clear the server side was fine.
+
+Cause was ordering in `useSignOut`: it called `queryClient.clear()` and then set the session flag.
+`clear()` removes the query objects that mounted components are subscribed to, so those observers
+are left watching nothing and the `setQueryData` that follows triggers no re-render at all.
+
+Fixed by setting the session flag FIRST — which re-renders the gate, swaps in the login form and
+unmounts everything watching a query — and only then removing the rest of the cache.
+
+Worth remembering beyond this bug: `clear()` is not "invalidate everything harder". It detaches
+live observers, so anything that must re-render as a result has to be told before the clear, not
+after.

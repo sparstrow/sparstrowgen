@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { ArrowUp, Check, ChevronDown, Square, Undo2 } from "lucide-react";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
-import { providerClasses, formatTokens } from "./provider-meta";
+import { providerStyle, formatTokens } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +52,7 @@ export function Composer({
   const shown = pending
     ? { provider: pending.to, model: pending.toModel }
     : { provider: activeProvider, model: activeModel };
-  const c = providerClasses[shown.provider];
+  const c = providerStyle(shown.provider);
 
   // The list is empty until the daemon reports what is installed, and on a
   // first load that is a couple of seconds during which this still renders.
@@ -137,7 +137,7 @@ export function Composer({
               <DropdownMenuContent side="top" align="start" className="w-56">
                 {providers.map((p) => {
                   const blocked = p.availability === "blocked";
-                  const pc = providerClasses[p.id];
+                  const pc = providerStyle(p.id);
                   return (
                     <DropdownMenuItem
                       key={p.id}

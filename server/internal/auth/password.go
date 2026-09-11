@@ -80,6 +80,42 @@ type argonParams struct {
 	threads uint8
 }
 
+/*
+	Bounds on what a hash may claim about itself.
+
+The parameters are read from the hash so the cost can be raised later without
+invalidating the password already set — but "read from the hash" must not mean
+"believe anything the hash says". Three ways that bites:
+
+	a short key      accepting any key length means a hash ending in one byte
+	                 verifies on one byte, and the password is then eight bits
+	                 of guessing however long it actually is
+	t=0 or p=0       argon2.IDKey panics rather than returning an error, so a
+	                 typo in configuration takes the server down
+	an enormous m    a hash claiming gigabytes makes every sign-in attempt an
+	                 out-of-memory
+
+None is reachable by a remote attacker — the hash comes from the deployment's
+own configuration — but all three turn a misconfiguration into something far
+worse than a misconfiguration, and the check is four lines.
+*/
+const (
+	wantSaltLen = saltLen
+	wantKeyLen  = argonKeyLen
+	minMemory   = 8 * 1024        // KiB; below this argon2id is not worth the name
+	maxMemory   = 2 * 1024 * 1024 // KiB — 2 GiB, past any sane setting
+	minTime     = 1
+	maxTime     = 16
+	minThreads  = 1
+	maxThreads  = 16
+)
+
+func (p argonParams) sane() bool {
+	return p.memory >= minMemory && p.memory <= maxMemory &&
+		p.time >= minTime && p.time <= maxTime &&
+		p.threads >= minThreads && p.threads <= maxThreads
+}
+
 // decodeHash reads the parameters back out of the hash, so a hash written under
 // older settings keeps verifying under its own.
 func decodeHash(encoded string) (argonParams, []byte, []byte, error) {
@@ -101,6 +137,9 @@ func decodeHash(encoded string) (argonParams, []byte, []byte, error) {
 	}
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
+		return p, nil, nil, ErrBadHash
+	}
+	if len(salt) != wantSaltLen || len(key) != wantKeyLen || !p.sane() {
 		return p, nil, nil, ErrBadHash
 	}
 	return p, salt, key, nil

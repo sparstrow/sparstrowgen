@@ -15,10 +15,51 @@ import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-ty
    patches this cache rather than a second copy of the data (AGENTS.md §3). */
 
 export const keys = {
+  session: ["session"] as const,
   providers: ["providers"] as const,
   conversations: (q: string) => ["conversations", q] as const,
   conversation: (id: string) => ["conversation", id] as const,
 };
+
+/** Whether this browser holds a live session.
+ *
+ *  Asked once before anything else, so the app shows the login screen rather
+ *  than a chat surface whose every request fails. Not retried: "not signed in"
+ *  is an answer, and retrying it three times only delays the login screen. */
+export function useSession() {
+  return useQuery({
+    queryKey: keys.session,
+    queryFn: api.signedIn,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+export function useSignOut() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (everywhere: boolean) => api.signOut(everywhere),
+    onSettled: () => {
+      // ORDER MATTERS, and getting it wrong looks like sign-out being broken.
+      //
+      // The session flag goes first. That re-renders the gate, which swaps the
+      // chat surface for the login form and unmounts every component still
+      // watching a query. Only then is it safe to drop the rest of the cache.
+      //
+      // Doing it the other way round — clear() and then set the flag — removes
+      // the query objects that the still-mounted observers are subscribed to,
+      // so they are left watching nothing and no re-render is ever triggered.
+      // The request succeeds, the cookie is gone, and the screen sits there
+      // showing a conversation the server would now refuse to hand over.
+      qc.setQueryData(keys.session, false);
+      // Everything else was read with a session that no longer exists, so none
+      // of it may stay behind the login form.
+      qc.removeQueries({
+        predicate: (q) => q.queryKey[0] !== keys.session[0],
+      });
+    },
+  });
+}
 
 export function useProviders() {
   return useQuery({

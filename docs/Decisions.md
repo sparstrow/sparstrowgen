@@ -497,3 +497,73 @@ arrive in. The API's own check is a cheap pre-filter over the top of it, not the
 **A message with no words in it names nothing.** A row of dashes, a bare code fence: better unnamed
 than named something worse than nothing — and because unnamed is a real state rather than a magic
 string, the next message can still name it.
+
+## D-025 — Authentication lives in the Go server, not in Next.js middleware
+
+The obvious place for a login in a Next.js app is middleware, and it is the wrong one here.
+
+Middleware protects **pages**. The thing that has to be protected is the Go API on its own port,
+and a browser that never loads a page can call it directly — `curl` against `:8080` does not pass
+through Next.js at all. Putting the gate in middleware would produce an app that looks locked and
+is not, which is worse than one that looks open, because nobody goes looking.
+
+So the server is the authority and the web app is only a surface: `app/page.tsx` asks whether it is
+signed in and renders accordingly, and every answer it gets is one the server independently
+enforces on every request.
+
+**Rejected: a reverse proxy doing basic auth.** It would work, and it moves the security boundary
+into a config file that lives somewhere else and is edited by hand. The rule "every route needs the
+owner, except these three" is worth having as code with tests around it.
+
+## D-026 — Sessions are rows in Postgres, not signed tokens
+
+A JWT is the default answer and it cannot be revoked. That is the whole decision.
+
+Behind this login is a daemon that runs coding agents on the owner's machine. The question that
+matters is not *is this token well-formed* but *should this token still work right now* — a laptop
+left somewhere, a session on a phone that was sold. A signed token can only be answered by waiting
+for it to expire. A row can be deleted, and "sign out everywhere" is one `DELETE`.
+
+The cost is a database round trip per request, which for a single-user app on a local network is
+not a cost.
+
+**What is stored is the token's SHA-256, never the token**, so a database dump or a leaked backup
+is a list of hashes rather than a list of working logins. SHA-256 rather than argon2 for this one:
+the input is already 256 bits of randomness, so there is no dictionary to slow an attacker to, and
+unlike the password this runs on every single request.
+
+Two expiries, because they answer different questions: `expires_at` is how old a session may get
+(a week), `last_seen_at` is how long it may go unused (two days). A session used daily for a month
+is not the same risk as one abandoned in a browser tab.
+
+## D-027 — The server refuses to start without its secrets
+
+No default password, no `AUTH_DISABLED` switch, no development shortcut. `OWNER_PASSWORD_HASH`,
+`DAEMON_TOKEN` and `WEB_ORIGIN` are all required, and the process exits naming the ones it is
+missing.
+
+Every convenience considered here was a way for an unauthenticated server to reach production
+quietly. A default password ships as the real one. An "auth off for local dev" flag gets set in a
+Coolify environment at 2am. A server that will not boot is a loud, immediate, local failure; a
+server that boots without a password is a silent, remote one, and the blast radius is a shell on
+the owner's laptop.
+
+The cost is that development needs the variables too, which the `Makefile` and `scripts/dev.ps1`
+supply. That is one line in a file rather than a branch in the program — and it means there is
+exactly **one** code path through authentication, which is the part that actually matters, because
+the second path is the one nobody tests.
+
+## D-028 — The daemon gets its own credential, not the owner's password
+
+The daemon presents `DAEMON_TOKEN` as a bearer header on its websocket handshake; the browser
+presents a session cookie. Two credentials, because they prove two different things: the password
+is a person proving who they are, the token is one machine proving it is the one that was
+installed.
+
+Sharing the password would put it in plain text in a service configuration on a laptop, and
+rotating it would sign the owner out of every device at the same time as re-authorising the
+machine. They should be able to change independently, because they will need to.
+
+The daemon socket is checked **before** the websocket upgrade, so an unauthorised dialler gets a
+plain 401 rather than a working socket that is then closed — and nothing is registered in the hub
+on the strength of a connection that is about to be rejected.

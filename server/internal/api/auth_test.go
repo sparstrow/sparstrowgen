@@ -116,9 +116,7 @@ func TestSigningOutStopsTheSessionImmediately(t *testing.T) {
 	r := newRig(t)
 
 	// Signed in by the harness, so this works.
-	if res := r.post("/api/conversations", nil); res.StatusCode != http.StatusOK {
-		t.Fatalf("while signed in: %s", res.Status)
-	}
+	r.createConversation() // proves the session works, and cleans up after itself
 	if res := r.post("/api/auth/logout", nil); res.StatusCode != http.StatusOK {
 		t.Fatalf("logout: %s", res.Status)
 	}
@@ -134,9 +132,7 @@ func TestSigningOutEverywhereEndsOtherDevicesToo(t *testing.T) {
 
 	// A second device: its own jar, its own sign-in, same password.
 	other := newClientOn(t, r)
-	if res := other.post("/api/conversations", nil); res.StatusCode != http.StatusOK {
-		t.Fatalf("the second device could not use its own session: %s", res.Status)
-	}
+	other.createConversation() // the second device's session works
 
 	if res := r.post("/api/auth/logout", map[string]any{"everywhere": true}); res.StatusCode != http.StatusOK {
 		t.Fatalf("logout everywhere: %s", res.Status)

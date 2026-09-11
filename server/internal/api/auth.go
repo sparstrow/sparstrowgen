@@ -65,10 +65,33 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 	})
 }
 
+// maxLoginBody bounds a sign-in request. A password is a password; a megabyte
+// of JSON is somebody making the server allocate. The limit is applied BEFORE
+// decoding, because a check afterwards has already paid for the allocation it
+// was meant to prevent.
+const maxLoginBody = 4 << 10
+
+// hashSlots caps how many argon2 hashes run at once.
+//
+// Each one is 19 MiB of working memory by design — that is what makes it a good
+// password hash — which also makes it a good way to exhaust a small VPS. Four
+// at a time is more than a single-user app will ever legitimately need, and it
+// bounds the damage at about 76 MiB. Anything beyond it is turned away
+// immediately rather than queued, since a queue is just the same exhaustion
+// with extra steps.
+const hashSlots = 4
+
 // login exchanges the owner's password for a session.
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
 	client := clientIP(r)
-	if wait := a.throttle.Wait(client); wait > 0 {
+
+	// Admission and the record of the attempt happen together, under one lock.
+	// Asking "may I?" and only counting the attempt after the hash leaves the
+	// whole hash sitting in the gap, and a burst of simultaneous requests all
+	// ask before any of them has counted (docs/Bugs.md B-12).
+	wait, admitted := a.throttle.Begin(client)
+	if !admitted {
 		// Say how long, rather than refusing blankly. The owner who mistyped
 		// three times needs to know this ends; an attacker learns only that the
 		// door is timed, which they could measure anyway.
@@ -82,11 +105,24 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		a.fail(w, err, http.StatusBadRequest)
+		// The attempt was already counted by Begin, and it stays counted: a
+		// malformed body is not a free retry.
+		a.fail(w, errors.New("that request could not be read"), http.StatusBadRequest)
 		return
 	}
 	if body.Password == "" {
 		a.fail(w, errNoPassword, http.StatusBadRequest)
+		return
+	}
+
+	// Turned away rather than queued when the server is already hashing as much
+	// as it is prepared to.
+	select {
+	case a.hashing <- struct{}{}:
+		defer func() { <-a.hashing }()
+	default:
+		w.Header().Set("Retry-After", "1")
+		a.fail(w, errors.New("the server is busy — try again in a moment"), http.StatusServiceUnavailable)
 		return
 	}
 

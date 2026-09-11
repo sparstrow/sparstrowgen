@@ -42,6 +42,9 @@ type API struct {
 	log      *slog.Logger
 	cfg      Config
 	throttle *auth.Throttle
+	// hashing bounds how many argon2 hashes run at once. Buffered to hashSlots;
+	// a send that would block means the server is already at its limit.
+	hashing chan struct{}
 
 	// turns maps an in-flight turn to the conversation and entry it is writing
 	// into, so a daemon message carrying only a turn id can be routed.
@@ -63,6 +66,7 @@ func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
 	a := &API{
 		store: s, hub: h, log: log, cfg: cfg,
 		throttle: auth.NewThrottle(),
+		hashing:  make(chan struct{}, hashSlots),
 		turns:    map[string]*turn{},
 	}
 	h.OnDaemonMessage = a.handleDaemonMessage

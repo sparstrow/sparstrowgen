@@ -56,11 +56,39 @@ func NewThrottle() *Throttle {
 	return &Throttle{by: map[string]*attempts{}, now: time.Now}
 }
 
-// Wait reports how long this client must wait, and is zero when it may proceed.
-func (t *Throttle) Wait(client string) time.Duration {
+// Begin asks permission to make an attempt, and reserves it in the same breath.
+//
+// Checking and recording have to happen under ONE lock. The obvious shape — ask
+// Wait, hash the password, then record a failure — leaves the whole argon2 hash
+// sitting in the gap between the two, and a hundred requests arriving together
+// all ask before any of them has recorded anything. Every one is admitted. The
+// allowance stops meaning five attempts and starts meaning five per burst, and
+// a hundred simultaneous hashes is about 1.9 GiB of working memory.
+//
+// So the attempt is counted the moment it is admitted, and Succeeded takes it
+// back. An attempt that is admitted and then abandoned leaves its count behind
+// until the window passes, which is the safe direction to be wrong in.
+//
+// Returns how long to wait, and whether the attempt may proceed now.
+func (t *Throttle) Begin(client string) (time.Duration, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if wait := t.waitLocked(client); wait > 0 {
+		return wait, false
+	}
+	t.recordLocked(client)
+	return 0, true
+}
+
+// Wait reports how long this client must wait, without reserving anything.
+func (t *Throttle) Wait(client string) time.Duration {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.waitLocked(client)
+}
+
+func (t *Throttle) waitLocked(client string) time.Duration {
 	a := t.by[client]
 	if a == nil {
 		return 0
@@ -93,10 +121,20 @@ func (t *Throttle) Wait(client string) time.Duration {
 }
 
 // Failed records a wrong password.
+//
+// The attempt itself was already counted by Begin, so this only refreshes the
+// clock — counting again here would charge a single wrong password twice.
 func (t *Throttle) Failed(client string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if a := t.by[client]; a != nil {
+		a.last = t.now()
+	}
+}
+
+// recordLocked counts one attempt against a client. Called under the lock.
+func (t *Throttle) recordLocked(client string) {
 	now := t.now()
 	a := t.by[client]
 	if a == nil || now.Sub(a.last) > failureWindow {

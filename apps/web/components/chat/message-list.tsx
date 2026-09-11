@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ArrowRightLeft, CircleSlash } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
-import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
+import { providerStyle, formatTokens, formatUsd } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Markdown } from "./markdown";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,7 +46,7 @@ function AgentTurn({
   stopped?: boolean;
   streaming?: boolean;
 }) {
-  const c = providerClasses[provider];
+  const c = providerStyle(provider);
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-2">
@@ -141,7 +141,7 @@ function ReplayDivider({
    *  nothing switched would be a small lie in the record. */
   switched: boolean;
 }) {
-  const c = providerClasses[to];
+  const c = providerStyle(to);
   return (
     <div className="flex items-center gap-3 py-1" role="separator">
       <span className="h-px flex-1 bg-border" />
@@ -175,7 +175,7 @@ export function WorkingIndicator({
   elapsed: number;
   streams: boolean;
 }) {
-  const c = providerClasses[provider];
+  const c = providerStyle(provider);
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Entry } from "@/lib/chat-types";
-import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
+import { providerStyle, formatTokens, formatUsd } from "./provider-meta";
 
 /* The transcript with nothing done to it.
  *
@@ -55,7 +55,7 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
           return (
             <Line key={e.id}>
               <span>switched to</span>
-              <span className={providerClasses[e.to].text}>{e.to}</span>
+              <span className={providerStyle(e.to).text}>{e.to}</span>
               <span>{e.toModel.label}</span>
               <span>· replayed {e.messagesReplayed} messages</span>
               <span>· {formatTokens(e.tokens)} tokens</span>
@@ -66,7 +66,7 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
         return (
           <div key={e.id}>
             <Line>
-              <span className={providerClasses[e.provider].text}>{e.provider}</span>
+              <span className={providerStyle(e.provider).text}>{e.provider}</span>
               <span>{e.model.label}</span>
               <span>{e.at}</span>
               {e.usage && (

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import type { Headroom, Provider } from "@/lib/chat-types";
-import { providerClasses } from "./provider-meta";
+import { providerStyle } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import {
   Tooltip,
@@ -60,7 +60,7 @@ function HeadroomReadout({ head, now }: { head: Headroom; now: number }) {
 }
 
 function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
-  const c = providerClasses[provider.id];
+  const c = providerStyle(provider.id);
   const blocked = provider.availability === "blocked";
   const waiting = provider.availability === "waitable";
   const head = provider.headroom;

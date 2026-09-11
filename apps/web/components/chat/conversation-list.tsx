@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 import type { Conversation } from "@/lib/chat-types";
 import { useChatView } from "@/lib/store";
-import { providerClasses } from "./provider-meta";
+import { providerStyle } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
+import { SignOutMenu } from "@/components/auth/sign-out";
 import {
   ConversationName,
   conversationName,
@@ -72,7 +73,7 @@ function Row({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(conversation.title);
   const inputRef = useRef<HTMLInputElement>(null);
-  const c = providerClasses[conversation.provider];
+  const c = providerStyle(conversation.provider);
 
   useEffect(() => {
     if (editing) {
@@ -234,15 +235,18 @@ export function ConversationList({
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
       <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
         <h2 className="text-sm font-medium">Conversations</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          onClick={onCreate}
-          aria-label="New conversation"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={onCreate}
+            aria-label="New conversation"
+          >
+            <Plus className="size-4" />
+          </Button>
+          <SignOutMenu />
+        </div>
       </div>
 
       <div className="shrink-0 px-3 pb-2">
