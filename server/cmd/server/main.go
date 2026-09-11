@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,6 +39,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "-hashpw" {
 		hashPassword(log)
 		return
+	}
+
+	// `server -healthcheck` asks the running server whether it is alive and
+	// exits 0 or 1. It lives in this binary because the deployed image is
+	// FROM scratch — there is no shell, no curl and no wget in it to run a
+	// healthcheck with, which is the whole point of shipping it that way.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(healthcheck())
 	}
 
 	dsn := env("DATABASE_URL",
@@ -82,6 +91,32 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
+}
+
+// healthcheck calls the local server's liveness endpoint. Returns a process
+// exit code: 0 alive, 1 not.
+func healthcheck() int {
+	addr := env("ADDR", ":8080")
+	// ADDR is a listen address and may have no host at all (":8080") or a
+	// wildcard one ("0.0.0.0:8080"); neither is dialable as written, and
+	// 0.0.0.0 in particular is not an address you connect TO.
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: cannot read ADDR %q: %v\n", addr, err)
+		return 1
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	res, err := client.Get("http://127.0.0.1:" + port + "/api/health")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck: %s\n", res.Status)
+		return 1
+	}
+	return 0
 }
 
 func env(key, fallback string) string {
