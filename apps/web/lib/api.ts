@@ -1,6 +1,7 @@
 import type {
   AgentMessage,
   Conversation,
+  DirListing,
   Entry,
   Model,
   Provider,
@@ -58,7 +59,7 @@ export const api = {
 
   async patch(
     id: string,
-    patch: { title?: string; archived?: boolean },
+    patch: { title?: string; archived?: boolean; folder?: string },
   ): Promise<Conversation> {
     return json(
       await fetch(`${BASE}/api/conversations/${id}`, {
@@ -67,6 +68,23 @@ export const api = {
         body: JSON.stringify(patch),
       }),
     );
+  },
+
+  /** What is inside a directory ON THE OWNER'S MACHINE. The server forwards
+   *  this to the daemon and never touches a filesystem itself — it is meant to
+   *  run somewhere else entirely. An empty path asks for the starting points. */
+  async directories(path: string): Promise<DirListing> {
+    const q = path ? `?path=${encodeURIComponent(path)}` : "";
+    return json(await fetch(`${BASE}/api/directories${q}`, { cache: "no-store" }));
+  },
+
+  /** Folders already in use, most recent first. Free from conversations that
+   *  already exist, so there is no separate list to maintain. */
+  async recentFolders(): Promise<string[]> {
+    const body = await json<{ folders: string[] }>(
+      await fetch(`${BASE}/api/folders/recent`, { cache: "no-store" }),
+    );
+    return body.folders;
   },
 
   async remove(id: string): Promise<void> {

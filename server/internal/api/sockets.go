@@ -61,6 +61,11 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 			a.log.Warn("bad daemon message", "err", err)
 			continue
 		}
+		// A reply to something the server asked (a directory listing) belongs to
+		// whoever is waiting for it, not to the event handling below.
+		if a.hub.Deliver(msg) {
+			continue
+		}
 		a.handleDaemonMessage(msg)
 	}
 }

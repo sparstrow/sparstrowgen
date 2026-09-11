@@ -6,14 +6,24 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
+
+// ErrDaemonOffline is returned by Ask when there is no machine to ask. It is a
+// normal outcome and not a fault — the owner's machine is allowed to be asleep —
+// so callers answer it differently from a real error: a picker says "machine
+// unreachable", not "something went wrong".
+var ErrDaemonOffline = errors.New("the machine is not connected")
 
 type Hub struct {
 	mu sync.RWMutex
@@ -25,6 +35,13 @@ type Hub struct {
 	// should not be locked out by its own stale socket.
 	daemon    *websocket.Conn
 	providers []protocol.Provider
+
+	// Waiters for daemon replies, by request id. See Ask.
+	pending map[string]chan protocol.DaemonMessage
+	// Request ids only have to be unique among the requests in flight in this
+	// process, so a counter does the job and saves a uuid dependency the module
+	// does not otherwise have — every other id here comes from Postgres.
+	nextRequest atomic.Uint64
 
 	log *slog.Logger
 
@@ -181,4 +198,73 @@ func (h *Hub) SendToDaemon(msg protocol.ServerMessage) bool {
 	err = d.WriteMessage(websocket.TextMessage, payload)
 	h.mu.Unlock()
 	return err == nil
+}
+
+// ---------------------------------------------------------------------------
+// asking the daemon something
+// ---------------------------------------------------------------------------
+
+// Ask sends a message and waits for the daemon's reply to it.
+//
+// Every other exchange here is one-way: the server tells the daemon to run a
+// turn, the daemon streams back what happens. Directory browsing is the first
+// thing that needs an answer, because only the daemon can see the filesystem —
+// the server is meant to run somewhere else entirely.
+//
+// Replies are matched by request id rather than by order, since a browser can
+// have several pickers open and the daemon may answer them in any sequence.
+// The waiter is always removed, on every path, or a client that gave up would
+// leak a channel per keystroke.
+func (h *Hub) Ask(ctx context.Context, msg protocol.ServerMessage) (protocol.DaemonMessage, error) {
+	id := strconv.FormatUint(h.nextRequest.Add(1), 10)
+	msg.RequestID = id
+
+	// Buffered, so a reply that lands after the caller's context expired is
+	// dropped by the garbage collector rather than blocking the read loop.
+	reply := make(chan protocol.DaemonMessage, 1)
+	h.mu.Lock()
+	if h.pending == nil {
+		h.pending = map[string]chan protocol.DaemonMessage{}
+	}
+	h.pending[id] = reply
+	h.mu.Unlock()
+
+	defer func() {
+		h.mu.Lock()
+		delete(h.pending, id)
+		h.mu.Unlock()
+	}()
+
+	if !h.SendToDaemon(msg) {
+		return protocol.DaemonMessage{}, ErrDaemonOffline
+	}
+
+	select {
+	case m := <-reply:
+		return m, nil
+	case <-ctx.Done():
+		return protocol.DaemonMessage{}, ctx.Err()
+	}
+}
+
+// Deliver hands a daemon reply to whoever is waiting for it, and reports
+// whether anyone was. A false means the message is an ordinary event and the
+// caller should handle it normally — including a late reply to a request that
+// has already been abandoned.
+func (h *Hub) Deliver(m protocol.DaemonMessage) bool {
+	if m.RequestID == "" {
+		return false
+	}
+	h.mu.RLock()
+	ch, ok := h.pending[m.RequestID]
+	h.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	select {
+	case ch <- m:
+	default:
+		// Already answered. Only reachable if the daemon replied twice.
+	}
+	return true
 }

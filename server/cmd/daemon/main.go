@@ -122,10 +122,16 @@ func (d *daemon) run(ctx context.Context, url string) error {
 			d.log.Warn("bad server message", "err", err)
 			continue
 		}
-		if msg.Type == protocol.ServerRunTurn && msg.Turn != nil {
+		switch {
+		case msg.Type == protocol.ServerRunTurn && msg.Turn != nil:
 			// Each turn runs on its own goroutine so a long one does not block
 			// the socket, and cancelling the daemon cancels the CLI with it.
 			go d.runTurn(ctx, *msg.Turn)
+		case msg.Type == protocol.ServerListDir:
+			// Off the read loop too: a directory on a cold or network drive can
+			// take a moment, and a turn already streaming must not stall behind
+			// somebody browsing for a folder.
+			go d.listDir(msg)
 		}
 	}
 }
@@ -141,6 +147,20 @@ func (d *daemon) send(msg protocol.DaemonMessage) error {
 		return fmt.Errorf("not connected")
 	}
 	return d.conn.WriteMessage(websocket.TextMessage, payload)
+}
+
+// listDir answers a browser asking what is on this machine. Only the daemon can
+// see the filesystem — the server is meant to run somewhere else — so every path
+// question comes through here.
+func (d *daemon) listDir(msg protocol.ServerMessage) {
+	listing := agent.Listing(msg.Path)
+	if err := d.send(protocol.DaemonMessage{
+		Type:      protocol.DaemonDirListing,
+		RequestID: msg.RequestID,
+		Listing:   &listing,
+	}); err != nil {
+		d.log.Warn("dir listing not sent", "err", err, "path", msg.Path)
+	}
 }
 
 func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {

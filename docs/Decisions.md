@@ -344,3 +344,43 @@ remains a distinct state from "plenty left". The `--capacity-ok` / `--capacity-l
 backend can't deliver", and a design got approved with a number no provider emits. What caught it
 was building the adapter — which is late, but not too late, and is why the backend step is allowed
 to send a design back.
+
+## D-019 — lucide-react is the icon family, and the only one
+
+**Chosen 2026-09-10**, when the owner asked what family was in use and told us to lock on it.
+
+Every icon in the app comes from `lucide-react`. There is no second icon package, and adding one
+is the decision this entry exists to prevent: two families in one interface is visible at a glance,
+because stroke weight, corner radius and optical size never match between them.
+
+**The single exception is `components/chat/provider-icon.tsx`** — the claude, codex and agy marks.
+Those are the vendors' own logos, which no icon family can supply. They are held to lucide's
+conventions anyway: a 24×24 viewBox, `currentColor` rather than a brand hue, and sized by the same
+`size-*` classes as every other icon, so they sit correctly beside real lucide glyphs.
+
+**Rejected:** importing `@lobehub/icons` for the three brand marks. It is where the path data came
+from (MIT), but the package pulls in 400+ transitive dependencies for three glyphs, so the paths are
+inlined instead.
+
+## D-020 — Only the daemon touches the filesystem
+
+**Chosen 2026-09-10**, building the working-directory picker (B-3).
+
+Directory browsing is a request the server forwards to the daemon and waits for, rather than an
+`os.ReadDir` in the API handler.
+
+The server is meant to run somewhere else — Coolify is the plan. Today it happens to share a machine
+with the daemon, so reading the disk directly would appear to work perfectly, and would silently
+start listing a *container's* directories the day it is deployed, presenting them as the owner's.
+The bug would surface as a folder picker showing `/app` and `/usr`, long after anyone remembered
+why.
+
+This is the first exchange in the protocol that expects an answer; everything else is one-way. It
+is matched by request id rather than by order (`hub.Ask`), because several pickers can be open at
+once and the daemon may answer them in any sequence.
+
+**Rejected:** an Electron-style native folder dialog, which is what Multica uses
+(`apps/desktop/src/main/local-directory.ts`). It is not available to a web app, and would tie the
+picker to the desktop shell that does not exist yet (L-2). What was taken from Multica instead is
+its typed failure reasons — `not_found`, `not_a_directory`, `not_readable` — so the surface renders
+its own wording rather than parsing a sentence.

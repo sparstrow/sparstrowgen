@@ -141,3 +141,36 @@ export type PendingSwitch = {
   estimatedTokens: number;
 };
 
+
+/* ── Directories ──────────────────────────────────────────────────────────────
+   Only the daemon can see the owner's filesystem, so browsing goes through it
+   (docs/Decisions.md D-020). These mirror protocol.DirListing. */
+
+/** Why a directory cannot be used, as a value rather than a sentence — so the
+ *  wording lives here, in the surface that shows it, and a client never parses
+ *  prose to tell "you pasted a file" from "that folder is read-only". */
+export type DirReason =
+  | ""
+  | "not_absolute"
+  | "not_found"
+  | "not_a_directory"
+  | "not_readable";
+
+export type DirEntry = {
+  name: string;
+  path: string;
+};
+
+export type DirListing = {
+  /** As the daemon resolved it: absolute, with ".." and symlinks collapsed. */
+  path: string;
+  /** Empty at a root, so the picker knows not to offer "up". */
+  parent: string;
+  /** Subdirectories only. A conversation runs in a directory, so listing files
+   *  would offer a choice that cannot be made. */
+  entries: DirEntry[];
+  reason: DirReason;
+  /** Advisory. Shown so a folder outside any repo is noticeable before the
+   *  conversation starts, never to prevent the choice. */
+  isGitRepo: boolean;
+};

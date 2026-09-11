@@ -93,11 +93,17 @@ function ReplayDivider({
   toModel,
   messagesReplayed,
   tokens,
+  switched,
 }: {
   to: ProviderId;
   toModel: Model;
   messagesReplayed: number;
   tokens: number;
+  /** False when the same provider is being caught up rather than a new one
+   *  taking over — which happens when a conversation moves to another folder
+   *  and the provider sessions go with it. Saying "switched to claude" when
+   *  nothing switched would be a small lie in the record. */
+  switched: boolean;
 }) {
   const c = providerClasses[to];
   return (
@@ -105,7 +111,7 @@ function ReplayDivider({
       <span className="h-px flex-1 bg-border" />
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <ArrowRightLeft className="size-3.5" aria-hidden />
-        switched to
+        {switched ? "switched to" : "caught up"}
         <ProviderIcon provider={to} className={`size-3.5 ${c.text}`} />
         <span className={c.text}>{to}</span>
         <span className="text-muted-foreground/70">{toModel.label}</span>
@@ -184,6 +190,16 @@ export function MessageSkeleton() {
   );
 }
 
+/** Which provider answered most recently before position `i`. Undefined at the
+ *  start of a conversation, where a catch-up cannot be a switch. */
+function lastAgentBefore(entries: Entry[], i: number): ProviderId | undefined {
+  for (let j = i - 1; j >= 0; j--) {
+    const e = entries[j];
+    if (e.role === "agent") return e.provider;
+  }
+  return undefined;
+}
+
 export function MessageList({
   entries,
   streamingId,
@@ -193,7 +209,7 @@ export function MessageList({
 }) {
   return (
     <div className="space-y-8">
-      {entries.map((e) => {
+      {entries.map((e, i) => {
         if (e.role === "user")
           return <UserBubble key={e.id} text={e.text} at={e.at} />;
         if (e.role === "replay")
@@ -204,6 +220,9 @@ export function MessageList({
               toModel={e.toModel}
               messagesReplayed={e.messagesReplayed}
               tokens={e.tokens}
+              // Whether anything actually switched is not stored on the marker;
+              // it is whether the agent that answered last was someone else.
+              switched={lastAgentBefore(entries, i) !== e.to}
             />
           );
         return (

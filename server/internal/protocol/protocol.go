@@ -153,11 +153,24 @@ const (
 	ServerRunTurn = "run_turn"
 	// ServerProbe asks the daemon to re-report what is installed.
 	ServerProbe = "probe"
+	// ServerListDir asks the daemon what is inside a directory, and whether it
+	// can be used as a conversation's working directory.
+	//
+	// This is the first request that expects an answer. Everything else here is
+	// fire-and-forget, so it carries a RequestID the daemon echoes back — see
+	// hub.Ask.
+	ServerListDir = "list_dir"
 )
 
 type ServerMessage struct {
 	Type string   `json:"type"`
 	Turn *RunTurn `json:"turn,omitempty"`
+
+	// list_dir
+	RequestID string `json:"requestId,omitempty"`
+	// Empty asks for the starting points — drive roots on Windows, $HOME
+	// elsewhere — because a browser has no idea what the machine looks like.
+	Path string `json:"path,omitempty"`
 }
 
 // ReplayEntry is one historical message being handed to a provider that has not
@@ -200,7 +213,49 @@ const (
 	// DaemonStarted reports the provider's session id as soon as it is known,
 	// so a resume pointer survives a turn that later fails.
 	DaemonStarted = "started"
+	// DaemonDirListing answers a ServerListDir, echoing its RequestID.
+	DaemonDirListing = "dir_listing"
 )
+
+// Why a directory is unusable, as a value rather than a sentence.
+//
+// The reason is rendered into a message by the surface that shows it, so the
+// wording can change without the daemon knowing, and a client never has to
+// parse prose to tell "you typed a file" from "that folder is read-only".
+// Borrowed from Multica's local-directory validator.
+const (
+	DirOK           = ""
+	DirNotAbsolute  = "not_absolute"
+	DirNotFound     = "not_found"
+	DirNotDirectory = "not_a_directory"
+	DirNotReadable  = "not_readable"
+)
+
+// DirEntry is one subdirectory. Files are never listed: a conversation runs in
+// a directory, so offering files would only invite an unusable choice.
+type DirEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// DirListing is what the daemon knows about one directory.
+type DirListing struct {
+	// Path as the daemon resolved it — absolute, symlinks and "." collapsed —
+	// so what gets stored is what the agent will actually run in.
+	Path string `json:"path"`
+	// Empty at a root. Lets the picker walk up without doing path arithmetic in
+	// the browser, where the separator may not even match the machine.
+	Parent string `json:"parent"`
+	// Never null: emit_empty_slices is the Go side, and the picker renders a
+	// real "nothing in here" rather than a missing state.
+	Entries []DirEntry `json:"entries"`
+	// DirOK, or one of the reasons above.
+	Reason string `json:"reason"`
+	// Whether the directory sits in a git working tree. Advisory only — it is
+	// shown so a folder that is not the project root is noticeable before a
+	// conversation starts, never to prevent the choice.
+	IsGitRepo bool `json:"isGitRepo"`
+}
 
 type DaemonMessage struct {
 	Type string `json:"type"`
@@ -229,6 +284,10 @@ type DaemonMessage struct {
 
 	// failed
 	Error string `json:"error,omitempty"`
+
+	// dir_listing
+	RequestID string      `json:"requestId,omitempty"`
+	Listing   *DirListing `json:"listing,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

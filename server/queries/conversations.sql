@@ -40,3 +40,18 @@ DELETE FROM entries WHERE conversation_id = $1;
 
 -- name: DeleteConversationProviderSessions :exec
 DELETE FROM provider_sessions WHERE conversation_id = $1;
+
+-- name: SetConversationFolder :one
+UPDATE conversations SET folder = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- Folders already in use, most recently touched first. The picker's shortcut
+-- list, and the default for a new conversation — both come free from
+-- conversations that already exist rather than from a preference to maintain.
+-- name: RecentFolders :many
+SELECT folder, max(updated_at) AS last_used
+FROM conversations
+GROUP BY folder
+ORDER BY last_used DESC
+LIMIT $1;

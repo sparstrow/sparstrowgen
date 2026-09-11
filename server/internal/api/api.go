@@ -68,6 +68,8 @@ func (a *API) Routes() http.Handler {
 	r.Patch("/api/conversations/{id}", a.patchConversation)
 	r.Delete("/api/conversations/{id}", a.deleteConversation)
 	r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
+	r.Get("/api/directories", a.listDirectories)
+	r.Get("/api/folders/recent", a.recentFolders)
 	r.Post("/api/conversations/{id}/messages", a.postMessage)
 
 	r.Get("/ws", a.browserSocket)
@@ -139,7 +141,14 @@ func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Folder == "" {
-		body.Folder = defaultFolder()
+		// The folder last worked in beats the directory the server process
+		// happens to have been started in, which is what every conversation
+		// used to inherit (docs/Bugs.md B-3).
+		if recent, err := a.store.RecentFolders(r.Context(), 1); err == nil && len(recent) > 0 {
+			body.Folder = recent[0]
+		} else {
+			body.Folder = defaultFolder()
+		}
 	}
 	if body.Provider == "" {
 		if ps := a.hub.Providers(); len(ps) > 0 && ps[0].Model != nil {
@@ -160,6 +169,7 @@ func (a *API) patchConversation(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title    *string `json:"title"`
 		Archived *bool   `json:"archived"`
+		Folder   *string `json:"folder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		a.fail(w, err, http.StatusBadRequest)
@@ -174,6 +184,9 @@ func (a *API) patchConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && body.Archived != nil {
 		c, err = a.store.SetArchived(r.Context(), id, *body.Archived)
+	}
+	if err == nil && body.Folder != nil {
+		c, err = a.store.SetFolder(r.Context(), id, *body.Folder)
 	}
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
@@ -253,13 +266,20 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	// The replay marker is written HERE — at the moment the catch-up is paid
 	// for — never when the provider was selected. Selecting is free, and the
 	// transcript should say what happened, not what was contemplated.
+	//
+	// The condition is what this provider has not seen, and nothing else. It
+	// used to also require a provider CHANGE, which quietly assumed a switch is
+	// the only way a session goes missing. Moving a conversation to another
+	// folder drops the sessions too (they are keyed to the old directory), and
+	// under the old condition the next turn ran with no history at all — the
+	// agent starting blind, with nothing on screen saying so (docs/Bugs.md B-7).
 	unseen, err := a.store.Unseen(ctx, id, body.Provider)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
 	var replay []protocol.ReplayEntry
-	if body.Provider != conv.Provider && len(unseen) > 0 {
+	if len(unseen) > 0 {
 		tokens := estimateTokens(unseen)
 		marker, err := a.store.AppendReplay(ctx, id, body.Provider, body.Model, int32(len(unseen)), tokens)
 		if err != nil {

@@ -258,3 +258,64 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 		t.Errorf("failure = %q", done.Failure)
 	}
 }
+
+func TestSetFolderDropsProviderSessions(t *testing.T) {
+	// The store stores a path, it never parses one, so the shape does not matter.
+	const somewhereElse = "/projects/elsewhere"
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if _, err := s.AppendUser(ctx, c.ID, "what does this repo do?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkSeen(ctx, c.ID, "codex", "thread-abc", 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.ResumeID(ctx, c.ID, "codex"); got != "thread-abc" {
+		t.Fatalf("resume id = %q before the move, want thread-abc", got)
+	}
+
+	moved, err := s.SetFolder(ctx, c.ID, somewhereElse)
+	if err != nil {
+		t.Fatalf("set folder: %v", err)
+	}
+	if moved.Folder != somewhereElse {
+		t.Errorf("folder = %q", moved.Folder)
+	}
+
+	// A session recorded in the old directory is a dead pointer: claude keys
+	// sessions by project directory and answers "No conversation found with
+	// session ID" when resumed from anywhere else, which fails every later turn
+	// in about a second.
+	if got := s.ResumeID(ctx, c.ID, "codex"); got != "" {
+		t.Errorf("resume id = %q after the move, want it dropped", got)
+	}
+	// seen_seq went with it, so the next message replays the transcript into a
+	// fresh session rather than continuing one that knows a different tree.
+	unseen, err := s.Unseen(ctx, c.ID, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unseen) != 1 {
+		t.Errorf("unseen = %d entries, want the whole transcript back (1)", len(unseen))
+	}
+}
+
+func TestSetFolderToTheSamePlaceCostsNothing(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	if err := s.MarkSeen(ctx, c.ID, "codex", "thread-abc", 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetFolder(ctx, c.ID, c.Folder); err != nil {
+		t.Fatalf("set folder: %v", err)
+	}
+	// Re-choosing the folder a conversation is already in must not silently
+	// charge a full replay on the next message.
+	if got := s.ResumeID(ctx, c.ID, "codex"); got != "thread-abc" {
+		t.Errorf("resume id = %q, want it untouched by a no-op move", got)
+	}
+}

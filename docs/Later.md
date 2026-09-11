@@ -146,3 +146,35 @@ storage decision (how much, for how long) rather than a UI one.
 
 **Unblocks when:** an answer looks wrong in a way the stored text cannot explain — most likely a
 turn that used tools, where what the agent *did* is invisible and only what it said survives.
+
+## L-11 — The transcript does not record that a conversation moved
+
+**Status:** idea **Raised:** 2026-09-10, building the folder picker (B-3)
+
+A provider switch is written into the transcript as a marker, at the moment the catch-up is paid
+for. A folder move is not, even though it changes the thing the answers are *about* — read back
+later, every answer above the move looks like it was about the folder shown in the header now.
+
+The picker says so at the time ("they were about the old folder, and nothing above will say so"),
+which is honest but only helps the person who moved it, and only right then.
+
+The cheap version is another marker role alongside `replay`, which the CHECK constraint on
+`entries.role` would have to allow. The more accurate version records the folder on each agent
+entry, so a transcript can show where each answer actually came from — a column rather than a row,
+and no new role.
+
+**Unblocks when:** a conversation is moved and the transcript above it is later misread, or the
+folder becomes something that changes often enough to be worth the record.
+
+## L-12 — postMessage has no test
+
+**Status:** idea **Raised:** 2026-09-10, after B-7
+
+B-7 lived in `postMessage`, which has no test at all — `api_test.go` covers `estimateTokens` and
+nothing else, because exercising the handler needs a database, a hub, and something pretending to
+be a daemon. The store half of the same bug *is* covered
+(`TestSetFolderDropsProviderSessions` asserts the whole transcript comes back unseen); the half that
+decides whether to actually send a replay was verified only in a browser.
+
+**Unblocks when:** a second bug lands in that handler, or the daemon gets a test double for
+something else and the harness is already paid for.

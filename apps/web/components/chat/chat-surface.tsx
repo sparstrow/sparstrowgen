@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderOpen, PlugZap, Plus, RefreshCw } from "lucide-react";
+import { FolderOpen, Pencil, PlugZap, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Model, ProviderId } from "@/lib/chat-types";
 import { api } from "@/lib/api";
@@ -15,12 +15,14 @@ import {
   useRealtime,
   useRenameConversation,
   useSendMessage,
+  useSetFolder,
 } from "@/lib/queries";
 import { useChatView, type TranscriptView } from "@/lib/store";
 import { ConversationList } from "./conversation-list";
 import { ProviderStrip } from "./provider-strip";
 import { MessageList, MessageSkeleton, WorkingIndicator } from "./message-list";
 import { RawTranscript } from "./raw-transcript";
+import { FolderPicker } from "./folder-picker";
 import { Composer } from "./composer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -91,6 +93,7 @@ export function ChatSurface() {
   const setDraft = useChatView((s) => s.setDraft);
   const clearDraft = useChatView((s) => s.clearDraft);
 
+  const [pickingFolder, setPickingFolder] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
@@ -105,6 +108,7 @@ export function ChatSurface() {
   const rename = useRenameConversation();
   const archive = useArchiveConversation();
   const remove = useDeleteConversation();
+  const setFolder = useSetFolder();
   const send = useSendMessage();
 
   const selected = conversation.data ?? null;
@@ -316,13 +320,22 @@ export function ChatSurface() {
 
           {selected ? (
             <>
-              <header className="flex shrink-0 items-center gap-3 border-b px-6 py-3">
+              <header className="group/header flex shrink-0 items-center gap-3 border-b px-6 py-3">
                 <div className="min-w-0 flex-1">
                   <h1 className="truncate text-sm font-medium">{selected.title}</h1>
-                  <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                  {/* The folder is what the agent can see, so the place it is
+                      displayed is the place to change it — rather than a
+                      setting somewhere you would have to know about. */}
+                  <button
+                    type="button"
+                    onClick={() => setPickingFolder(true)}
+                    title={selected.folder}
+                    className="mt-0.5 flex max-w-full items-center gap-1.5 rounded text-xs text-muted-foreground hover:text-foreground"
+                  >
                     <FolderOpen className="size-3.5 shrink-0" aria-hidden />
-                    {selected.folder}
-                  </p>
+                    <span className="truncate">{selected.folder}</span>
+                    <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover/header:opacity-100" aria-hidden />
+                  </button>
                 </div>
                 <ViewToggle value={transcriptView} onChange={setTranscriptView} />
                 <div className="shrink-0 text-right font-mono text-xs text-muted-foreground">
@@ -373,6 +386,16 @@ export function ChatSurface() {
                   )}
                 </div>
               </ScrollArea>
+
+              <FolderPicker
+                open={pickingFolder}
+                onOpenChange={setPickingFolder}
+                current={selected.folder}
+                hasMessages={selected.entries.length > 0}
+                onChoose={(folder) =>
+                  setFolder.mutate({ id: selected.id, patch: { folder } })
+                }
+              />
 
               <Composer
                 providers={usableProviders}

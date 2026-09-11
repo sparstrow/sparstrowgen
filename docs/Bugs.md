@@ -79,6 +79,48 @@ no way to change it afterwards.
 the clinic project that silently runs against this repo gives confidently wrong answers about the
 wrong codebase, with nothing on screen saying so.
 
+**Fixed 2026-09-10.** The folder shown in the header is now the button that changes it, opening a
+picker with three ways in: recent folders (derived from conversations that already exist, so there
+is no second list to maintain), a browsable tree, and a paste-a-path field with a visible **Go**
+beside it. New conversations inherit the folder last used rather than the server's working
+directory, which alone fixes the common case.
+
+Browsing is answered by the daemon, never by the server — see D-020 for why that is not
+over-engineering. Paths are stored as the daemon resolved them, so `..` and a typed-in spelling
+never reach the database.
+
+**Two things surfaced while verifying it, both of which only appear once you actually move a
+conversation and run a turn:**
+
+- claude keys its sessions by project directory. A resume id recorded in the old folder answers
+  `No conversation found with session ID` from the new one, and every later turn failed in about a
+  second. `SetFolder` now drops the conversation's provider sessions, which is right for all three
+  CLIs regardless: a session built elsewhere is reasoning about the wrong tree.
+- Dropping them exposed B-7 below.
+
+## B-7 — A caught-up provider only replayed on a provider switch
+
+**Found:** 2026-09-10, verifying the B-3 fix **Status:** fixed 2026-09-10
+**Repro:** Move a conversation to another folder, then ask a question about something said earlier.
+**Expected / Actual:** the agent has the conversation / it starts blind, with no history and nothing
+on screen saying so.
+
+`postMessage` gated the catch-up on `body.Provider != conv.Provider` — which quietly assumed a
+provider switch is the only way a session goes missing. Moving a folder drops the sessions too, so
+the next turn ran with `replay=0` against a brand-new session.
+
+The condition is now simply "this provider has not seen these entries", which is what `seen_seq`
+already answers and covers every reason a session disappears, including ones not invented yet.
+
+The marker's wording had the same assumption baked in: it said *switched to claude* when nothing
+had switched. `MessageList` now decides that by looking at which provider actually answered last,
+so a same-provider catch-up reads **caught up claude · replayed 8 messages**.
+
+Verified end to end: after moving a conversation into `docs/`, one question got both halves right —
+the new working directory, and the first thing asked in the conversation, which only the replay
+could have supplied.
+
+
 ## B-4 — Fenced code blocks threw away the language and everything else on the fence line
 
 **Found:** 2026-09-10, owner, reading the first markdown-rendered answers **Status:** fixed 2026-09-10

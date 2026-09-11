@@ -169,6 +169,42 @@ func (q *Queries) ListConversations(ctx context.Context) ([]Conversation, error)
 	return items, nil
 }
 
+const recentFolders = `-- name: RecentFolders :many
+SELECT folder, max(updated_at) AS last_used
+FROM conversations
+GROUP BY folder
+ORDER BY last_used DESC
+LIMIT $1
+`
+
+type RecentFoldersRow struct {
+	Folder   string      `json:"folder"`
+	LastUsed interface{} `json:"last_used"`
+}
+
+// Folders already in use, most recently touched first. The picker's shortcut
+// list, and the default for a new conversation — both come free from
+// conversations that already exist rather than from a preference to maintain.
+func (q *Queries) RecentFolders(ctx context.Context, limit int32) ([]RecentFoldersRow, error) {
+	rows, err := q.db.Query(ctx, recentFolders, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecentFoldersRow{}
+	for rows.Next() {
+		var i RecentFoldersRow
+		if err := rows.Scan(&i.Folder, &i.LastUsed); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renameConversation = `-- name: RenameConversation :one
 UPDATE conversations SET title = $2, updated_at = now()
 WHERE id = $1
@@ -212,6 +248,36 @@ type SetConversationArchivedParams struct {
 
 func (q *Queries) SetConversationArchived(ctx context.Context, arg SetConversationArchivedParams) (Conversation, error) {
 	row := q.db.QueryRow(ctx, setConversationArchived, arg.ID, arg.Archived)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Folder,
+		&i.Provider,
+		&i.ModelID,
+		&i.ModelLabel,
+		&i.Archived,
+		&i.SpendTicks,
+		&i.Tokens,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setConversationFolder = `-- name: SetConversationFolder :one
+UPDATE conversations SET folder = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at
+`
+
+type SetConversationFolderParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Folder string      `json:"folder"`
+}
+
+func (q *Queries) SetConversationFolder(ctx context.Context, arg SetConversationFolderParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setConversationFolder, arg.ID, arg.Folder)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,

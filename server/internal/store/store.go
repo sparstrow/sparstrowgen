@@ -288,6 +288,66 @@ func (s *Store) SetArchived(ctx context.Context, id string, archived bool) (prot
 	return toConversation(row), nil
 }
 
+// SetFolder moves a conversation to another working directory, and drops every
+// provider session with it.
+//
+// Allowed at any point, including mid-conversation, because the moment the
+// folder is discovered to be wrong is usually after an answer about the wrong
+// codebase (docs/Bugs.md B-3) — refusing then would refuse exactly when it
+// matters.
+//
+// The sessions have to go. claude keys its sessions by project directory, so a
+// resume id recorded in the old folder is simply not found from the new one —
+// verified: `--resume` from a different cwd answers "No conversation found with
+// session ID", and every later turn fails in about a second. Beyond that
+// mechanical fact, a session built somewhere else is reasoning about the wrong
+// tree, which is true of all three CLIs whether or not they refuse the resume.
+//
+// Dropping them resets seen_seq, so the next message replays the transcript
+// into a fresh session — the same path a provider switch already uses, and the
+// reason the picker warns that moving costs a catch-up.
+//
+// What the transcript does NOT record is that earlier answers came from
+// somewhere else; see docs/Later.md L-11.
+func (s *Store) SetFolder(ctx context.Context, id, folder string) (protocol.Conversation, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return protocol.Conversation{}, err
+	}
+	// Nothing to invalidate when the folder has not actually moved — and a
+	// no-op must not cost a replay.
+	current, err := s.q.GetConversation(ctx, uid)
+	if err != nil {
+		return protocol.Conversation{}, err
+	}
+	if current.Folder == folder {
+		return toConversation(current), nil
+	}
+	row, err := s.q.SetConversationFolder(ctx, db.SetConversationFolderParams{ID: uid, Folder: folder})
+	if err != nil {
+		return protocol.Conversation{}, err
+	}
+	if err := s.q.DeleteConversationProviderSessions(ctx, uid); err != nil {
+		return protocol.Conversation{}, err
+	}
+	return toConversation(row), nil
+}
+
+// RecentFolders is the picker's shortcut list and the default for a new
+// conversation. Derived from conversations that already exist, so there is no
+// separate list to keep in step with reality.
+func (s *Store) RecentFolders(ctx context.Context, limit int32) ([]string, error) {
+	rows, err := s.q.RecentFolders(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Folder)
+	}
+	return out, nil
+}
+
 func (s *Store) SetProvider(ctx context.Context, id, provider string, model protocol.Model) error {
 	uid, err := parseUUID(id)
 	if err != nil {

@@ -77,7 +77,9 @@ export function useCreateConversation() {
    the whole test AGENTS.md §3 sets for doing it. Sending a message is not
    optimistic, because what comes back is a model's answer and nothing about it
    is predictable. */
-function useOptimisticPatch<T extends { title?: string; archived?: boolean }>(
+function useOptimisticPatch<
+  T extends { title?: string; archived?: boolean; folder?: string },
+>(
   apply: (c: Conversation, patch: T) => Conversation,
   failure: string,
 ) {
@@ -121,6 +123,17 @@ export function useArchiveConversation() {
   return useOptimisticPatch<{ archived: boolean }>(
     (c, p) => ({ ...c, archived: p.archived }),
     "Could not archive",
+  );
+}
+
+/** Moving a conversation to another working directory.
+ *
+ *  Optimistic like the others: the outcome is predictable, the owner stays put,
+ *  and a failure rolls back to a folder that is still on screen. */
+export function useSetFolder() {
+  return useOptimisticPatch<{ folder: string }>(
+    (c, p) => ({ ...c, folder: p.folder }),
+    "Could not change the folder",
   );
 }
 
