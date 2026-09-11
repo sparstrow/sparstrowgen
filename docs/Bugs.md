@@ -344,3 +344,38 @@ it easy to produce on demand.
 it stopped is kept above", including turns where nothing had arrived and there was nothing above.
 It now says that only when there is something to mean.
 
+
+---
+
+## B-11 — `agy` cannot use any tool, so it cannot read the codebase it is pointed at
+
+**Found:** 2026-09-11, checking whether an agent can read a dropped file from disk **Status:** open
+**Repro:** In a folder containing `evidence.png`, run the adapter's own command line —
+`agy -p "Read the file evidence.png in this directory..." --output-format stream-json`. No flags
+beyond those in `server/internal/agent/agy.go`.
+**Expected / Actual:** The file is read and described / nothing is produced, and agy says so
+plainly:
+
+> `no output produced — a tool required the "command" permission that headless mode cannot prompt
+> for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g.
+> command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve
+> all tools.`
+
+The other two are not like this. `codex` runs under a `read-only` sandbox by default and read the
+same file without any flag from us; `claude` allows its read-only tools in `-p` without prompting.
+Only `agy` denies everything it cannot prompt for, and headless mode can never prompt.
+
+So agy in this app can answer from what the model already knows and nothing else — it cannot read a
+file, search the tree, or run a command. For a harness whose premise is one chat across every
+*coding* agent, that is the provider not doing the job rather than a missing nicety, and it is
+invisible today because nobody has asked agy to touch the codebase.
+
+**Not fixed here, because the fix is a decision rather than a flag.** The two routes agy documents
+are `--dangerously-skip-permissions` (auto-approve *everything*, which is the opposite of the
+scoping this project treats as a security boundary — see D-018) and an allow-rule in the user's own
+`settings.json`, which is the owner's tooling config rather than ours to write. `--sandbox` exists
+and may be the honest pairing for the first, but the combination is unverified: the check needed to
+confirm it was blocked before it ran, and no claim is made here about what it does.
+
+**Blocks a design that assumes every provider can read an attached file** — see
+[`Capabilities.md`](Capabilities.md).

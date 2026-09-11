@@ -155,6 +155,33 @@ the design from the first draft, not retrofitted when codex is wired up.
 
 `gemini` is out of the product entirely (D-014). Nothing here covers it and nothing should.
 
+### Files the owner drops into a conversation (2026-09-11)
+
+Checked because nothing here covered attachments, and the answer decides what the feature *is*.
+
+| | `claude` 2.1.90 | `codex` 0.154.0 | `agy` 1.2.0 |
+|---|---|---|---|
+| A flag that attaches a file to the prompt | **no** — `--file` takes Claude's own file-API ids (`file_abc:doc.txt`), not local paths *(verified from `--help`)* | **`-i, --image <FILE>...`**, on `exec` **and** `exec resume` *(verified flag, images only)* | **no** — its `-i` is `--prompt-interactive`, unrelated *(verified from `--help`)* |
+| Reads a file from disk when the prompt names the path | assumed — its read tool handles images, not re-checked here (the token in the checking shell had expired) | **yes, including images** *(verified 2026-09-11 — a PNG containing "SECRET CODE: PELICAN-7429" and "count of rows: 314" was read from cwd and both values returned, with no attachment flag and no vision plumbing from us)* | **no — denied before it tries**, see [`Bugs.md`](Bugs.md) B-11 |
+
+**The consequence for design.** Attaching a file *to the model* is not deliverable across providers
+— one of three has a flag and only for images. Putting the file **on the machine, inside the folder
+the conversation already runs in, and naming it in the prompt** is deliverable, for any file type,
+using the agents' own tools — and it is strictly better than an attachment: the file stays readable
+on later turns, survives a provider switch because it lives in the folder rather than in a session,
+and can be grepped and diffed rather than only looked at.
+
+**Except on `agy`, which can use no tools at all** (B-11). A design that assumes every provider can
+read what was dropped is not deliverable today; one that states plainly what the current provider
+can do with it is.
+
+**Only the daemon can write the file**, per D-020 — and it must be written before the turn starts,
+because the agent has no way to call back for it. That is the one place this differs from
+[Multica](../Reference/multica-main), which ships a CLI on the machine and can therefore tell the
+agent to fetch the bytes itself (`multica attachment download <id>`); its prompt deliberately
+carries the id and filename rather than a URL, because a signed URL can expire before the agent
+gets to it (`server/internal/daemon/prompt.go`). Materialising first has no such failure mode.
+
 ## Real caveats found while capturing (2026-09-09)
 
 - **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`
