@@ -26,12 +26,15 @@ import (
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	// The agent package reports a degraded process-tree stop through the
+	// default logger rather than by threading one through three backends.
+	slog.SetDefault(log)
 	serverURL := env("SERVER_WS", "ws://localhost:8080/daemon")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	d := &daemon{log: log, backends: agent.Backends()}
+	d := &daemon{log: log, backends: agent.Backends(), turns: newRunningTurns()}
 
 	// Bounded exponential backoff with full jitter. The attempt counter resets
 	// only after a connection has actually been established, not after a dial
@@ -78,6 +81,7 @@ func backoff(attempt int) time.Duration {
 type daemon struct {
 	log      *slog.Logger
 	backends map[string]agent.Backend
+	turns    *runningTurns
 
 	mu   sync.Mutex
 	conn *websocket.Conn
@@ -127,6 +131,15 @@ func (d *daemon) run(ctx context.Context, url string) error {
 			// Each turn runs on its own goroutine so a long one does not block
 			// the socket, and cancelling the daemon cancels the CLI with it.
 			go d.runTurn(ctx, *msg.Turn)
+		case msg.Type == protocol.ServerStopTurn && msg.TurnID != "":
+			// Deliberately NOT on a goroutine. Stopping is a map write and a
+			// context cancel with no I/O in it, and running it on the read loop
+			// is what keeps it ordered against the run_turn that started it.
+			if !d.turns.stop(msg.TurnID) {
+				// Either it finished a moment ago or its start is still in
+				// flight; stop() has remembered the request either way.
+				d.log.Info("stop for a turn that is not running", "turn", msg.TurnID)
+			}
 		case msg.Type == protocol.ServerListDir:
 			// Off the read loop too: a directory on a cold or network drive can
 			// take a moment, and a turn already streaming must not stall behind
@@ -175,6 +188,20 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		return
 	}
 
+	// Per-turn cancellation, so stopping one turn leaves the others alone. The
+	// connection context stays the parent: losing the socket still stops
+	// everything, which is the behaviour that existed before this.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if !d.turns.begin(t.TurnID, cancel) {
+		// The stop overtook the start. Nothing ran, so there is nothing to kill
+		// and no text to keep — but the turn still has to be closed out, or the
+		// server waits on it forever.
+		log.Info("turn was stopped before it started")
+		_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
+		return
+	}
+
 	prompt := buildPrompt(t)
 	log.Info("running turn", "replay", len(t.Replay), "resume", t.ResumeSessionID != "")
 
@@ -184,6 +211,10 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		ResumeSessionID: t.ResumeSessionID,
 	})
 	if err != nil {
+		if d.turns.end(t.TurnID) {
+			_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
+			return
+		}
 		_ = d.send(protocol.DaemonMessage{
 			Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: err.Error(),
 		})
@@ -209,19 +240,36 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	}
 
 	result := <-session.Result
-	if result.Err != nil {
+
+	// One place decides how the turn ended, and it reads the stop flag exactly
+	// once. A killed CLI usually also reports an error on its way out, so this
+	// order matters: asked-to-stop wins over whatever the dying process said,
+	// because that error is a consequence of the stop and not a reason.
+	switch stopped := d.turns.end(t.TurnID); {
+	case stopped:
+		// Text that arrived before the stop is kept, and it is usually the
+		// point — a turn is stopped once the answer has gone somewhere
+		// useless, and what came before is still worth reading. A provider
+		// that does not stream (codex) simply has nothing to keep.
+		log.Info("turn stopped", "chars", len(result.Text))
+		_ = d.send(protocol.DaemonMessage{
+			Type: protocol.DaemonStopped, TurnID: t.TurnID,
+			Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
+			SessionID: result.SessionID,
+		})
+	case result.Err != nil:
 		log.Warn("turn failed", "err", result.Err)
 		_ = d.send(protocol.DaemonMessage{
 			Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: result.Err.Error(),
 		})
-		return
+	default:
+		log.Info("turn done", "tokens", result.Tokens, "chars", len(result.Text))
+		_ = d.send(protocol.DaemonMessage{
+			Type: protocol.DaemonDone, TurnID: t.TurnID,
+			Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
+			SessionID: result.SessionID,
+		})
 	}
-	log.Info("turn done", "tokens", result.Tokens, "chars", len(result.Text))
-	_ = d.send(protocol.DaemonMessage{
-		Type: protocol.DaemonDone, TurnID: t.TurnID,
-		Full: result.Text, Tokens: result.Tokens, SpendTicks: result.SpendTicks,
-		SessionID: result.SessionID,
-	})
 }
 
 // buildPrompt prepends the catch-up, when there is one.

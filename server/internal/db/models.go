@@ -36,6 +36,7 @@ type Entry struct {
 	SpendTicks       *int64             `json:"spend_ticks"`
 	Failure          *string            `json:"failure"`
 	MessagesReplayed *int32             `json:"messages_replayed"`
+	Stopped          bool               `json:"stopped"`
 }
 
 type ProviderSession struct {

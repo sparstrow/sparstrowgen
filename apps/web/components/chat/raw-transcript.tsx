@@ -77,7 +77,12 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
               )}
             </Line>
             {e.text && <Body text={e.text} />}
-            {e.failure && (
+            {e.stopped && (
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                stopped{e.text ? "" : " before anything arrived"}
+              </p>
+            )}
+            {e.failure && !e.stopped && (
               <p className="mt-1 text-[13px] text-destructive">
                 turn did not finish: {e.failure}
               </p>

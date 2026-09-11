@@ -212,7 +212,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// codex reports tokens but never currency.
-	done, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 0, "")
+	done, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 0, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 	}
 
 	// claude does, and it should come through as real dollars.
-	withCost, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 363094500, "")
+	withCost, err := s.FinishAgent(ctx, placeholder.ID, "answer", 1234, 363094500, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := s.FinishAgent(ctx, e.ID, "got this far", 0, 0, "connection lost")
+	done, err := s.FinishAgent(ctx, e.ID, "got this far", 0, 0, "connection lost", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,6 +256,73 @@ func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	}
 	if done.Failure != "connection lost" {
 		t.Errorf("failure = %q", done.Failure)
+	}
+}
+
+// A stopped turn is not a failed one, and the transcript has to be able to tell
+// them apart: one says something went wrong, the other says the owner decided
+// he had seen enough.
+func TestStoppedTurnIsNotAFailure(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := s.FinishAgent(ctx, e.ID, "half an answer", 0, 0, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done.Stopped {
+		t.Error("stopped = false, want the stop recorded")
+	}
+	if done.Failure != "" {
+		t.Errorf("failure = %q, want nothing: being stopped is not going wrong", done.Failure)
+	}
+	if done.Text != "half an answer" {
+		t.Errorf("text = %q, want what arrived before the stop", done.Text)
+	}
+
+	// And it survives a reload, because that is the whole reason it is a column
+	// rather than something the client remembers.
+	reloaded, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, entry := range reloaded.Entries {
+		if entry.ID == e.ID {
+			found = true
+			if !entry.Stopped {
+				t.Error("stopped did not survive a reload")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the stopped entry is not in the transcript")
+	}
+}
+
+// A turn can be both: a CLI killed mid-answer often complains on its way out.
+// Recording only one of the two would lose either the reason it ended or the
+// detail of how it died.
+func TestATurnCanBeStoppedAndAlsoReportAFailure(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "claude", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := s.FinishAgent(ctx, e.ID, "", 0, 0, "signal: killed", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done.Stopped || done.Failure != "signal: killed" {
+		t.Errorf("stopped = %v, failure = %q; want both kept", done.Stopped, done.Failure)
 	}
 }
 

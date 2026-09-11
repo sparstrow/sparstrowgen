@@ -228,3 +228,25 @@ as one string — and the raw view is what made the first one findable.
 
 **Not repaired retroactively:** replies already stored are missing that text for good; it was never
 written down. Only what claude sends from now on is kept whole.
+
+## B-8 — A turn in flight when the daemon disconnects never ends
+
+**Found:** 2026-09-11, building the stop button (L-8) **Status:** open
+**Repro:** Send a message, then kill the daemon before the reply arrives.
+**Expected / Actual:** the turn is reported as broken and the conversation becomes usable again /
+the working indicator ticks forever, the composer stays locked, and the agent entry stays an empty
+placeholder — including after a refresh, because the placeholder is a real row.
+
+`daemonSocket`'s deferred cleanup calls `hub.ClearDaemon` and nothing else, so every entry in
+`api.turns` is orphaned (`server/internal/api/sockets.go:52`). Only a message carrying that turn id
+finishes a turn, and the process that would have sent one is gone.
+
+**Predates the stop button and is not caused by it** — this is what "there is no way to call a turn
+back" looked like even before there was a button. But it is the same shape of problem: a turn that
+cannot end. The fix is small (finish every in-flight turn when the daemon goes, with the failure
+saying the machine went away) and deliberately not bundled into L-8, which is already a protocol
+change, a migration and a process-tree change.
+
+**Also worth doing at the same time:** a turn that outlives its own plausible runtime with no
+daemon message at all. There is no timeout anywhere in the path today.
+

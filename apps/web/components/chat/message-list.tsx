@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CircleSlash } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
 import { providerClasses, formatTokens, formatUsd } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
@@ -34,6 +34,7 @@ function AgentTurn({
   at,
   usage,
   failure,
+  stopped,
   streaming,
 }: {
   provider: ProviderId;
@@ -42,6 +43,7 @@ function AgentTurn({
   at: string;
   usage?: { tokens: number; usd?: number };
   failure?: string;
+  stopped?: boolean;
   streaming?: boolean;
 }) {
   const c = providerClasses[provider];
@@ -62,7 +64,30 @@ function AgentTurn({
         <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 rounded-xs bg-foreground/60" />
       )}
 
-      {failure && (
+      {/* Deliberately not the destructive treatment below. Stopping a turn is
+          something the owner chose to do, and putting a red alert box around a
+          deliberate act reads as though something went wrong. */}
+      {stopped && (
+        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-dashed bg-muted/40 px-3.5 py-2.5">
+          <CircleSlash
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <div className="text-sm">
+            <p className="font-medium">You stopped this</p>
+            <p className="mt-0.5 text-muted-foreground">
+              {text
+                ? "What had arrived is kept above."
+                : `Nothing had arrived yet — ${provider} sends its reply in one piece.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* A stopped turn's CLI often complains on its way out, and that
+          complaint is a consequence of the stop rather than a reason worth
+          reading. The stop is the truer account, so it is the one shown. */}
+      {failure && !stopped && (
         <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-2.5">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="text-sm">
@@ -234,6 +259,7 @@ export function MessageList({
             at={e.at}
             usage={e.usage}
             failure={e.failure}
+            stopped={e.stopped}
             streaming={streamingId === e.id}
           />
         );

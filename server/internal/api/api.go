@@ -71,6 +71,10 @@ func (a *API) Routes() http.Handler {
 	r.Get("/api/directories", a.listDirectories)
 	r.Get("/api/folders/recent", a.recentFolders)
 	r.Post("/api/conversations/{id}/messages", a.postMessage)
+	// Keyed by turn, not by conversation. "Stop whatever this conversation is
+	// running" would be ambiguous the moment a turn ends between the click and
+	// the request, and would then stop the wrong one.
+	r.Post("/api/turns/{turnId}/stop", a.stopTurn)
 
 	r.Get("/ws", a.browserSocket)
 	r.Get("/daemon", a.daemonSocket)
@@ -342,12 +346,42 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if !sent {
-		a.finishTurn(ctx, turnID, "", 0, 0, errDaemonOffline.Error())
+		a.finishTurn(ctx, turnID, "", 0, 0, errDaemonOffline.Error(), false)
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
 		return
 	}
 
 	writeJSON(w, map[string]any{"turnId": turnID, "entry": agentEntry})
+}
+
+// stopTurn ends a turn that is already running.
+//
+// It does not finish the entry itself. The daemon confirms with DaemonStopped
+// and that goes through the same finishTurn as every other ending, so there is
+// one path for "this turn is over" rather than a second one that has to be kept
+// in step with the first.
+func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
+	turnID := chi.URLParam(r, "turnId")
+
+	a.mu.Lock()
+	_, running := a.turns[turnID]
+	a.mu.Unlock()
+	if !running {
+		// The click and the turn ending race by nature, so this is an ordinary
+		// outcome rather than something to alarm anyone about — but it is not a
+		// success either, because nothing was stopped. The client treats it as
+		// "already finished" and says nothing.
+		a.fail(w, errTurnNotRunning, http.StatusConflict)
+		return
+	}
+	if !a.hub.SendToDaemon(protocol.ServerMessage{
+		Type: protocol.ServerStopTurn, TurnID: turnID,
+	}) {
+		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
+		return
+	}
+	// Accepted, not done: the turn ends when the daemon says it has.
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // ---------------------------------------------------------------------------
@@ -395,16 +429,26 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 		})
 
 	case protocol.DaemonDone:
-		a.finishTurn(ctx, msg.TurnID, msg.Full, msg.Tokens, msg.SpendTicks, "")
+		a.finishTurn(ctx, msg.TurnID, msg.Full, msg.Tokens, msg.SpendTicks, "", false)
 
 	case protocol.DaemonFailed:
 		// Whatever arrived before it stopped is kept: a partial answer is still
 		// worth reading, and deleting it would hide what went wrong.
-		a.finishTurn(ctx, msg.TurnID, t.Streamed, 0, 0, msg.Error)
+		a.finishTurn(ctx, msg.TurnID, t.Streamed, 0, 0, msg.Error, false)
+
+	case protocol.DaemonStopped:
+		// No failure text. The turn ended because it was asked to, and any error
+		// the CLI produced while being killed is a consequence of that rather
+		// than something the owner needs to read.
+		text := msg.Full
+		if text == "" {
+			text = t.Streamed
+		}
+		a.finishTurn(ctx, msg.TurnID, text, msg.Tokens, msg.SpendTicks, "", true)
 	}
 }
 
-func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spendTicks int64, failure string) {
+func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spendTicks int64, failure string, stopped bool) {
 	a.mu.Lock()
 	t := a.turns[turnID]
 	delete(a.turns, turnID)
@@ -413,7 +457,7 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		return
 	}
 
-	entry, err := a.store.FinishAgent(ctx, t.EntryID, text, tokens, spendTicks, failure)
+	entry, err := a.store.FinishAgent(ctx, t.EntryID, text, tokens, spendTicks, failure, stopped)
 	if err != nil {
 		a.log.Error("finish entry", "err", err)
 		return
@@ -431,7 +475,10 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 	}
 
 	// The provider has now seen everything up to and including its own reply,
-	// so a switch away and back replays only what comes after this point.
+	// so a switch away and back replays only what comes after this point. True
+	// of a stopped turn too: the CLI received the prompt and its own session
+	// holds the exchange, so replaying it again would be telling it something
+	// it already knows.
 	if seq, err := a.store.LastSeq(ctx, t.ConversationID); err == nil {
 		_ = a.store.MarkSeen(ctx, t.ConversationID, t.Provider, "", seq)
 	}

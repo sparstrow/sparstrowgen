@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { ArrowUp, Check, ChevronDown, Undo2 } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Square, Undo2 } from "lucide-react";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
 import { providerClasses, formatTokens } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
@@ -25,6 +25,12 @@ type Props = {
   onSelect: (provider: ProviderId, model: Model) => void;
   onCancelSwitch: () => void;
   onSend: () => void;
+  /** A turn is running and can be called back. The send button becomes the stop
+   *  button rather than a second control appearing elsewhere: it is where the
+   *  hand already is, and the working indicator it would otherwise sit beside
+   *  scrolls out of sight on a long answer. */
+  running: boolean;
+  onStop: () => void;
 };
 
 export function Composer({
@@ -39,6 +45,8 @@ export function Composer({
   onSelect,
   onCancelSwitch,
   onSend,
+  running,
+  onStop,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const shown = pending
@@ -206,21 +214,39 @@ export function Composer({
               }
             }}
             placeholder={
-              disabled ? "Unavailable" : `Message ${shown.provider}…`
+              running
+                ? `${shown.provider} is working — stop it to type`
+                : disabled
+                  ? "Unavailable"
+                  : `Message ${shown.provider}…`
             }
             aria-label="Message"
             className="max-h-50 min-h-9 flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-muted-foreground disabled:opacity-50"
           />
 
-          <Button
-            size="icon"
-            className="size-9 shrink-0 rounded-xl"
-            disabled={disabled || !value.trim()}
-            onClick={onSend}
-            aria-label="Send message"
-          >
-            <ArrowUp className="size-4" />
-          </Button>
+          {running ? (
+            <Button
+              size="icon"
+              variant="secondary"
+              className="size-9 shrink-0 rounded-xl"
+              onClick={onStop}
+              aria-label="Stop this turn"
+              title="Stop this turn"
+            >
+              {/* A filled square, the one stop glyph nobody has to learn. */}
+              <Square className="size-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className="size-9 shrink-0 rounded-xl"
+              disabled={disabled || !value.trim()}
+              onClick={onSend}
+              aria-label="Send message"
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

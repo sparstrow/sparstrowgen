@@ -104,6 +104,7 @@ func toEntry(e db.Entry) protocol.Entry {
 		out.Provider = str(e.Provider)
 		out.Model = model
 		out.Failure = str(e.Failure)
+		out.Stopped = e.Stopped
 		// Usage is omitted entirely until the turn reports some. An agent
 		// message still streaming has none, and showing "0 tokens" would be a
 		// statement we cannot support.
@@ -454,7 +455,12 @@ func (s *Store) AppendDelta(ctx context.Context, entryID, text string) error {
 	return err
 }
 
-func (s *Store) FinishAgent(ctx context.Context, entryID, text string, tokens, spendTicks int64, failure string) (protocol.Entry, error) {
+// FinishAgent closes out a turn, however it ended.
+//
+// stopped and failure are not alternatives: a CLI killed mid-answer often
+// complains on its way out, so a stopped turn can carry an exec error too. Both
+// are recorded and the surface decides which to lead with.
+func (s *Store) FinishAgent(ctx context.Context, entryID, text string, tokens, spendTicks int64, failure string, stopped bool) (protocol.Entry, error) {
 	uid, err := parseUUID(entryID)
 	if err != nil {
 		return protocol.Entry{}, err
@@ -464,7 +470,8 @@ func (s *Store) FinishAgent(ctx context.Context, entryID, text string, tokens, s
 		failPtr = &failure
 	}
 	row, err := s.q.FinishAgentEntry(ctx, db.FinishAgentEntryParams{
-		ID: uid, Body: text, Tokens: &tokens, SpendTicks: &spendTicks, Failure: failPtr,
+		ID: uid, Body: text, Tokens: &tokens, SpendTicks: &spendTicks,
+		Failure: failPtr, Stopped: stopped,
 	})
 	if err != nil {
 		return protocol.Entry{}, err

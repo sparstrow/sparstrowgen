@@ -106,6 +106,20 @@ export const api = {
     );
   },
 
+  /** Ends a turn that is already running. Resolves to false when the turn had
+   *  already finished — the click and the last delta race every time, and that
+   *  is an ordinary outcome rather than something worth a message. The turn's
+   *  actual ending still arrives over the socket, like every other ending. */
+  async stopTurn(turnId: string): Promise<boolean> {
+    const res = await fetch(`${BASE}/api/turns/${turnId}/stop`, { method: "POST" });
+    if (res.status === 409) return false;
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+    }
+    return true;
+  },
+
   async send(
     id: string,
     input: { text: string; provider: ProviderId; model: Model },

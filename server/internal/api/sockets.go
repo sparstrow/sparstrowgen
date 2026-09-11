@@ -15,6 +15,10 @@ import (
 // than after.
 var errDaemonOffline = errors.New("your machine is unreachable, so nothing new can be sent")
 
+// errTurnNotRunning answers a stop for a turn that has already ended. Ordinary
+// rather than exceptional: the button and the last delta race every time.
+var errTurnNotRunning = errors.New("that turn has already finished")
+
 func defaultFolder() string {
 	if wd, err := os.Getwd(); err == nil {
 		return wd

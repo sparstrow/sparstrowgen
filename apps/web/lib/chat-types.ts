@@ -93,6 +93,12 @@ export type AgentMessage = {
   usage?: Usage;
   /** Set when the turn ended badly. Text may still hold a partial answer. */
   failure?: string;
+  /** The owner ended this turn rather than the agent finishing it. Kept apart
+   *  from `failure` because they read differently: one is something going
+   *  wrong, the other is a decision. Both can be set when a CLI complained on
+   *  its way out — the surface leads with the stop, since the complaint is a
+   *  consequence of it. */
+  stopped?: boolean;
 };
 
 /** A provider switch that has actually been paid for, recorded in the transcript

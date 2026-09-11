@@ -166,6 +166,17 @@ export function useSendMessage() {
   });
 }
 
+/** Ends a turn that is already running.
+ *
+ *  Nothing is patched here and no cache is invalidated: the turn ends when the
+ *  daemon says it has, and that arrives as the same entry_done every other
+ *  ending arrives as. Finishing it optimistically would mean guessing what text
+ *  survived, and the whole reason to stop a turn is that you want to keep what
+ *  it already said. */
+export function useStopTurn() {
+  return useMutation({ mutationFn: (turnId: string) => api.stopTurn(turnId) });
+}
+
 // ---------------------------------------------------------------------------
 // realtime
 // ---------------------------------------------------------------------------
