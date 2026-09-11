@@ -151,3 +151,48 @@ The predicted cost was right too. B-5 mangled text that was all still present; t
 message with nothing on screen to suggest it. Fixed in the same change that closed this entry;
 `claudeMessage.text()` now joins a message's own text blocks with a blank line as well, though that
 path is still unexercised — no capture we hold has two text blocks inside one message.
+
+## G-15 — The process-tree stop is proved on Windows only
+
+**Kind:** unproved
+**Raised:** 2026-09-11, building the stop button (L-8)
+
+`server/internal/agent/tree_windows.go` is verified twice over: a unit test that captures a
+grandchild in the Job Object and confirms the tree empties, and a real `claude` turn that had
+spawned `bash -c 'sleep 180'` — after the stop, neither the CLI nor the bash process existed.
+
+`tree_other.go`, the process-group equivalent for everything else, **has never been run.** It
+compiles under `GOOS=linux` and that is the whole of the evidence. The daemon runs on the owner's
+Windows machine and nothing else has ever run one, so this is not currently reachable — but the
+server and daemon are one module, and the file exists so the module builds for the Coolify
+deployment the *server* is headed for.
+
+- **If wrong:** on a non-Windows daemon a stop would kill the CLI but possibly not its subprocesses,
+  which is the pre-D-021 behaviour rather than something newly broken. The Unix path also uses a
+  real SIGTERM→SIGKILL escalation that Windows has no equivalent of, so it is the *more* forgiving
+  of the two.
+- **Clears when:** a daemon runs on Linux or macOS and the grandchild test is run there. The test is
+  already written in the Windows-tagged file and would port almost unchanged — `cmd.exe /c ping`
+  becomes `sh -c 'sleep 60'`.
+
+## G-16 — The concurrency in `launch` has not been through the race detector
+
+**Kind:** unproved
+**Raised:** 2026-09-11, building the stop button (L-8)
+
+`process.treeGone` is written by the terminator goroutine and read by whoever called `Wait`. That is
+safe by the channel close — the terminator's `defer close(p.terminated)` happens after the write,
+and `Wait` reads only after `<-p.terminated` — and the same channel is what stops `release` from
+invalidating the job handle while `terminate`/`gone` are still using it. **That is an argument, not
+a measurement.**
+
+`go test -race` cannot run on this machine: the race detector needs cgo, and there is no gcc on
+PATH. Reported honestly rather than skipped quietly — the tests themselves pass, but they pass
+without the detector watching.
+
+- **If wrong:** a torn read of a bool, which would at worst mislabel a stop as unconfirmed in a log
+  line. The handle-lifetime question is the one that would actually matter, and it is the one the
+  channel most directly guards.
+- **Clears when:** a C toolchain is available anywhere this repo is tested — `go test ./... -race`
+  in CI would do it — or the daemon is built on a machine that has one.
+

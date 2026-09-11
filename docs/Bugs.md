@@ -250,3 +250,23 @@ change, a migration and a process-tree change.
 **Also worth doing at the same time:** a turn that outlives its own plausible runtime with no
 daemon message at all. There is no timeout anywhere in the path today.
 
+## B-9 — The composer shows the old provider after sending to a new one
+
+**Found:** 2026-09-11, verifying the stop button (L-8) **Status:** open
+**Repro:** In a conversation on claude, pick codex in the provider dropdown and send a message.
+**Expected / Actual:** the composer says codex, because that is what the conversation is on now /
+it snaps back to claude, and the placeholder reads "Message claude…". A reload corrects it.
+
+Purely a stale cache, and the server is right: `postMessage` calls `store.SetProvider` and the
+conversation really is on codex (verified directly — `provider: codex`, `model: GPT-5.6 Sol`), but
+nothing broadcasts an `EventConversation` for that change, so the browser's copy still says claude
+until something else refetches it.
+
+The transcript is unaffected — the working indicator and the agent entry both name codex correctly,
+because they take the provider from the send rather than from the cached conversation. It is the
+composer alone, which reads `selected.provider`.
+
+**Predates the stop button**; found while verifying it because switching provider and then watching
+the composer is not something the earlier rounds happened to do. The fix is one broadcast in
+`postMessage`, alongside the one `patchConversation` already does.
+

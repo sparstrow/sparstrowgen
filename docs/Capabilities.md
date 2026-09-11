@@ -229,6 +229,18 @@ the design from the first draft, not retrofitted when codex is wired up.
 - **Provider and model discovery from the machine** — the daemon can probe what's installed and
   report it, including a `Blocked` state with a reason, per the three-state model above.
 - **Daemon online/offline state**, and which directories are registered.
+- **Stopping a turn that is already running, and keeping what it had said.** Verified 2026-09-11 on
+  `claude` and `codex`. The daemon owns each CLI's whole process tree (a Windows Job Object), so a
+  stop takes the agent's own subprocesses with it: verified against a real turn where `claude` had
+  spawned `bash -c 'sleep 180'`, and both were gone immediately afterwards. Text that had already
+  arrived is kept and the turn is recorded as stopped rather than failed.
+- **Partial output survives a stop on `codex` too, despite it not streaming.** Verified 2026-09-11,
+  and it corrects a reasonable-sounding assumption: `Streams: false` means codex emits no
+  incremental *deltas*, NOT that it produces nothing until the end. It completes whole
+  `agent_message` items during a turn, and a stop keeps every one it finished — a codex turn stopped
+  after 6s kept 471 characters the surface had never displayed, because there were no deltas to
+  display them with. So "does not stream" and "has nothing to keep" are different claims, and only
+  the first is true.
 
 ## Keeping this honest
 

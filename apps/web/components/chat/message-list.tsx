@@ -75,10 +75,16 @@ function AgentTurn({
           />
           <div className="text-sm">
             <p className="font-medium">You stopped this</p>
+            {/* Two states, and no explanation of why. Twice now a plausible
+                sentence about the provider turned out to be false — claude was
+                said not to stream (it does, it was mid-tool-call) and codex was
+                said to lose everything (it keeps whole messages it finished).
+                What is actually known here is whether text arrived, so that is
+                all this says. */}
             <p className="mt-0.5 text-muted-foreground">
               {text
                 ? "What had arrived is kept above."
-                : `Nothing had arrived yet — ${provider} sends its reply in one piece.`}
+                : "Nothing had arrived yet."}
             </p>
           </div>
         </div>

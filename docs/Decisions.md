@@ -384,3 +384,55 @@ once and the daemon may answer them in any sequence.
 picker to the desktop shell that does not exist yet (L-2). What was taken from Multica instead is
 its typed failure reasons — `not_found`, `not_a_directory`, `not_readable` — so the surface renders
 its own wording rather than parsing a sentence.
+
+## D-021 — The daemon owns each agent's whole process tree, not just the CLI
+
+**Decided:** 2026-09-11, building the stop button (L-8)
+
+Stopping a turn kills a Windows Job Object (or a Unix process group) that the CLI and everything it
+spawns belong to, rather than the CLI process alone.
+
+**Rejected: `exec.CommandContext`'s built-in cancel**, which kills the direct child. That is not a
+stop. An agent mid-task is usually running something — a build, an install, an MCP server — and
+those are children of the CLI, not of us. Verified rather than assumed: with a leader-only kill, a
+`ping` the leader had spawned outlived it and went on holding the inherited stdout pipe, which is
+also what wedges the parser
+(`server/internal/agent/tree_windows_test.go:TestKillingOnlyTheLeaderLeavesTheGrandchildRunning`).
+
+**Adopted from [Multica](../Reference/multica-main)** (`server/pkg/agent/proc_windows.go`), which
+drives these same CLIs on this same machine, and carries an ordering that is easy to get wrong and
+expensive to discover: the child is created **suspended**, assigned to the job, and only then
+resumed. Windows grants job membership only to processes created *after* the assignment and never
+retroactively, so assigning after a plain `Start` leaves a window in which the agent has already
+spawned subprocesses outside the job. That is worse than owning nothing — the job then reports an
+empty tree while the escaped processes run on, and a stop gets reported as confirmed when it is not.
+
+Trimmed from Multica's version: its console handling (`CREATE_NEW_CONSOLE`) solves a popup problem
+we do not have, because our daemon runs in a terminal its children inherit.
+
+**Cost:** `golang.org/x/sys` becomes a direct dependency. Accepted over hand-rolled `LazyDLL`
+bindings for the job-object calls, which is precisely the kind of code that fails silently and in
+the wrong direction. Weighed against D-013's preference for few dependencies: x/sys is effectively
+extended-stdlib, and the alternative here is worse code, not less code.
+
+**Failure is degraded, not fatal.** If ownership cannot be taken the child is resumed and runs
+unowned, with a warning naming the consequence — a stop that kills only the CLI. A launch that
+failed outright would take the whole provider down over something environmental.
+
+## D-022 — A stopped turn is a column on the entry, not a fourth entry role
+
+**Decided:** 2026-09-11, building the stop button (L-8)
+
+`entries.stopped boolean` rather than a `stopped` value in `entries.role`.
+
+**Rejected: a new role.** The partial text lives on the agent entry, and a separate marker row would
+put the note somewhere other than the thing it is about. `role` has a CHECK constraint precisely to
+keep the set of things that can appear in a transcript small and meaningful, and "this turn ended
+early" is a property of a turn rather than a new kind of event. This is the same call
+[`Later.md`](Later.md) L-11 reaches for recording a folder move — a column rather than a row.
+
+**Rejected: reusing `failure`.** They are different events and they read differently: a failure is
+something going wrong, a stop is someone deciding they had seen enough. Rendering the second as the
+first puts a red alert box around a deliberate act. The surface leads with the stop when both are
+set, because a CLI's complaint on its way out is a consequence of the stop, not a reason for it.
+
