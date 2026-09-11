@@ -46,3 +46,12 @@ type ProviderSession struct {
 	SeenSeq        int32              `json:"seen_seq"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
+
+type Session struct {
+	TokenHash  []byte             `json:"token_hash"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	UserAgent  string             `json:"user_agent"`
+	Ip         string             `json:"ip"`
+}

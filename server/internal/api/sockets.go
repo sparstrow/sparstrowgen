@@ -36,7 +36,8 @@ func defaultFolder() string {
 }
 
 func (a *API) browserSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	up := a.upgrader()
+	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
@@ -53,7 +54,17 @@ func (a *API) browserSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	// Checked BEFORE the upgrade, so an unauthorised dialler gets a plain 401
+	// rather than a working websocket that is then closed — and so that nothing
+	// is registered in the hub on the strength of a connection we are about to
+	// reject.
+	if !a.daemonAuthorised(r) {
+		a.log.Warn("refused a daemon connection", "remote", r.RemoteAddr)
+		a.fail(w, errors.New("this machine is not authorised"), http.StatusUnauthorized)
+		return
+	}
+	up := a.upgrader()
+	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}

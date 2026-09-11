@@ -13,15 +13,35 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/websocket"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
+// Config is what the deployment decides. Every field is required: there is no
+// value of any of them that means "no authentication", because the one mistake
+// this app cannot afford is being reachable without it.
+type Config struct {
+	// PasswordHash is the argon2id PHC string from `server -hashpw`.
+	PasswordHash string
+	// DaemonToken is the shared secret the owner's machine presents.
+	DaemonToken string
+	// Origin is the exact browser origin allowed to call this API, e.g.
+	// "https://sparstrowgen.example.ts.net". Cross-origin requests from
+	// anywhere else are refused, and so are websocket upgrades.
+	Origin string
+	// SecureCookie marks the session cookie Secure, which makes it unusable
+	// over plain HTTP. On in production, off for http://localhost.
+	SecureCookie bool
+}
+
 type API struct {
-	store *store.Store
-	hub   *hub.Hub
-	log   *slog.Logger
+	store    *store.Store
+	hub      *hub.Hub
+	log      *slog.Logger
+	cfg      Config
+	throttle *auth.Throttle
 
 	// turns maps an in-flight turn to the conversation and entry it is writing
 	// into, so a daemon message carrying only a turn id can be routed.
@@ -39,53 +59,100 @@ type turn struct {
 	Streamed string
 }
 
-func New(s *store.Store, h *hub.Hub, log *slog.Logger) *API {
-	a := &API{store: s, hub: h, log: log, turns: map[string]*turn{}}
+func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
+	a := &API{
+		store: s, hub: h, log: log, cfg: cfg,
+		throttle: auth.NewThrottle(),
+		turns:    map[string]*turn{},
+	}
 	h.OnDaemonMessage = a.handleDaemonMessage
 	return a
 }
 
-// upgrader accepts any origin: the server is reached over the loopback address
-// in development and behind our own auth in production, and there is no
-// cookie-authenticated state for a foreign page to abuse yet. Revisit the day
-// there is a session cookie.
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(*http.Request) bool { return true },
+// upgrader refuses a websocket from anywhere but the configured origin.
+//
+// This used to accept any origin, with a comment saying to revisit it the day
+// there was a session cookie. That day is this one. A cookie is sent on a
+// websocket handshake exactly as on any other request, and the same-origin
+// policy does NOT apply to websockets — so without this check any page the
+// owner happened to visit could open a socket to this server, be authenticated
+// by his own cookie, and read every conversation in it.
+//
+// A handshake with no Origin header at all is allowed: that is a non-browser
+// client, which has no cookie to abuse and must still present the daemon token
+// or a session of its own.
+func (a *API) upgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return origin == "" || origin == a.cfg.Origin
+		},
+	}
 }
 
 func (a *API) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(cors)
+	r.Use(a.cors)
 
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"ok": true, "daemon": a.hub.DaemonOnline()})
+	// --- open to anyone -----------------------------------------------------
+	// Liveness only. It deliberately does NOT report whether the daemon is
+	// connected: that is a fact about the owner's machine, and an unauthenticated
+	// endpoint should not answer "is he at his desk right now".
+	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"ok": true})
 	})
-	r.Get("/api/providers", a.getProviders)
-	r.Get("/api/conversations", a.listConversations)
-	r.Post("/api/conversations", a.createConversation)
-	r.Get("/api/conversations/{id}", a.getConversation)
-	r.Patch("/api/conversations/{id}", a.patchConversation)
-	r.Delete("/api/conversations/{id}", a.deleteConversation)
-	r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
-	r.Get("/api/directories", a.listDirectories)
-	r.Get("/api/folders/recent", a.recentFolders)
-	r.Post("/api/conversations/{id}/messages", a.postMessage)
-	// Keyed by turn, not by conversation. "Stop whatever this conversation is
-	// running" would be ambiguous the moment a turn ends between the click and
-	// the request, and would then stop the wrong one.
-	r.Post("/api/turns/{turnId}/stop", a.stopTurn)
+	r.Post("/api/auth/login", a.login)
+	r.Post("/api/auth/logout", a.logout)
+	r.Get("/api/auth/session", a.session)
 
-	r.Get("/ws", a.browserSocket)
+	// The daemon presents its own token on the handshake rather than a session
+	// cookie, so it is not behind requireSession.
 	r.Get("/daemon", a.daemonSocket)
+
+	// --- everything else needs the owner ------------------------------------
+	r.Group(func(r chi.Router) {
+		r.Use(a.requireSession)
+
+		r.Get("/api/providers", a.getProviders)
+		r.Get("/api/conversations", a.listConversations)
+		r.Post("/api/conversations", a.createConversation)
+		r.Get("/api/conversations/{id}", a.getConversation)
+		r.Patch("/api/conversations/{id}", a.patchConversation)
+		r.Delete("/api/conversations/{id}", a.deleteConversation)
+		r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
+		r.Get("/api/directories", a.listDirectories)
+		r.Get("/api/folders/recent", a.recentFolders)
+		r.Post("/api/conversations/{id}/messages", a.postMessage)
+		// Keyed by turn, not by conversation. "Stop whatever this conversation
+		// is running" would be ambiguous the moment a turn ends between the
+		// click and the request, and would then stop the wrong one.
+		r.Post("/api/turns/{turnId}/stop", a.stopTurn)
+
+		r.Get("/ws", a.browserSocket)
+	})
 	return r
 }
 
-func cors(next http.Handler) http.Handler {
+// cors answers exactly one origin, and only with credentials allowed.
+//
+// It used to answer "*", which was survivable while there was nothing to steal.
+// With a session cookie there is: "*" cannot legally be combined with
+// credentials, and a browser enforces that — but the deeper point is that the
+// list of origins allowed to act as the owner should be one, named in the
+// deployment, rather than everything.
+//
+// Vary: Origin because the answer differs per request, and a cache that misses
+// that would hand one origin's permission to another.
+func (a *API) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Add("Vary", "Origin")
+		if origin := r.Header.Get("Origin"); origin != "" && origin == a.cfg.Origin {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

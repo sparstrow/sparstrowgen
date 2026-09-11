@@ -7,7 +7,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
@@ -41,11 +44,26 @@ These SKIP without a database, matching the store tests, so the suite stays
 useful on a machine with nothing running. Start one with `make db && make
 migrate`. */
 
+// testPassword is the password the harness signs in with. A fixed string in a
+// test file is not a secret — the hash is generated fresh in newRig, so nothing
+// here is a credential that works anywhere but inside this process.
+const testPassword = "correct-horse-battery-staple"
+
+// testDaemonToken must clear the 32-character floor the server enforces.
+const testDaemonToken = "test-daemon-token-0123456789abcdefgh"
+
+// testOrigin is what the harness claims to be. It matters: the API now answers
+// CORS for exactly one origin and refuses websockets from any other.
+const testOrigin = "http://sparstrowgen.test"
+
 type rig struct {
 	t     *testing.T
 	api   *API
 	store *store.Store
 	http  *httptest.Server
+	// client carries the session cookie, so these tests exercise the same path
+	// a browser does rather than quietly bypassing the login.
+	client *http.Client
 }
 
 func newRig(t *testing.T) *rig {
@@ -73,12 +91,73 @@ func newRig(t *testing.T) *rig {
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	s := store.New(pool)
 	h := hub.New(quiet)
-	a := New(s, h, quiet)
+
+	hash, err := auth.HashPassword(testPassword)
+	if err != nil {
+		t.Fatalf("hash the test password: %v", err)
+	}
+	a := New(s, h, quiet, Config{
+		PasswordHash: hash,
+		DaemonToken:  testDaemonToken,
+		Origin:       testOrigin,
+		// The harness speaks http://127.0.0.1, and a Secure cookie would never
+		// be stored by the jar — the tests would then all fail as "not signed
+		// in", which is the right behaviour and the wrong test.
+		SecureCookie: false,
+	})
 
 	srv := httptest.NewServer(a.Routes())
 	t.Cleanup(srv.Close)
 
-	return &rig{t: t, api: a, store: s, http: srv}
+	r := &rig{t: t, api: a, store: s, http: srv, client: newJarClient(t)}
+	r.signIn()
+	return r
+}
+
+// signIn does what the login screen does, and every later request in the test
+// rides the cookie it returns.
+func (r *rig) signIn() {
+	r.t.Helper()
+	res := r.post("/api/auth/login", map[string]any{"password": testPassword})
+	if res.StatusCode != http.StatusOK {
+		r.t.Fatalf("sign in: %s", res.Status)
+	}
+	if len(r.client.Jar.Cookies(mustURL(r.t, r.http.URL))) == 0 {
+		r.t.Fatal("signing in set no cookie")
+	}
+}
+
+// newJarClient is a fresh browser: its own cookie jar, nothing carried over.
+func newJarClient(t *testing.T) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &http.Client{Jar: jar}
+}
+
+func mustURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+// cookieHeader is what a websocket dial needs, since the gorilla dialler does
+// not share the http.Client's jar.
+func (r *rig) cookieHeader() http.Header {
+	r.t.Helper()
+	var pairs []string
+	for _, c := range r.client.Jar.Cookies(mustURL(r.t, r.http.URL)) {
+		pairs = append(pairs, c.Name+"="+c.Value)
+	}
+	return http.Header{
+		"Cookie": []string{strings.Join(pairs, "; ")},
+		"Origin": []string{testOrigin},
+	}
 }
 
 func (r *rig) ws(path string) string {
@@ -107,7 +186,13 @@ func (r *rig) post(path string, body any) *http.Response {
 			r.t.Fatal(err)
 		}
 	}
-	res, err := http.Post(r.http.URL+path, "application/json", &buf)
+	req, err := http.NewRequest(http.MethodPost, r.http.URL+path, &buf)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", testOrigin)
+	res, err := r.client.Do(req)
 	if err != nil {
 		r.t.Fatalf("POST %s: %v", path, err)
 	}
@@ -165,7 +250,9 @@ type daemon struct {
 
 func (r *rig) connectDaemon() *daemon {
 	r.t.Helper()
-	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/daemon"), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/daemon"), http.Header{
+		"Authorization": []string{"Bearer " + testDaemonToken},
+	})
 	if err != nil {
 		r.t.Fatalf("dial /daemon: %v", err)
 	}
@@ -243,7 +330,7 @@ type browser struct {
 
 func (r *rig) watch() *browser {
 	r.t.Helper()
-	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/ws"), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(r.ws("/ws"), r.cookieHeader())
 	if err != nil {
 		r.t.Fatalf("dial /ws: %v", err)
 	}

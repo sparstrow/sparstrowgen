@@ -6,16 +6,22 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/term"
+
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/api"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
@@ -25,9 +31,19 @@ import (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
+	// `server -hashpw` prints the value for OWNER_PASSWORD_HASH and exits. It
+	// lives in this binary rather than a second one so that the thing which
+	// writes the hash and the thing which reads it can never be different
+	// versions of the same algorithm.
+	if len(os.Args) > 1 && os.Args[1] == "-hashpw" {
+		hashPassword(log)
+		return
+	}
+
 	dsn := env("DATABASE_URL",
 		"postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen?sslmode=disable")
 	addr := env("ADDR", ":8080")
+	cfg := authConfig(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -47,7 +63,7 @@ func main() {
 	h := hub.New(log)
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: api.New(store.New(pool), h, log).Routes(),
+		Handler: api.New(store.New(pool), h, log, cfg).Routes(),
 		// No write timeout: these are long-lived websockets, and a deadline
 		// here would cut a turn off mid-answer.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -73,4 +89,119 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+/*
+	Authentication configuration, which the server refuses to start without.
+
+There is no default password, no "auth disabled" switch and no development
+shortcut, because every one of those is a thing that can end up in production by
+accident — and what is behind this login is a program that runs code on the
+owner's machine. A server that will not boot is a loud, immediate, local
+failure. A server that boots without a password is a silent, remote one.
+
+Development is served by the Makefile setting these to known values, so the
+cost of the strictness is one line in a file, not a branch in the program.
+*/
+func authConfig(log *slog.Logger) api.Config {
+	cfg := api.Config{
+		PasswordHash: os.Getenv("OWNER_PASSWORD_HASH"),
+		DaemonToken:  os.Getenv("DAEMON_TOKEN"),
+		Origin:       os.Getenv("WEB_ORIGIN"),
+		// Secure unless explicitly turned off, so forgetting it is the safe
+		// mistake: a cookie that will not travel over http://localhost is an
+		// obvious local annoyance, while one sent in the clear over the internet
+		// is a quiet disaster.
+		SecureCookie: os.Getenv("SESSION_SECURE") != "false",
+	}
+
+	var missing []string
+	if cfg.PasswordHash == "" {
+		missing = append(missing, "OWNER_PASSWORD_HASH (generate one with: server -hashpw)")
+	}
+	if cfg.DaemonToken == "" {
+		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses)")
+	}
+	if cfg.Origin == "" {
+		missing = append(missing, "WEB_ORIGIN (the exact origin the web app is served from, e.g. https://sparstrowgen.example.ts.net)")
+	}
+	if len(missing) > 0 {
+		log.Error("refusing to start without authentication configured")
+		for _, m := range missing {
+			log.Error("  missing", "variable", m)
+		}
+		os.Exit(1)
+	}
+
+	// Fail here rather than on the owner's first sign-in attempt. A hash that
+	// cannot be parsed means nobody can ever get in, and finding that out at
+	// startup is worth more than finding it out from a login screen.
+	if _, err := auth.VerifyPassword(cfg.PasswordHash, "any probe value"); err != nil {
+		log.Error("OWNER_PASSWORD_HASH is not a hash this server can read", "err", err)
+		log.Error("generate one with: server -hashpw")
+		os.Exit(1)
+	}
+	if len(cfg.DaemonToken) < 32 {
+		log.Error("DAEMON_TOKEN is too short to be a secret", "length", len(cfg.DaemonToken), "want_at_least", 32)
+		os.Exit(1)
+	}
+	return cfg
+}
+
+// hashPassword reads a password from the terminal without echoing it and prints
+// the hash to put in OWNER_PASSWORD_HASH.
+func hashPassword(log *slog.Logger) {
+	// Two ways in, because this is used by two different things. A person at a
+	// terminal gets a hidden prompt and a confirmation; a deploy pipeline pipes
+	// the password in and gets the hash out, which is the only way this is
+	// usable from a container or a CI job.
+	var first []byte
+	if term.IsTerminal(int(syscall.Stdin)) {
+		var err error
+		fmt.Fprint(os.Stderr, "New password: ")
+		first, err = term.ReadPassword(int(syscall.Stdin))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			log.Error("could not read the password", "err", err)
+			os.Exit(1)
+		}
+		fmt.Fprint(os.Stderr, "Again: ")
+		second, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			log.Error("could not read the password", "err", err)
+			os.Exit(1)
+		}
+		if string(first) != string(second) {
+			log.Error("those did not match")
+			os.Exit(1)
+		}
+	} else {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && line == "" {
+			log.Error("nothing was piped in to hash", "err", err)
+			os.Exit(1)
+		}
+		// Only the line ending: a password may legitimately start or end with a
+		// space, and silently trimming one would hash something other than what
+		// the owner typed.
+		first = []byte(strings.TrimRight(line, "\r\n"))
+	}
+
+	if len(first) < 12 {
+		// A floor, not a character-class rule. Length is what actually resists
+		// guessing, and the usual "one capital, one symbol" advice mostly
+		// produces passwords people cannot remember and therefore reuse.
+		log.Error("too short", "length", len(first), "want_at_least", 12)
+		os.Exit(1)
+	}
+
+	hash, err := auth.HashPassword(string(first))
+	if err != nil {
+		log.Error("could not hash the password", "err", err)
+		os.Exit(1)
+	}
+	// To stdout, alone, so it can be piped or copied. Everything else this
+	// command says goes to stderr.
+	fmt.Println(hash)
 }

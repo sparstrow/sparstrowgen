@@ -8,9 +8,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,6 +33,17 @@ func main() {
 	slog.SetDefault(log)
 	serverURL := env("SERVER_WS", "ws://localhost:8080/daemon")
 
+	// The shared secret proving this is the machine that was installed, not
+	// something else that found the socket. Required, for the same reason the
+	// server requires it: a daemon that silently connects without one would be
+	// refused by the server anyway, and failing here says why in one line
+	// instead of as an endless reconnect loop.
+	token := os.Getenv("DAEMON_TOKEN")
+	if token == "" {
+		log.Error("DAEMON_TOKEN is not set — it must match the server's")
+		os.Exit(1)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -42,7 +55,7 @@ func main() {
 	// resetting on the dial is what turns a flapping link into a hot loop.
 	attempt := 0
 	for ctx.Err() == nil {
-		if err := d.run(ctx, serverURL); err != nil && ctx.Err() == nil {
+		if err := d.run(ctx, serverURL, token); err != nil && ctx.Err() == nil {
 			log.Warn("connection lost", "err", err, "attempt", attempt+1)
 		}
 		if ctx.Err() != nil {
@@ -128,9 +141,20 @@ type daemon struct {
 	connectedOnce bool
 }
 
-func (d *daemon) run(ctx context.Context, url string) error {
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
+func (d *daemon) run(ctx context.Context, url, token string) error {
+	// In a header rather than the URL: a query string ends up in proxy logs and
+	// in the server's own access log, and a credential that is written down
+	// somewhere by default is a credential that leaks eventually.
+	conn, res, err := websocket.DefaultDialer.DialContext(ctx, url, http.Header{
+		"Authorization": []string{"Bearer " + token},
+	})
 	if err != nil {
+		// 401 is not a connection problem and will not fix itself by retrying,
+		// so say what it actually is rather than letting it look like the
+		// network being down.
+		if res != nil && res.StatusCode == http.StatusUnauthorized {
+			return errors.New("the server rejected this machine: DAEMON_TOKEN does not match the server's")
+		}
 		return err
 	}
 	defer conn.Close()
@@ -317,7 +341,7 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	// order matters: asked-to-stop wins over whatever the dying process said,
 	// because that error is a consequence of the stop and not a reason.
 	switch stopped := d.turns.end(t.TurnID); {
-	case stopped:  // deliberate, and it outranks everything below
+	case stopped: // deliberate, and it outranks everything below
 		// Text that arrived before the stop is kept, and it is usually the
 		// point — a turn is stopped once the answer has gone somewhere
 		// useless, and what came before is still worth reading. A provider
