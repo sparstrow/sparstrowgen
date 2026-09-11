@@ -140,3 +140,49 @@ backend immediately. Worth remembering the next time something looks like a rend
 
 **Not repaired retroactively:** transcripts already stored keep the welded text and still render
 badly. Rewriting stored replies is a destructive edit to the record and needs the owner to ask.
+
+## B-6 — claude keeps only its last message; everything before a tool call is dropped
+
+**Found:** 2026-09-10, clearing G-14 **Status:** fixed 2026-09-10
+**Repro:** Ask claude something that makes it use a tool and speak either side of it — "First write
+one sentence saying which file you are about to open. Then read package.json. Then give me a fenced
+json code block."
+**Expected / Actual:** the sentence, then the code block / only the code block. The sentence is gone
+and nothing on screen suggests anything is missing.
+
+**Cause, verified against a real capture**
+(`server/internal/agent/testdata/claude-two-messages.jsonl`): one claude turn is **four** assistant
+messages, not one.
+
+```
+assistant #1  ["thinking"]
+assistant #2  ["text"]      "Opening the root package.json to check the package identity."   (60ch)
+assistant #3  ["tool_use"]  Read
+assistant #4  ["text"]      "```json\n{ … }\n```\n\nNo `version` field is present…"          (174ch)
+```
+
+`parseClaude` treated the `assistant` event as the whole answer and called `full.Reset()`, so #4
+erased #2. That reset was correct for a different reason — the deltas of *that same message* had
+already been accumulated and must not be counted twice — and collapsing the two jobs into one
+buffer is what made it wrong.
+
+**Fixed** in `server/internal/agent/claude.go`: `done` holds completed messages, `streaming`
+accumulates deltas for the one still arriving, and an `assistant` event supersedes only its own
+message. Messages are joined with a blank line for the same reason as B-5 — glued together, a fence
+stops beginning its line and stops being a fence. Deltas left with no `assistant` event behind them
+are kept, so a turn that dies mid-answer still shows what arrived.
+
+`TestParseClaudeKeepsEveryMessage` runs the real capture and asserts both messages survive, blank-line
+separated, with no fence off line start. Confirmed to fail on the old code, dropping exactly the
+60-character sentence.
+
+**Also verified in the same capture:** only `text_delta` carries `.text`. `thinking_delta` and
+`input_json_delta` do not, so claude's private reasoning and its tool arguments cannot leak into a
+transcript — which the fix had to preserve, since it now keeps more than it used to.
+
+**Worse than B-5 was.** B-5 mangled the formatting of text that was all still on screen; this
+deleted whole messages silently. Both were the same underlying mistake — treating several messages
+as one string — and the raw view is what made the first one findable.
+
+**Not repaired retroactively:** replies already stored are missing that text for good; it was never
+written down. Only what claude sends from now on is kept whole.

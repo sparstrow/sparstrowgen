@@ -89,9 +89,19 @@ func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*
 // owner's quota. See docs/KnownGaps.md G-12.
 func parseClaude(r io.Reader, out chan<- Message) parsed {
 	var (
-		p       parsed
-		full    strings.Builder
-		retries int
+		p parsed
+		// One turn can contain several assistant messages — narration, then a
+		// tool call, then the answer. `done` holds the ones already completed;
+		// `streaming` accumulates the deltas of the one still arriving, and is
+		// superseded by that message's own `assistant` event when it lands.
+		//
+		// Collapsing these two into one buffer is what caused B-6: the assistant
+		// event reset the buffer, so every message before the last was thrown
+		// away. Verified against a real capture — a 60-character sentence
+		// vanished ahead of a tool call.
+		done      []string
+		streaming strings.Builder
+		retries   int
 	)
 
 	scanner := bufio.NewScanner(r)
@@ -130,17 +140,24 @@ func parseClaude(r io.Reader, out chan<- Message) parsed {
 		case "stream_event":
 			// Verified: ~89 deltas of ~8 characters for a four-sentence answer.
 			// Finer-grained than agy's 25-35.
+			// Verified: only text_delta carries `.text`. thinking_delta and
+			// input_json_delta do not, so reasoning and tool arguments cannot
+			// leak into the answer.
 			if ev.Event.Type == "content_block_delta" && ev.Event.Delta.Text != "" {
-				full.WriteString(ev.Event.Delta.Text)
+				streaming.WriteString(ev.Event.Delta.Text)
 				send(out, Message{Type: MessageDelta, Text: ev.Event.Delta.Text})
 			}
 
 		case "assistant":
-			// The whole answer, sent once. When deltas also arrived this
-			// repeats them, so it replaces rather than appends.
+			// One whole message, and authoritative for it: when deltas also
+			// arrived they were pieces of this same message, so it supersedes
+			// them rather than adding to them. Earlier messages are kept.
+			//
+			// Messages carrying only thinking or tool_use have no text and are
+			// skipped, which leaves any deltas already in flight alone.
 			if text := ev.Message.text(); text != "" {
-				full.Reset()
-				full.WriteString(text)
+				done = append(done, strings.Trim(text, "\n"))
+				streaming.Reset()
 			}
 
 		case "result":
@@ -157,7 +174,16 @@ func parseClaude(r io.Reader, out chan<- Message) parsed {
 		}
 	}
 
-	p.Text = full.String()
+	// A turn that died mid-message leaves deltas with no assistant event behind
+	// them. Keeping them is the difference between showing a half-written answer
+	// and showing nothing at all.
+	if tail := strings.Trim(streaming.String(), "\n"); tail != "" {
+		done = append(done, tail)
+	}
+	// A blank line between messages, for the same reason as codex (B-5): they
+	// are separate messages, and glued together a fence stops beginning its line
+	// and stops being a fence.
+	p.Text = strings.Join(done, "\n\n")
 	return p
 }
 
@@ -212,14 +238,21 @@ type claudeMessage struct {
 	} `json:"content"`
 }
 
+// text is every text block in one message, joined with a blank line.
+//
+// A message holds several text blocks only when something sits between them —
+// thinking, or a tool call — so they are separate paragraphs, and gluing them
+// edge-to-edge is what shredded codex replies (B-5). Unlike that one this is
+// unverified in either direction: every claude capture we hold has a single
+// text block per message, so this path has never actually run.
 func (m claudeMessage) text() string {
-	var b strings.Builder
+	parts := make([]string, 0, len(m.Content))
 	for _, c := range m.Content {
-		if c.Type == "text" {
-			b.WriteString(c.Text)
+		if c.Type == "text" && c.Text != "" {
+			parts = append(parts, strings.Trim(c.Text, "\n"))
 		}
 	}
-	return b.String()
+	return strings.Join(parts, "\n\n")
 }
 
 type claudeUsage struct {

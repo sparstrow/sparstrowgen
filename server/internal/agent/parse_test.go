@@ -55,8 +55,8 @@ func TestParseClaude(t *testing.T) {
 	if p.Err != nil {
 		t.Fatalf("unexpected error: %v", p.Err)
 	}
-	// The assistant event replaces the accumulated deltas rather than appending
-	// to them. Getting this wrong doubles every streamed answer.
+	// The assistant event supersedes the deltas of its OWN message rather than
+	// adding to them. Getting this wrong doubles every streamed answer.
 	if want := "When many clients retry at once they synchronise."; p.Text != want {
 		t.Errorf("text = %q, want %q", p.Text, want)
 	}
@@ -93,6 +93,56 @@ func TestParseClaude(t *testing.T) {
 // A failed turn reports subtype "success" with is_error true. Reading the
 // subtype turns a total authentication failure into an apparent success, which
 // is exactly the mistake this test exists to prevent recurring.
+// One claude turn, four assistant messages: thinking, a sentence of prose, a
+// tool call, then the answer. Captured 2026-09-10 from "First write one
+// sentence of prose saying which file you are about to open. Then read
+// package.json. Then give me a fenced json code block…".
+//
+// A file rather than an inline constant: the real stream is 61 lines, most of
+// them deltas and thinking signatures the parser has to ignore, and that is
+// precisely the part worth keeping honest.
+func TestParseClaudeKeepsEveryMessage(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "claude-two-messages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p, _ := drain(t, func(ch chan<- Message) parsed {
+		return parseClaude(bytes.NewReader(raw), ch)
+	})
+	if p.Err != nil {
+		t.Fatalf("unexpected error: %v", p.Err)
+	}
+
+	// The bug this exists for (docs/Bugs.md B-6): the assistant event reset the
+	// whole buffer, so this sentence — a complete message, sent before the tool
+	// call — was dropped without trace.
+	const preamble = "Opening the root package.json to check the package identity."
+	if !strings.Contains(p.Text, preamble) {
+		t.Errorf("the message before the tool call was dropped; text = %q", p.Text)
+	}
+	if !strings.Contains(p.Text, "```json") {
+		t.Errorf("the final message is missing; text = %q", p.Text)
+	}
+	if !strings.Contains(p.Text, preamble+"\n\n```json") {
+		t.Errorf("messages are not separated by a blank line; text = %q", p.Text)
+	}
+
+	// Reasoning and tool arguments stream as thinking_delta and
+	// input_json_delta, neither of which carries `.text`. If that ever changes,
+	// claude's private reasoning starts appearing in the transcript.
+	if strings.Contains(p.Text, "package identity.Opening") ||
+		strings.Contains(strings.ToLower(p.Text), "let me") {
+		t.Errorf("non-answer content leaked into the text: %q", p.Text)
+	}
+
+	for i, line := range strings.Split(p.Text, "\n") {
+		if strings.Contains(line, "```") && !strings.HasPrefix(strings.TrimLeft(line, " "), "```") {
+			t.Fatalf("line %d has a fence that does not start it: %q", i+1, line)
+		}
+	}
+}
+
 func TestParseClaudeAuthFailureIsNotSuccess(t *testing.T) {
 	const stream = `{"type":"system","subtype":"api_retry","attempt":1,"error_status":401,"error":"authentication_failed"}
 {"type":"result","subtype":"success","is_error":true,"result":"Failed to authenticate. API Error: 401 {\"error\":{\"message\":\"OAuth access token has expired. Re-authenticate to continue.\"}}","total_cost_usd":0}`
