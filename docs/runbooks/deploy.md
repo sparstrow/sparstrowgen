@@ -91,7 +91,7 @@ Set:
 
 ## 4. Set the environment variables
 
-**Configuration → Environment Variables.** All five are required — the compose
+**Configuration → Environment Variables.** All four are required — the compose
 file uses `${VAR:?}`, so a missing one fails the deploy immediately and names
 itself, rather than producing a container that restarts forever.
 
