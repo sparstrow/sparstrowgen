@@ -18,7 +18,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
@@ -48,6 +47,9 @@ migrate`. */
 // test file is not a secret — the hash is generated fresh in newRig, so nothing
 // here is a credential that works anywhere but inside this process.
 const testPassword = "correct-horse-battery-staple"
+
+// testEmail is the account the harness claims the app with.
+const testEmail = "owner@sparstrow.test"
 
 // testDaemonToken must clear the 32-character floor the server enforces.
 const testDaemonToken = "test-daemon-token-0123456789abcdefgh"
@@ -92,14 +94,9 @@ func newRig(t *testing.T) *rig {
 	s := store.New(pool)
 	h := hub.New(quiet)
 
-	hash, err := auth.HashPassword(testPassword)
-	if err != nil {
-		t.Fatalf("hash the test password: %v", err)
-	}
 	a := New(s, h, quiet, Config{
-		PasswordHash: hash,
-		DaemonToken:  testDaemonToken,
-		Origin:       testOrigin,
+		DaemonToken: testDaemonToken,
+		Origin:      testOrigin,
 		// The harness speaks http://127.0.0.1, and a Secure cookie would never
 		// be stored by the jar — the tests would then all fail as "not signed
 		// in", which is the right behaviour and the wrong test.
@@ -110,15 +107,43 @@ func newRig(t *testing.T) *rig {
 	t.Cleanup(srv.Close)
 
 	r := &rig{t: t, api: a, store: s, http: srv, client: newJarClient(t)}
-	r.signIn()
+	r.claim()
 	return r
 }
 
-// signIn does what the login screen does, and every later request in the test
-// rides the cookie it returns.
+// claim creates the account these tests sign in with, exactly as the sign-up
+// screen does — setup code included.
+//
+// It wipes the users table first, and that is worth saying out loud: the app
+// can be claimed ONCE, so without this the second test in a run would be told
+// the account already exists. These run against the DEVELOPMENT database, so
+// running the suite deletes whatever development account is there and the next
+// sign-in needs a fresh setup code from the server log. Recorded as
+// docs/KnownGaps.md G-20; the real fix is a database of their own.
+func (r *rig) claim() {
+	r.t.Helper()
+	if _, err := r.store.DeleteEveryUser(context.Background()); err != nil {
+		r.t.Fatalf("clear users: %v", err)
+	}
+	res := r.post("/api/auth/signup", map[string]any{
+		"setupCode": r.api.SetupCode(),
+		"email":     testEmail,
+		"password":  testPassword,
+	})
+	if res.StatusCode != http.StatusOK {
+		r.t.Fatalf("claim the app: %s", res.Status)
+	}
+	if len(r.client.Jar.Cookies(mustURL(r.t, r.http.URL))) == 0 {
+		r.t.Fatal("claiming set no cookie")
+	}
+}
+
+// signIn is an ordinary sign-in on an app that is already claimed.
 func (r *rig) signIn() {
 	r.t.Helper()
-	res := r.post("/api/auth/login", map[string]any{"password": testPassword})
+	res := r.post("/api/auth/login", map[string]any{
+		"email": testEmail, "password": testPassword,
+	})
 	if res.StatusCode != http.StatusOK {
 		r.t.Fatalf("sign in: %s", res.Status)
 	}

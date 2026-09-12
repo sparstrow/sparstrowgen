@@ -7,9 +7,11 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/auth"
+	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
 /* The front door.
@@ -33,10 +35,21 @@ means "deployed with authentication accidentally switched off" is not a state
 this program can be in. */
 
 var (
-	errNotLoggedIn = errors.New("not signed in")
-	errBadLogin    = errors.New("that password is not right")
-	errNoPassword  = errors.New("a password is required")
+	errNotLoggedIn   = errors.New("not signed in")
+	errNoPassword    = errors.New("a password is required")
+	errNoEmail       = errors.New("that does not look like an email address")
+	errAlreadySetUp  = errors.New("this app already has an account")
+	errBadSetupCode  = errors.New("that setup code is not right — check the server's startup log")
+	errPasswordShort = errors.New("a password needs to be at least 12 characters")
 )
+
+// minPassword is a floor on length and nothing else.
+//
+// No character-class rule: "one capital, one digit, one symbol" mostly produces
+// passwords people cannot remember and therefore reuse, and length is what
+// actually resists guessing. Twelve because this one credential stands in front
+// of a shell on somebody's laptop.
+const minPassword = 12
 
 // requireSession rejects anything without a live session cookie.
 func (a *API) requireSession(next http.Handler) http.Handler {
@@ -46,7 +59,7 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 			a.fail(w, errNotLoggedIn, http.StatusUnauthorized)
 			return
 		}
-		ok, err := a.store.ValidSession(r.Context(), cookie.Value)
+		user, ok, err := a.store.SessionUser(r.Context(), cookie.Value)
 		if err != nil {
 			// A database that cannot answer is not permission to proceed.
 			a.log.Error("could not check a session", "err", err)
@@ -61,7 +74,7 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 			a.fail(w, errNotLoggedIn, http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(withUser(r.Context(), user, cookie.Value)))
 	})
 }
 
@@ -81,20 +94,98 @@ const maxLoginBody = 4 << 10
 // with extra steps.
 const hashSlots = 4
 
-// login exchanges the owner's password for a session.
+// ---------------------------------------------------------------------------
+// claiming the app
+// ---------------------------------------------------------------------------
+
+// signUp creates the one account, and is reachable only while there isn't one.
+func (a *API) signUp(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+	client := clientIP(r)
+
+	// Throttled like a sign-in, because guessing a setup code is guessing.
+	wait, admitted := a.throttle.Begin(client)
+	if !admitted {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		a.fail(w, errors.New("too many attempts — try again in "+wait.Round(time.Second).String()),
+			http.StatusTooManyRequests)
+		return
+	}
+
+	claimed, err := a.store.Claimed(r.Context())
+	if err != nil {
+		a.fail(w, errors.New("could not reach the database"), http.StatusServiceUnavailable)
+		return
+	}
+	if claimed {
+		a.fail(w, errAlreadySetUp, http.StatusConflict)
+		return
+	}
+
+	var body struct {
+		SetupCode string `json:"setupCode"`
+		Email     string `json:"email"`
+		Password  string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		a.fail(w, errors.New("that request could not be read"), http.StatusBadRequest)
+		return
+	}
+
+	// Constant-time: a fixed secret compared on every attempt is exactly the
+	// shape a timing attack likes.
+	if subtle.ConstantTimeCompare(
+		[]byte(strings.TrimSpace(body.SetupCode)), []byte(a.setupCode)) != 1 {
+		a.throttle.Failed(client)
+		a.log.Warn("wrong setup code", "ip", client)
+		a.fail(w, errBadSetupCode, http.StatusUnauthorized)
+		return
+	}
+	if err := checkCredentials(body.Email, body.Password); err != nil {
+		a.fail(w, err, http.StatusBadRequest)
+		return
+	}
+
+	select {
+	case a.hashing <- struct{}{}:
+		defer func() { <-a.hashing }()
+	default:
+		a.fail(w, errors.New("the server is busy — try again in a moment"), http.StatusServiceUnavailable)
+		return
+	}
+
+	user, err := a.store.CreateUser(r.Context(), body.Email, body.Password)
+	if errors.Is(err, store.ErrEmailTaken) {
+		// Two sign-ups at once: both passed the check above and the database
+		// decided between them. This is the loser, and the app is claimed.
+		a.fail(w, errAlreadySetUp, http.StatusConflict)
+		return
+	}
+	if err != nil {
+		a.fail(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	a.throttle.Succeeded(client)
+	a.log.Info("account created — sign-up is now closed", "email", user.Email)
+	a.startSession(w, r, user)
+}
+
+// ---------------------------------------------------------------------------
+// signing in and out
+// ---------------------------------------------------------------------------
+
+// login exchanges an email and password for a session.
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
 	client := clientIP(r)
 
-	// Admission and the record of the attempt happen together, under one lock.
-	// Asking "may I?" and only counting the attempt after the hash leaves the
-	// whole hash sitting in the gap, and a burst of simultaneous requests all
-	// ask before any of them has counted (docs/Bugs.md B-12).
+	// Admission and the record of the attempt happen under one lock. Asking
+	// "may I?" and only counting the attempt after the hash leaves the whole
+	// hash sitting in the gap, and a burst of simultaneous requests all ask
+	// before any of them has counted (docs/Bugs.md B-12).
 	wait, admitted := a.throttle.Begin(client)
 	if !admitted {
-		// Say how long, rather than refusing blankly. The owner who mistyped
-		// three times needs to know this ends; an attacker learns only that the
-		// door is timed, which they could measure anyway.
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		a.fail(w, errors.New("too many attempts — try again in "+wait.Round(time.Second).String()),
 			http.StatusTooManyRequests)
@@ -102,16 +193,15 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		// The attempt was already counted by Begin, and it stays counted: a
-		// malformed body is not a free retry.
 		a.fail(w, errors.New("that request could not be read"), http.StatusBadRequest)
 		return
 	}
-	if body.Password == "" {
-		a.fail(w, errNoPassword, http.StatusBadRequest)
+	if body.Email == "" || body.Password == "" {
+		a.fail(w, store.ErrNoAccount, http.StatusUnauthorized)
 		return
 	}
 
@@ -126,50 +216,61 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, err := auth.VerifyPassword(a.cfg.PasswordHash, body.Password)
-	if err != nil {
-		// The hash itself is unreadable — a deployment fault, not a wrong
-		// password, and worth a loud log because nobody can sign in until it is
-		// fixed.
-		a.log.Error("OWNER_PASSWORD_HASH cannot be read", "err", err)
-		a.fail(w, errors.New("this server's password is misconfigured"), http.StatusInternalServerError)
-		return
-	}
-	if !ok {
+	user, err := a.store.Authenticate(r.Context(), body.Email, body.Password)
+	if errors.Is(err, store.ErrNoAccount) {
 		a.throttle.Failed(client)
 		a.log.Warn("failed sign-in", "ip", client)
-		a.fail(w, errBadLogin, http.StatusUnauthorized)
+		// One message for a wrong password and for an email with no account.
+		// Telling them apart tells a stranger which addresses exist here.
+		a.fail(w, store.ErrNoAccount, http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		a.log.Error("sign-in failed unexpectedly", "err", err)
+		a.fail(w, errors.New("could not sign you in"), http.StatusInternalServerError)
 		return
 	}
 
-	token, expires, err := a.store.StartSession(r.Context(), r.UserAgent(), client)
+	a.throttle.Succeeded(client)
+	a.log.Info("signed in", "ip", client)
+	a.startSession(w, r, user)
+}
+
+// startSession is the last step of signing up, signing in, and changing a
+// password — every path that should leave this browser holding a NEW session.
+func (a *API) startSession(w http.ResponseWriter, r *http.Request, user store.User) {
+	token, expires, err := a.store.StartSession(r.Context(), user.ID, r.UserAgent(), clientIP(r))
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
-	a.throttle.Succeeded(client)
 	http.SetCookie(w, auth.Cookie(token, a.cfg.SecureCookie, expires))
-	a.log.Info("signed in", "ip", client)
-	writeJSON(w, map[string]any{"ok": true})
+	writeJSON(w, map[string]any{"ok": true, "email": user.Email})
 }
 
 // logout ends this session, and optionally every other one too.
+//
+// Not behind requireSession on purpose: signing out has to work even when the
+// session is already dead, or a browser holding a stale cookie has no way to be
+// rid of it.
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Everywhere bool `json:"everywhere"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body) // an empty body means "just me"
 
-	if body.Everywhere {
-		n, err := a.store.EndAllSessions(r.Context())
-		if err != nil {
-			a.fail(w, err, http.StatusInternalServerError)
-			return
-		}
-		a.log.Info("signed out everywhere", "sessions", n)
-	} else if cookie, err := r.Cookie(auth.CookieName(a.cfg.SecureCookie)); err == nil {
-		if err := a.store.EndSession(r.Context(), cookie.Value); err != nil {
-			a.fail(w, err, http.StatusInternalServerError)
+	if cookie, err := r.Cookie(auth.CookieName(a.cfg.SecureCookie)); err == nil {
+		if body.Everywhere {
+			if user, ok, uerr := a.store.SessionUser(r.Context(), cookie.Value); uerr == nil && ok {
+				n, derr := a.store.EndAllSessions(r.Context(), user.ID)
+				if derr != nil {
+					a.fail(w, derr, http.StatusInternalServerError)
+					return
+				}
+				a.log.Info("signed out everywhere", "sessions", n)
+			}
+		} else if derr := a.store.EndSession(r.Context(), cookie.Value); derr != nil {
+			a.fail(w, derr, http.StatusInternalServerError)
 			return
 		}
 	}
@@ -177,20 +278,102 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// session answers "am I signed in", so the web app can decide between the login
-// screen and the chat without first firing a request that 401s.
+// session tells the app which screen to show: whether anybody has claimed this
+// instance yet, and whether this browser is signed in.
 func (a *API) session(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(auth.CookieName(a.cfg.SecureCookie))
+	claimed, err := a.store.Claimed(r.Context())
 	if err != nil {
-		writeJSON(w, map[string]any{"signedIn": false})
+		a.fail(w, errors.New("could not reach the database"), http.StatusServiceUnavailable)
 		return
 	}
-	ok, err := a.store.ValidSession(r.Context(), cookie.Value)
-	if err != nil {
-		a.fail(w, errors.New("could not verify your session"), http.StatusServiceUnavailable)
+	out := map[string]any{"claimed": claimed, "signedIn": false}
+
+	if cookie, cerr := r.Cookie(auth.CookieName(a.cfg.SecureCookie)); cerr == nil {
+		user, ok, uerr := a.store.SessionUser(r.Context(), cookie.Value)
+		if uerr != nil {
+			a.fail(w, errors.New("could not verify your session"), http.StatusServiceUnavailable)
+			return
+		}
+		if ok {
+			out["signedIn"] = true
+			out["email"] = user.Email
+		}
+	}
+	writeJSON(w, out)
+}
+
+// ---------------------------------------------------------------------------
+// the account
+// ---------------------------------------------------------------------------
+
+// changePassword replaces it, having first proved the current one, and leaves
+// this browser holding a brand new session.
+func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+	user, _ := userFrom(r.Context())
+
+	var body struct {
+		Current string `json:"current"`
+		Next    string `json:"next"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		a.fail(w, errors.New("that request could not be read"), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, map[string]any{"signedIn": ok})
+	if len(body.Next) < minPassword {
+		a.fail(w, errPasswordShort, http.StatusBadRequest)
+		return
+	}
+
+	select {
+	case a.hashing <- struct{}{}:
+		defer func() { <-a.hashing }()
+	default:
+		a.fail(w, errors.New("the server is busy — try again in a moment"), http.StatusServiceUnavailable)
+		return
+	}
+
+	// The current password is required even though the session already proves
+	// who this is. The session is what somebody would have if they walked up to
+	// an unlocked laptop, which is exactly the case this check is for.
+	ended, err := a.store.ChangePassword(r.Context(), user.ID, body.Current, body.Next)
+	if errors.Is(err, store.ErrNoAccount) {
+		a.log.Warn("wrong current password on a change attempt", "ip", clientIP(r))
+		a.fail(w, errors.New("that is not your current password"), http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		a.fail(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Every session just died, this browser's included. Issuing a fresh one
+	// here keeps the owner signed in without keeping the old token alive — a
+	// copy of it, taken by whoever prompted the change, is now dead too.
+	a.log.Info("password changed", "sessions_ended", ended)
+	a.startSession(w, r, user)
+}
+
+// ---------------------------------------------------------------------------
+
+// checkCredentials rejects what is obviously not an email and a password that
+// is too short to be one.
+//
+// Deliberately not a regular expression. The only address that matters is one
+// the owner can actually receive mail at, and no pattern decides that.
+func checkCredentials(email, password string) error {
+	trimmed := strings.TrimSpace(email)
+	at := strings.Index(trimmed, "@")
+	if at <= 0 || at == len(trimmed)-1 || strings.ContainsAny(trimmed, " \t") {
+		return errNoEmail
+	}
+	if password == "" {
+		return errNoPassword
+	}
+	if len(password) < minPassword {
+		return errPasswordShort
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

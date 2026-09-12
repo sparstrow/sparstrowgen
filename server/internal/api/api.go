@@ -45,6 +45,11 @@ type API struct {
 	// hashing bounds how many argon2 hashes run at once. Buffered to hashSlots;
 	// a send that would block means the server is already at its limit.
 	hashing chan struct{}
+	// setupCode claims the first account. Generated per process and held only
+	// in memory: a restart prints a new one and kills the old, which is the
+	// safe direction to be wrong in — the owner reads the newest startup log,
+	// and a code that leaked into an old log is already dead.
+	setupCode string
 
 	// turns maps an in-flight turn to the conversation and entry it is writing
 	// into, so a daemon message carrying only a turn id can be routed.
@@ -65,9 +70,10 @@ type turn struct {
 func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
 	a := &API{
 		store: s, hub: h, log: log, cfg: cfg,
-		throttle: auth.NewThrottle(),
-		hashing:  make(chan struct{}, hashSlots),
-		turns:    map[string]*turn{},
+		throttle:  auth.NewThrottle(),
+		hashing:   make(chan struct{}, hashSlots),
+		setupCode: auth.NewSetupCode(),
+		turns:     map[string]*turn{},
 	}
 	h.OnDaemonMessage = a.handleDaemonMessage
 	return a
@@ -106,6 +112,7 @@ func (a *API) Routes() http.Handler {
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	r.Post("/api/auth/signup", a.signUp)
 	r.Post("/api/auth/login", a.login)
 	r.Post("/api/auth/logout", a.logout)
 	r.Get("/api/auth/session", a.session)
@@ -132,6 +139,8 @@ func (a *API) Routes() http.Handler {
 		// is running" would be ambiguous the moment a turn ends between the
 		// click and the request, and would then stop the wrong one.
 		r.Post("/api/turns/{turnId}/stop", a.stopTurn)
+
+		r.Post("/api/auth/password", a.changePassword)
 
 		r.Get("/ws", a.browserSocket)
 	})
@@ -627,3 +636,7 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 	}
 
 }
+
+// SetupCode is what claims the first account, for main.go to print at startup.
+// Only meaningful while nobody has signed up.
+func (a *API) SetupCode() string { return a.setupCode }

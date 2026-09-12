@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -99,4 +100,27 @@ func ClearCookie(secure bool) *http.Cookie {
 	c := Cookie("", secure, time.Unix(0, 0))
 	c.MaxAge = -1
 	return c
+}
+
+// SetupCodeBytes is the entropy behind the code that claims the first account.
+// Sixteen bytes is not guessable, and base32 without padding makes it readable
+// off a log line and typeable without ambiguity about case.
+const SetupCodeBytes = 16
+
+// NewSetupCode mints the code printed at startup while the app is unclaimed.
+//
+// Held in memory only, never written to the database. A restart therefore
+// invalidates it and prints a new one, which is deliberate: the owner reads the
+// newest startup log, and a code that leaked into an older one is already dead.
+// The cost is that a code copied before a restart stops working, which is a
+// retry rather than a lockout.
+func NewSetupCode() string {
+	raw := make([]byte, SetupCodeBytes)
+	if _, err := rand.Read(raw); err != nil {
+		// Unreachable in practice, and a predictable setup code is worse than
+		// no app at all — so this returns something no one can match rather
+		// than something weak.
+		return ""
+	}
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 }

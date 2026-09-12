@@ -92,9 +92,21 @@ func TestHealthIsPublicButSaysNothingAboutTheMachine(t *testing.T) {
 func TestTheWrongPasswordDoesNotGetIn(t *testing.T) {
 	r := newRig(t)
 
-	res := r.anon(http.MethodPost, "/api/auth/login", map[string]any{"password": "not it"})
+	res := r.anon(http.MethodPost, "/api/auth/login", map[string]any{
+		"email": testEmail, "password": "not it",
+	})
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("wrong password: %s, want 401", res.Status)
+	}
+
+	// An email nobody has an account for answers exactly the same way. Telling
+	// them apart would tell a stranger which addresses exist here.
+	missing := r.anon(http.MethodPost, "/api/auth/login", map[string]any{
+		"email": "nobody@sparstrow.test", "password": testPassword,
+	})
+	if missing.StatusCode != res.StatusCode {
+		t.Errorf("unknown email answered %s but a wrong password answered %s — that difference is an oracle",
+			missing.Status, res.Status)
 	}
 	for _, c := range res.Cookies() {
 		if c.Name == auth.CookieName(false) && c.Value != "" {
@@ -102,10 +114,12 @@ func TestTheWrongPasswordDoesNotGetIn(t *testing.T) {
 		}
 	}
 
-	// And an empty password is refused as a bad request rather than being
-	// hashed and compared, which would make it just another guess.
-	if res := r.anon(http.MethodPost, "/api/auth/login", map[string]any{"password": ""}); res.StatusCode != http.StatusBadRequest {
-		t.Errorf("empty password: %s, want 400", res.Status)
+	// An empty password is refused without being hashed and compared, which
+	// would make it just another guess.
+	if res := r.anon(http.MethodPost, "/api/auth/login", map[string]any{
+		"email": testEmail, "password": "",
+	}); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("empty password: %s, want 401", res.Status)
 	}
 }
 

@@ -12,13 +12,14 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (token_hash, expires_at, user_agent, ip)
-VALUES ($1, $2, $3, $4)
-RETURNING token_hash, created_at, last_seen_at, expires_at, user_agent, ip
+INSERT INTO sessions (token_hash, user_id, expires_at, user_agent, ip)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING token_hash, created_at, last_seen_at, expires_at, user_agent, ip, user_id
 `
 
 type CreateSessionParams struct {
 	TokenHash []byte             `json:"token_hash"`
+	UserID    pgtype.UUID        `json:"user_id"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	UserAgent string             `json:"user_agent"`
 	Ip        string             `json:"ip"`
@@ -27,6 +28,7 @@ type CreateSessionParams struct {
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.TokenHash,
+		arg.UserID,
 		arg.ExpiresAt,
 		arg.UserAgent,
 		arg.Ip,
@@ -39,23 +41,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.ExpiresAt,
 		&i.UserAgent,
 		&i.Ip,
+		&i.UserID,
 	)
 	return i, err
-}
-
-const deleteAllSessions = `-- name: DeleteAllSessions :execrows
-DELETE FROM sessions
-`
-
-// Signing out everywhere. The reason this exists is that the owner may one day
-// need it in a hurry, and "delete the rows by hand in psql" is not a thing to
-// work out under pressure.
-func (q *Queries) DeleteAllSessions(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAllSessions)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const deleteDeadSessions = `-- name: DeleteDeadSessions :execrows
@@ -71,6 +59,28 @@ func (q *Queries) DeleteDeadSessions(ctx context.Context, idleSince pgtype.Times
 	return result.RowsAffected(), nil
 }
 
+const deleteOtherUserSessions = `-- name: DeleteOtherUserSessions :execrows
+DELETE FROM sessions
+WHERE user_id = $1 AND token_hash <> $2
+`
+
+type DeleteOtherUserSessionsParams struct {
+	UserID        pgtype.UUID `json:"user_id"`
+	KeepTokenHash []byte      `json:"keep_token_hash"`
+}
+
+// Signing out every OTHER device, which is what changing a password should do:
+// the point of the change is usually that somebody else may hold a session, and
+// ending your own at the same time would log you out of the screen you just
+// used to fix it.
+func (q *Queries) DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOtherUserSessions, arg.UserID, arg.KeepTokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = $1
 `
@@ -80,12 +90,27 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return err
 }
 
-const listSessions = `-- name: ListSessions :many
-SELECT token_hash, created_at, last_seen_at, expires_at, user_agent, ip FROM sessions ORDER BY last_seen_at DESC
+const deleteUserSessions = `-- name: DeleteUserSessions :execrows
+DELETE FROM sessions WHERE user_id = $1
 `
 
-func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
-	rows, err := q.db.Query(ctx, listSessions)
+// Signing out everywhere. The reason this exists is that the owner may one day
+// need it in a hurry, and "delete the rows by hand in psql" is not a thing to
+// work out under pressure.
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT token_hash, created_at, last_seen_at, expires_at, user_agent, ip, user_id FROM sessions WHERE user_id = $1 ORDER BY last_seen_at DESC
+`
+
+func (q *Queries) ListUserSessions(ctx context.Context, userID pgtype.UUID) ([]Session, error) {
+	rows, err := q.db.Query(ctx, listUserSessions, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +125,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.ExpiresAt,
 			&i.UserAgent,
 			&i.Ip,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}
@@ -117,7 +143,7 @@ SET last_seen_at = now()
 WHERE token_hash = $1
   AND expires_at > now()
   AND last_seen_at > $2
-RETURNING token_hash, created_at, last_seen_at, expires_at, user_agent, ip
+RETURNING token_hash, created_at, last_seen_at, expires_at, user_agent, ip, user_id
 `
 
 type TouchSessionParams struct {
@@ -144,6 +170,7 @@ func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (Ses
 		&i.ExpiresAt,
 		&i.UserAgent,
 		&i.Ip,
+		&i.UserID,
 	)
 	return i, err
 }

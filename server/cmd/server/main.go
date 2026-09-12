@@ -70,9 +70,25 @@ func main() {
 	}
 
 	h := hub.New(log)
+	st := store.New(pool)
+	a := api.New(st, h, log, cfg)
+
+	// The setup code is only meaningful while nobody has signed up. Printed
+	// here, loudly, because the deployment log is where the owner reads it —
+	// and NOT printed once the app is claimed, so it never sits in a log of a
+	// running system where it would be a credential with nothing to protect.
+	if claimed, err := st.Claimed(ctx); err != nil {
+		log.Warn("could not tell whether this app has been claimed yet", "err", err)
+	} else if !claimed {
+		log.Info("this app has no account yet")
+		log.Info("open it in a browser and use this setup code to create one",
+			"setup_code", a.SetupCode())
+		log.Info("the code changes every time this server restarts; use the newest one")
+	}
+
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: api.New(store.New(pool), h, log, cfg).Routes(),
+		Handler: a.Routes(),
 		// No write timeout: these are long-lived websockets, and a deadline
 		// here would cut a turn off mid-answer.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -140,11 +156,8 @@ cost of the strictness is one line in a file, not a branch in the program.
 */
 func authConfig(log *slog.Logger) api.Config {
 	cfg := api.Config{
-		// Accepts either the raw PHC string or its `b64:` form, because the
-		// raw one does not survive Docker Compose env interpolation.
-		PasswordHash: auth.NormaliseHash(os.Getenv("OWNER_PASSWORD_HASH")),
-		DaemonToken:  os.Getenv("DAEMON_TOKEN"),
-		Origin:       os.Getenv("WEB_ORIGIN"),
+		DaemonToken: os.Getenv("DAEMON_TOKEN"),
+		Origin:      os.Getenv("WEB_ORIGIN"),
 		// Secure unless explicitly turned off, so forgetting it is the safe
 		// mistake: a cookie that will not travel over http://localhost is an
 		// obvious local annoyance, while one sent in the clear over the internet
@@ -153,9 +166,6 @@ func authConfig(log *slog.Logger) api.Config {
 	}
 
 	var missing []string
-	if cfg.PasswordHash == "" {
-		missing = append(missing, "OWNER_PASSWORD_HASH (generate one with: server -hashpw)")
-	}
 	if cfg.DaemonToken == "" {
 		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses)")
 	}
@@ -170,14 +180,6 @@ func authConfig(log *slog.Logger) api.Config {
 		os.Exit(1)
 	}
 
-	// Fail here rather than on the owner's first sign-in attempt. A hash that
-	// cannot be parsed means nobody can ever get in, and finding that out at
-	// startup is worth more than finding it out from a login screen.
-	if _, err := auth.VerifyPassword(cfg.PasswordHash, "any probe value"); err != nil {
-		log.Error("OWNER_PASSWORD_HASH is not a hash this server can read", "err", err)
-		log.Error("generate one with: server -hashpw")
-		os.Exit(1)
-	}
 	if len(cfg.DaemonToken) < 32 {
 		log.Error("DAEMON_TOKEN is too short to be a secret", "length", len(cfg.DaemonToken), "want_at_least", 32)
 		os.Exit(1)
