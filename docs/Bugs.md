@@ -509,3 +509,21 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-16 — A failed Postgres connection printed the database password in the server log
+
+**Found:** 2026-09-11, deployment-readiness audit before the first Coolify deploy
+**Status:** fixed 2026-09-11
+
+**Repro:** Start the server with an unreachable `DATABASE_URL`; the `postgres unreachable` log
+entry included the complete connection string.
+
+**Expected / Actual:** The connection error identifies the failure without exposing credentials /
+the log copied the full URL, including its password, into the deployment log.
+
+**Security:** The most likely first-deploy failure is an incorrect Coolify network hostname, so
+this could expose the real Postgres password precisely when the owner opens the log to diagnose it.
+
+Fixed by logging the connection error without attaching the connection string. The pgx error still
+identifies resolution, refusal and authentication failures without printing the password.
+`TestPostgresFailureDoesNotLogDatabasePassword` starts the server against an unreachable dummy
+database and proves its distinctive dummy password is absent from the captured output.

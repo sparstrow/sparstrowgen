@@ -51,7 +51,7 @@ func main() {
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Error("postgres unreachable", "dsn", dsn, "err", err)
+		log.Error("postgres unreachable", "err", err)
 		os.Exit(1)
 	}
 
