@@ -132,6 +132,13 @@ trailing slash. A mismatch is not a vague failure: the API refuses the browser's
 requests by CORS and refuses its websocket, so the app loads and nothing in it
 works.
 
+In the v4.3.18 Domains editor, keep the generated internal ports: `3000` for
+`web`, `8080` for `server`. Coolify may warn that either port is unrecognized
+before the first successful deployment. That warning is safe to override with
+**Use This Port Anyway**: `Dockerfile.web` listens on 3000 and `Dockerfile.server`
+exposes 8080. The port is the private proxy target, not a public `:8080` suffix
+on either URL.
+
 Deploy. Expect, in order: `migrate` runs and exits 0, `server` becomes healthy,
 `web` starts. That ordering was verified by running this exact compose file
 locally against a real Postgres, so if it does not happen the cause is Coolify's
