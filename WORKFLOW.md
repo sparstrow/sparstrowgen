@@ -22,7 +22,10 @@ Phase 2 only after the managed daemon exit gate in
 1. Implement pairing, per-machine revocation, version negotiation, installation,
    per-user auto-start and safe updating as the next product capability. Follow
    the feature process in `AGENTS.md`; this statement selects the capability,
-   not its visual design or backend contract.
+   not its visual design or backend contract. The owner-facing drafts are
+   [`managed-runtimes`](docs/specs/2026-09-12-managed-runtimes.md) and
+   [`product destinations and settings`](docs/specs/2026-09-12-product-destinations-and-settings.md);
+   neither may drive design or implementation until the owner approves it.
 2. Preserve the existing `DAEMON_TOKEN` path while the paired path is being
    introduced. Removal is a later contract step after installed clients are
    proven.

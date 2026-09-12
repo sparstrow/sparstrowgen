@@ -36,6 +36,12 @@ Keep the existing `main`-only workflow while this phase is built. Feature
 branches still reach `main` through pull requests, and `main` remains the
 production deployment.
 
+The owner-visible outcomes are drafted in
+[`2026-09-12-managed-runtimes.md`](../specs/2026-09-12-managed-runtimes.md) and
+[`2026-09-12-product-destinations-and-settings.md`](../specs/2026-09-12-product-destinations-and-settings.md).
+They remain drafts until the owner approves them; implementation does not start merely because
+this workflow selected the feature.
+
 The current static `DAEMON_TOKEN` remains valid while the replacement is
 introduced. The server first learns both credential types, then paired daemons
 are installed and verified, and only then may the shared token be retired. A
