@@ -210,3 +210,20 @@ new machine instead of copying a secret into a service file.
 **Trigger:** a second machine, or the first time a machine needs to be revoked without disturbing
 the other. Until then one static token on one laptop is honest about what it is.
 
+## L-17 — Isolated pull-request preview deployments
+
+**Status:** idea **Raised:** 2026-09-11, configuring the first Coolify deployment
+
+When a pull request is opened, Coolify can build a temporary copy of the application and put its
+status and URL on the pull request. From the owner's side, that means opening the proposed version
+in a browser and verifying it before merging rather than learning what it does from production.
+
+Do not enable it against the current production configuration. A preview needs its own disposable
+Postgres database and its own matching web/API origin pair. Reusing production's `DATABASE_URL`
+would let a proposed migration change real data before the pull request is approved; reusing
+`WEB_ORIGIN` or `API_ORIGIN` would make the temporary domains fail CORS, cookies, or websockets.
+Coolify's GitHub App therefore does not get pull-request write access until the isolation exists.
+Normal pushes to `main` can still deploy automatically without that permission.
+
+**Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
+matching origins, and automatic cleanup when its pull request closes.
