@@ -158,8 +158,11 @@ your recommendation. Four things, not a form.
 
 ## 5. Git
 
-Feature branch → PR (squash) → `main`. Never edit `main` directly; never share a checkout between
-two agents.
+Read [`WORKFLOW.md`](WORKFLOW.md) before choosing a target branch or changing release automation.
+Its **Active phase** is authoritative. While it says Phase 1, the path remains feature branch → PR
+(squash) → `main`. Phase 2's `develop` → `staging` → `main` promotion protocol does not begin until
+the owner completes its activation gate. Never edit a protected branch directly; never share a
+checkout between two agents.
 
 **Commit and push your branch without asking** — this file is the standing authorization, and a
 commit that never leaves the checkout is as unrecoverable as one never made. That does *not* extend
@@ -184,6 +187,7 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | What he wants and why | [`docs/specs/`](docs/specs/) |
 | Several changes at once, after he looks at something built | [`docs/feedback/`](docs/feedback/) |
 | Only a human can do it — dashboard, DNS, secrets | [`docs/runbooks/`](docs/runbooks/) |
+| Which branch/environment/release path is active | [`WORKFLOW.md`](WORKFLOW.md) |
 
 Skills carry procedure so this file doesn't: `design-driven-feature`, `writing-specs`,
 `design-shots`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,

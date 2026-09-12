@@ -37,6 +37,20 @@ Consequences a designer must respect:
   comes back, unusable does not resolve until a human acts. See "Provider availability" below —
   the distinction is adopted from Multica and it is not optional to collapse the two.
 
+## First usable release: account, pairing and updates
+
+These rows separate what exists today from what the approved first release still has to build.
+The design may show the intended journey, but it must not present an unbuilt state as live proof.
+
+| Capability | Evidence |
+|---|---|
+| Email-and-password sign-in with revocable browser sessions | **Verified in this repository.** The current account can sign in, sign out, inspect sessions and change its password. |
+| Ordinary multi-user registration without a server-log setup code | **Not built.** The current database and signup path deliberately permit exactly one account and require the startup code. Replacing that boundary must preserve the existing account and protect public registration. |
+| Proving a new person's email address | **Not built.** No email-delivery path is configured in this repository. A design may include the required outcome, but feasibility must select and verify delivery before the backend stage. |
+| Browser-approved machine login without copying a shared daemon secret | **Not built here; verified as a working reference in Multica.** Its local login opens the browser, the signed-in person approves, and the daemon receives its own credential. The pattern is feasible, but sparstrowgen has no equivalent routes or machine records yet. |
+| Knowing whether sparstrowgen-managed agent work is active on this computer | **Verified in the current daemon.** It registers every running turn until that turn finishes or is stopped. That registry is the minimum reliable safety signal for blocking update activation. |
+| Installed release channel, signed Windows package, supervisor and rollback | **Not built.** The current daemon runs from source and reads a shared environment token. Update status, installation, signature verification, version switching and rollback must be built before update controls can use real data. |
+
 ## Provider availability is three states, not two
 
 Adopted from [Multica](../Reference/multica-main)'s `AgentAvailability` (`server/internal/service/agent_ready.go`):
