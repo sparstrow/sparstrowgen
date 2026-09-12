@@ -250,6 +250,11 @@ an existing application domain. This is a false warning for this deployment:
 `SERVICE_FQDN_SERVER_8080`. The analogous web port is 3000. Coolify accepts
 **Use This Port Anyway** and will route to the actual container port.
 
+On this first configuration, the inherited port did not persist after replacing
+the generated hostname: the Domains table showed a red missing-port triangle
+for both services. The workaround is to reopen each domain, explicitly type
+its verified internal port, save, and confirm that the table shows the number.
+
 The deployment runbook now tells the operator to retain each private port and
 override this warning only for the verified `web:3000` and `server:8080` mapping.
 
