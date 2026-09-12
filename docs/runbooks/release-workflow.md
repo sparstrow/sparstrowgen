@@ -11,7 +11,7 @@ owner's and an installed user's side. The agent rules that enforce it live in
 
 ```mermaid
 flowchart LR
-    P1["Phase 1 on the current main workflow<br/>Pairing · per-machine access · auto-start · safe updates"]
+    P1["Phase 1 on the current main workflow<br/>Accounts · workspaces · pairing · auto-start · safe updates"]
     V1{"Owner verifies the installed<br/>daemon end to end"}
     P2["Activate phase 2<br/>development → staging → production"]
     W["Isolated agent worktree<br/>feature branch + local stack"]
@@ -37,6 +37,7 @@ branches still reach `main` through pull requests, and `main` remains the
 production deployment.
 
 The owner-visible outcomes are drafted in
+[`2026-09-12-account-workspace-onboarding.md`](../specs/2026-09-12-account-workspace-onboarding.md),
 [`2026-09-12-managed-runtimes.md`](../specs/2026-09-12-managed-runtimes.md) and
 [`2026-09-12-product-destinations-and-settings.md`](../specs/2026-09-12-product-destinations-and-settings.md).
 They remain drafts until the owner approves them; implementation does not start merely because
@@ -68,17 +69,20 @@ From an installed user's point of view, the finished experience is:
    needs to take: pairing approval, an incompatible version, a failed update,
    missing provider authentication, or a revoked machine.
 
-The product must provide three directly reachable destinations:
+The product must make four jobs directly reachable. Design decides whether each job becomes its
+own destination or whether, for example, workspace management is part of switching context:
 
 - **Chat** — conversations and agent work.
+- **Workspaces** — create, switch and manage separate bodies of work.
 - **Runtimes** — pair and revoke computers; inspect connection, machine,
   daemon, provider and model state.
 - **Settings** — account and product preferences that do not belong to one
   conversation or one runtime.
 
 A sidebar is the current navigation direction, but this document does not lock
-its layout. The feature still follows the repository's design process before UI
-code is written, including populated, empty, loading and error states.
+its layout or require four permanent navigation items. The feature still follows
+the repository's design process before UI code is written, including populated,
+empty, loading and error states.
 
 ### Compatibility during phase 1
 
@@ -99,7 +103,11 @@ server.
 
 Phase 2 may begin only after the owner can verify all of these as a normal user:
 
+- a new person can create and verify an account without a server-log setup code;
+- that person can create, switch and manage more than one workspace;
 - a clean Windows machine can install without cloning the repository;
+- first setup can discover the local component, offer installation when absent,
+  finish pairing when present, or be skipped and resumed later;
 - browser pairing creates a separately revocable machine;
 - the daemon starts after sign-in without a terminal;
 - Chat can use the machine's providers and models;

@@ -4,13 +4,14 @@
 |---|---|
 | **Status** | **Draft — needs your correction and approval** |
 | **Created** | 2026-09-12 |
-| **Trigger** | "I want the auto update to happen ... The daemon should start automatically" and "pair, revoke access, check the models, check about the machine" |
+| **Trigger** | "I want the auto update to happen ... The daemon should start automatically", "pair, revoke access, check the models, check about the machine", and computer setup should feel like connecting a Bluetooth device |
 | **Design** | not designed yet |
 | **Open questions** | none; feasibility is checked after this draft is approved |
 
 > Drafted from the hosting walkthrough and your description of using the product as an ordinary
-> installed user. It deliberately says nothing about installers, background-service choices,
-> release storage or screen layout; those decisions come after you confirm the behaviour.
+> installed user. Account, workspace and first-run behaviour are in the separate account and
+> workspace onboarding draft. This document begins with discovering or installing the computer
+> component and deliberately leaves its visual treatment to design.
 
 ## What's wrong today
 
@@ -37,7 +38,7 @@ it can use, and remove that computer's access without affecting any other one.
 
 ## User stories
 
-### US1 — Install and pair a computer (P1)
+### US1 — Find, install and pair a computer (P1)
 
 **As** a person using the hosted app **I want** to install and pair my computer without cloning the
 project or receiving hosting credentials **so that** the app can use my local coding agents without
@@ -45,9 +46,15 @@ making me a developer or server administrator.
 
 **Acceptance**
 
-- **Given** sparstrowgen has never been installed on my computer, **when** I follow the normal
-  installation and pairing journey, **then** the computer becomes available to my signed-in
-  account without Git, source code, Coolify access or a shared production secret.
+- **Given** computer setup begins on the computer I want to connect, **when** the local component is
+  already running, **then** the product finds it and offers to connect this computer without asking
+  me to locate or paste a production secret.
+- **Given** the local component is not found, **when** setup checks this computer, **then** it offers
+  the correct installation package and plain instructions, keeps checking, and recognises the
+  component after installation.
+- **Given** sparstrowgen has never been installed on my computer, **when** I follow that journey,
+  **then** the computer becomes available to my signed-in account without Git, source code,
+  Coolify access or a shared production secret.
 - **Given** I am not already signed in, **when** pairing needs my approval, **then** I first prove
   which account the computer belongs to; finding a public pairing address is not enough to claim
   it.
@@ -57,6 +64,8 @@ making me a developer or server administrator.
   paired after the browser, app and computer restart.
 - **Given** the computer cannot reach the hosted app, **when** I try to pair it, **then** I am told
   that connection failed and no half-paired computer is presented as ready.
+- **Given** I skip the first computer setup, **when** I later decide to connect one, **then** the
+  same discovery, installation and pairing help is available from inside the product.
 
 ### US2 — Understand and control my computers (P1)
 
@@ -132,8 +141,9 @@ back into a setup exercise.
   but sparstrowgen does not own their accounts or installation journeys.
 - **Remote control of the whole desktop.** Pairing authorises sparstrowgen's work, not screen or
   keyboard access.
-- **Inviting multiple people into this deployment.** This spec replaces machine credentials; it
-  does not change the current account model.
+- **Creating accounts, workspaces or inviting other people.** This spec replaces machine
+  credentials. Account and personal-workspace onboarding is defined separately; shared workspace
+  membership still needs its own feature.
 - **A visible release catalogue or release-management controls.** Installed users should not need
   to know that release storage exists.
 - **Automatically updating development builds.** A developer running source needs predictable
@@ -147,5 +157,6 @@ back into a setup exercise.
 ## What I need from you
 
 Read the scenarios as the person installing and using sparstrowgen. Correct anything that feels
-wrong—especially what should happen when an update has been waiting behind long-running work.
-Nothing designs or implements against this document until you explicitly approve it.
+wrong—especially discovery when the component is missing, and what should happen when an update
+has been waiting behind long-running work. Nothing designs or implements against this document
+until you explicitly approve it.
