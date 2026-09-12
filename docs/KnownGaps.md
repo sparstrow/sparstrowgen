@@ -243,21 +243,17 @@ container.
 
 **Noticed:** 2026-09-12, configuring the first production domain on Coolify v4.3.18
 
-When replacing Coolify's generated `sslip.io` domain for `server`, the Domains
-editor warned that internal port 8080 was not listed in Ports Exposes or used by
-an existing application domain. This is a false warning for this deployment:
-`Dockerfile.server` declares `EXPOSE 8080` and the Compose service declares
-`SERVICE_FQDN_SERVER_8080`. The analogous web port is 3000. Coolify accepts
-**Use This Port Anyway** and will route to the actual container port.
+When replacing Coolify's generated `sslip.io` domains, the v4.3.18 Domains
+editor showed a red missing-port triangle for both services. It reads Compose
+`expose:` / `ports:` entries when choosing an internal proxy target; it does not
+recognize the Dockerfiles' `EXPOSE` instructions or the
+`SERVICE_FQDN_<SERVICE>_<PORT>` names alone. Typing a port into the domain modal
+did not persist it.
 
-On this first configuration, the inherited port did not persist after replacing
-the generated hostname: the Domains table showed a red missing-port triangle
-for both services. The workaround is to reopen each domain, explicitly type
-its verified internal port, save, and confirm that the table shows the number.
+`docker-compose.yaml` now declares `expose: ["8080"]` for `server` and
+`expose: ["3000"]` for `web`. Those are private network declarations, not host
+port publishing. The runbook now requires reloading the corrected Compose file
+and checking that the Domains table displays both numeric ports.
 
-The deployment runbook now tells the operator to retain each private port and
-override this warning only for the verified `web:3000` and `server:8080` mapping.
-
-**Closes when:** Coolify's initial Compose parsing recognizes Dockerfile-exposed
-ports before the first successful deploy, or the warning is otherwise shown to
-be necessary.
+**Closes when:** the live Coolify resource reloads the corrected Compose file
+and shows `8080` and `3000` for the two custom domains.

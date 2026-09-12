@@ -41,6 +41,10 @@ services:
       context: .
       dockerfile: Dockerfile.server
       target: server
+    # Private container port for Coolify's proxy. `expose` documents it to
+    # Compose/Coolify without publishing a host port or bypassing the proxy.
+    expose:
+      - "8080"
     environment:
       - DATABASE_URL=${DATABASE_URL:?}
       # Both are required and the server refuses to start without them
@@ -87,6 +91,9 @@ services:
         # restart — which is why it is an argument here and not an environment
         # variable below.
         NEXT_PUBLIC_API_URL: ${API_ORIGIN:?}
+    # As above: private proxy target, not a public host port.
+    expose:
+      - "3000"
     environment:
       # As above: an environment variable, not a label. Domain set in the UI
       # (https://app.sparstrow.com).
