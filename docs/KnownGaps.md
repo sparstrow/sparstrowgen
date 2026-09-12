@@ -239,21 +239,39 @@ replaced because reloading Compose preserves saved variable values.
 file leaves required variables empty and blocks deployment before starting a
 container.
 
-## G-23 — Coolify warns that the first Compose service ports are unrecognized
+## G-24 — Coolify Compose interpolation needs `API_ORIGIN` in its runtime `.env`
 
-**Noticed:** 2026-09-12, configuring the first production domain on Coolify v4.3.18
+**Noticed:** 2026-09-12, first automatic production deployment after changing
+the Compose port declarations
 
-When replacing Coolify's generated `sslip.io` domains, the v4.3.18 Domains
-editor showed a red missing-port triangle for both services. It reads Compose
-`expose:` / `ports:` entries when choosing an internal proxy target; it does not
-recognize the Dockerfiles' `EXPOSE` instructions or the
-`SERVICE_FQDN_<SERVICE>_<PORT>` names alone. Typing a port into the domain modal
-did not persist it.
+`API_ORIGIN` is referenced only under `web.build.args`, so it was configured as
+build-time-only. Coolify v4.3.18 nevertheless runs `docker compose pull` using
+the runtime `.env` before building images. Compose interpolates build arguments
+at that stage and failed with `required variable API_ORIGIN is missing a value`.
 
-`docker-compose.yaml` now declares `expose: ["8080"]` for `server` and
-`expose: ["3000"]` for `web`. Those are private network declarations, not host
-port publishing. The runbook now requires reloading the corrected Compose file
-and checking that the Domains table displays both numeric ports.
+The Coolify variable must therefore have both Build time and Runtime enabled.
+This does not add it to a running container: the Compose file uses the value
+only in `web.build.args`; it is a public API origin rather than a secret.
 
-**Closes when:** the live Coolify resource reloads the corrected Compose file
-and shows `8080` and `3000` for the two custom domains.
+**Closes when:** Coolify separates Compose interpolation variables from
+container runtime variables, or its documentation describes this requirement.
+
+## G-25 — Coolify labels the Compose resource “Running (no healthcheck)”
+
+**Kind:** caveat
+**Raised:** 2026-09-12, verifying the first successful production deployment
+
+The live v4.3.18 resource displayed **Running (no healthcheck)** at application
+level even though `server` has a Docker healthcheck in `docker-compose.yaml`.
+Both public routes worked, account creation completed through the API, and the
+server log showed it listening on `0.0.0.0:8080`; the label therefore did not
+mean this deployment lacked all operational proof. It appears to describe the
+aggregate Compose resource rather than the individual service, but that UI
+interpretation has not been verified from Coolify itself.
+
+- **If wrong:** an operator may trust the green/running label as evidence of API
+  health, or treat its “no healthcheck” suffix as evidence that Compose ignored
+  the service check. Either inference is stronger than what the UI proved.
+- **Clears when:** Coolify shows the individual service health state, or its
+  v4.3.18 behavior/documentation establishes exactly what the aggregate label
+  represents. Until then, use `/api/health` and the service runtime log.
