@@ -25,7 +25,10 @@ services:
       dockerfile: Dockerfile.server
       target: migrations
     environment:
-      - DATABASE_URL=${DATABASE_URL:?set this to the Postgres resource internal URL}
+      # Keep the Compose required-value message empty. Coolify v4.3.18 treats
+      # text after `:?` as the generated variable's value, so a helpful prompt
+      # here is passed to the container as though it were the database URL.
+      - DATABASE_URL=${DATABASE_URL:?}
     # It is meant to exit. Without this Coolify restarts it forever, and the
     # deploy never settles.
     restart: "no"
@@ -39,14 +42,14 @@ services:
       dockerfile: Dockerfile.server
       target: server
     environment:
-      - DATABASE_URL=${DATABASE_URL:?set this to the Postgres resource internal URL}
+      - DATABASE_URL=${DATABASE_URL:?}
       # Both are required and the server refuses to start without them
       # (docs/Decisions.md D-027). The `:?` makes the deploy fail here, with the
       # variable named, rather than in a container restart loop.
-      - DAEMON_TOKEN=${DAEMON_TOKEN:?a long random string, also given to the daemon}
+      - DAEMON_TOKEN=${DAEMON_TOKEN:?}
       # The exact origin the browser loads the app from. Anything else is
       # refused CORS and refused a websocket.
-      - WEB_ORIGIN=${WEB_ORIGIN:?the full https:// origin of the web app}
+      - WEB_ORIGIN=${WEB_ORIGIN:?}
       # Not "false", so the session cookie is Secure and wears the __Host-
       # prefix. Never set this to false on a deployed instance.
       - SESSION_SECURE=true
@@ -83,7 +86,7 @@ services:
         # bundle during the build. Changing it requires a rebuild, not a
         # restart — which is why it is an argument here and not an environment
         # variable below.
-        NEXT_PUBLIC_API_URL: ${API_ORIGIN:?the full https:// origin of the API}
+        NEXT_PUBLIC_API_URL: ${API_ORIGIN:?}
     environment:
       # As above: an environment variable, not a label. Domain set in the UI
       # (https://app.sparstrow.com).
