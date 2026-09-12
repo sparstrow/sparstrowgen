@@ -257,3 +257,20 @@ and checking that the Domains table displays both numeric ports.
 
 **Closes when:** the live Coolify resource reloads the corrected Compose file
 and shows `8080` and `3000` for the two custom domains.
+
+## G-24 — Coolify Compose interpolation needs `API_ORIGIN` in its runtime `.env`
+
+**Noticed:** 2026-09-12, first automatic production deployment after changing
+the Compose port declarations
+
+`API_ORIGIN` is referenced only under `web.build.args`, so it was configured as
+build-time-only. Coolify v4.3.18 nevertheless runs `docker compose pull` using
+the runtime `.env` before building images. Compose interpolates build arguments
+at that stage and failed with `required variable API_ORIGIN is missing a value`.
+
+The Coolify variable must therefore have both Build time and Runtime enabled.
+This does not add it to a running container: the Compose file uses the value
+only in `web.build.args`; it is a public API origin rather than a secret.
+
+**Closes when:** Coolify separates Compose interpolation variables from
+container runtime variables, or its documentation describes this requirement.

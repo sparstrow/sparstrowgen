@@ -114,7 +114,11 @@ deployment before a container starts.
 > offers it.
 
 `API_ORIGIN` is used at **build** time — it is compiled into the browser bundle.
-Changing it later requires a rebuild, not a restart.
+Changing it later requires a rebuild, not a restart. In Coolify v4.3.18, keep
+both its **Build time** and **Runtime** switches enabled even though the web
+container does not receive it as a runtime environment variable: Coolify runs
+`docker compose pull` with its runtime `.env` file first, and Compose must be
+able to interpolate the build argument at that stage.
 
 ## 5. Set the domains and deploy
 
@@ -211,6 +215,7 @@ not look like a network problem.
 | Symptom | Cause |
 |---|---|
 | Deploy is blocked naming a variable | That required variable is still empty. Set it in Configuration → Environment Variables. |
+| Deployment says `API_ORIGIN is missing a value` during `docker compose pull` | Enable both Build time and Runtime for `API_ORIGIN`; Coolify needs it to interpolate the Compose build argument. |
 | Goose says it cannot parse `set this to the Postgres resource internal URL` | Coolify saved the old `${DATABASE_URL:?message}` prompt as the value. Replace `DATABASE_URL` with the Postgres internal URL. |
 | `migrate` fails on hostname resolution | Step 2's gotcha — predefined network not enabled, or wrong container name. |
 | App loads, everything inside it fails | `WEB_ORIGIN` does not exactly match the web domain. |
