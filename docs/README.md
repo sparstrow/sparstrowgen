@@ -16,6 +16,11 @@ docs/
 └── templates/         spec, runbook
 ```
 
+The proposed development, staging, production and installed-daemon flow is
+[`runbooks/release-workflow.md`](runbooks/release-workflow.md). Its matching agent protocol is the
+repository-root [`WORKFLOW.md`](../WORKFLOW.md); the **Active phase** there decides which branch
+rules apply.
+
 There is **no plan document**. See [`AGENTS.md` §2](../AGENTS.md): a spec says what he wants, a
 rendered design answers what it looks like, and that design's handoff contract is the backend's
 brief.
@@ -45,6 +50,7 @@ server/migrations/                                  the schema it needed
 | "Here's what I want and how I'd use it" | `specs/` |
 | Several changes at once, after looking at something built | `feedback/` — capture verbatim, triage after |
 | "Only a human can do this part" | `runbooks/` |
+| "Which branch, environment or release channel does this use?" | `../WORKFLOW.md` |
 
 Each file states its own format at the top. Only specs and runbooks have templates, because only
 they're long enough to need one.

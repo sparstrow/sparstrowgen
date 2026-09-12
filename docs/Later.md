@@ -38,17 +38,23 @@ touch interaction, no encoding latency.
 
 **Unblocks when:** something needs reaching a *native* app on the machine, not a web app.
 
-## L-2 — Desktop app (Electron)
+## L-2 — Managed daemon installer and supervisor
 
 **Status:** parked **Raised:** 2026-09-09
+**Selected next:** 2026-09-12; its trigger is met.
 
-`apps/desktop/` is an empty placeholder. The desktop app's real job is being the daemon's
-installer, supervisor, and updater — not a second UI. Until then the daemon runs as a terminal
-process, then a Windows service. A Go system-tray binary should be evaluated before Electron,
-since the daemon is already a Go binary and the web UI already exists.
+`apps/desktop/` is an empty placeholder. If a desktop shell is needed, its real job is being the
+daemon's installer, supervisor, and updater — not a second UI. The selected outcome is a per-user
+Windows installation that starts automatically and updates safely. Whether that needs a Go tray,
+a small launcher or the eventual Electron shell is a feasibility decision for the feature, not a
+reason to make users run the daemon in a terminal.
 
 **Unblocks when:** someone other than the owner needs to run a daemon, or starting it manually
 becomes a daily annoyance.
+
+The trigger is now met. The selected direction is a per-user Windows supervisor that installs,
+starts and safely updates the daemon; the feature process still determines its approved contract
+and design. See [`runbooks/release-workflow.md`](runbooks/release-workflow.md), phase 1.
 
 ## L-3 — Mobile app (Expo)
 
@@ -191,6 +197,8 @@ the other two get it free. Worth doing them as one piece of work rather than thr
 
 ## L-16 — Pair a machine from the browser, and a screen that lists them
 
+**Status:** parked
+**Selected next:** 2026-09-12; its trigger is met.
 **Raised:** 2026-09-11, while building accounts against Multica's model
 
 `DAEMON_TOKEN` is one static shared secret, the same on the server and on every machine that dials
@@ -208,7 +216,9 @@ last seen, which agent CLIs it found, and a button to revoke one — plus `spars
 new machine instead of copying a secret into a service file.
 
 **Trigger:** a second machine, or the first time a machine needs to be revoked without disturbing
-the other. Until then one static token on one laptop is honest about what it is.
+the other. The owner has now selected browser pairing and per-machine revocation as part of the
+managed-daemon phase before the staging/development workflow is activated. See
+[`runbooks/release-workflow.md`](runbooks/release-workflow.md), phase 1.
 
 ## L-17 — Isolated pull-request preview deployments
 
