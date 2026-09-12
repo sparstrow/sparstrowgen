@@ -23,14 +23,25 @@ through that has not proved it is the owner, and the small number of exceptions
 are written out one by one below rather than being whatever happens to be
 outside a route group.
 
-Three ways in, and only three:
+Two credentials, and only two:
 
-  a session cookie   the browser, after a password
+  a session cookie   the browser, after an email and a password
   the daemon token   the owner's own machine, dialling in
-  /api/health        nothing but liveness, so a deploy can check it
 
-There is no fourth, and there is no configuration that removes the first two.
-The server refuses to start without both secrets set (cmd/server/main.go), which
+Four routes are reachable without either, and each earns it:
+
+  /api/health        liveness only, so a deploy can check it. It deliberately
+                     does not say whether the daemon is connected
+  /api/auth/session  which of the three screens to show. Answers only
+                     "has anybody claimed this" and "are YOU signed in"
+  /api/auth/login    the door itself
+  /api/auth/signup   creates the ONE account, and only while there is none.
+                     Guarded by a setup code the server prints at startup,
+                     because reading that means having the deployment's logs
+                     (docs/Decisions.md D-029). It answers 409 forever after
+
+There is no fifth, and no configuration that removes the two credentials. The
+server refuses to start without both secrets set (cmd/server/main.go), which
 means "deployed with authentication accidentally switched off" is not a state
 this program can be in. */
 
@@ -103,15 +114,13 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
 	client := clientIP(r)
 
-	// Throttled like a sign-in, because guessing a setup code is guessing.
-	wait, admitted := a.throttle.Begin(client)
-	if !admitted {
-		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
-		a.fail(w, errors.New("too many attempts — try again in "+wait.Round(time.Second).String()),
-			http.StatusTooManyRequests)
-		return
-	}
-
+	// "Is this app already claimed?" is answered BEFORE the throttle is touched,
+	// and the order is the whole point. The throttle is keyed by client IP,
+	// which behind a reverse proxy is one value for the entire internet
+	// (see clientIP) — so if a closed sign-up consumed an attempt, any stranger
+	// could hold the owner's SIGN-IN in permanent back-off by hammering an
+	// endpoint that does nothing. Refusing for free costs an attacker
+	// everything and the owner nothing.
 	claimed, err := a.store.Claimed(r.Context())
 	if err != nil {
 		a.fail(w, errors.New("could not reach the database"), http.StatusServiceUnavailable)
@@ -122,6 +131,16 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only now: guessing a setup code is guessing, and is throttled like a
+	// password.
+	wait, admitted := a.throttle.Begin(client)
+	if !admitted {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		a.fail(w, errors.New("too many attempts — try again in "+wait.Round(time.Second).String()),
+			http.StatusTooManyRequests)
+		return
+	}
+
 	var body struct {
 		SetupCode string `json:"setupCode"`
 		Email     string `json:"email"`
@@ -129,6 +148,16 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		a.fail(w, errors.New("that request could not be read"), http.StatusBadRequest)
+		return
+	}
+
+	// A setup code that was never generated must match nothing. NewSetupCode
+	// cannot return an empty string (it fails the process instead), so this is
+	// belt and braces against a future edit making it fail soft — at which
+	// point an empty submitted code would claim the app.
+	if a.setupCode == "" {
+		a.log.Error("no setup code exists, so no sign-up can be accepted")
+		a.fail(w, errBadSetupCode, http.StatusUnauthorized)
 		return
 	}
 
@@ -155,9 +184,10 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := a.store.CreateUser(r.Context(), body.Email, body.Password)
-	if errors.Is(err, store.ErrEmailTaken) {
-		// Two sign-ups at once: both passed the check above and the database
-		// decided between them. This is the loser, and the app is claimed.
+	if errors.Is(err, store.ErrAlreadyClaimed) || errors.Is(err, store.ErrEmailTaken) {
+		// Two sign-ups at once: both passed the check above, and the database
+		// decided between them (migrations/00008_one_account_only.sql). This is
+		// the loser, whichever constraint refused it, and the app is claimed.
 		a.fail(w, errAlreadySetUp, http.StatusConflict)
 		return
 	}
@@ -216,7 +246,12 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.store.Authenticate(r.Context(), body.Email, body.Password)
+	// Checking the password and starting the session are one transaction in the
+	// store, not two calls from here. Splitting them leaves a ~50ms argon2-wide
+	// window in which a password change can delete every session and this can
+	// then insert a working one for the password that was just revoked.
+	user, token, expires, err := a.store.SignIn(
+		r.Context(), body.Email, body.Password, r.UserAgent(), client)
 	if errors.Is(err, store.ErrNoAccount) {
 		a.throttle.Failed(client)
 		a.log.Warn("failed sign-in", "ip", client)
@@ -233,11 +268,14 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 
 	a.throttle.Succeeded(client)
 	a.log.Info("signed in", "ip", client)
-	a.startSession(w, r, user)
+	http.SetCookie(w, auth.Cookie(token, a.cfg.SecureCookie, expires))
+	writeJSON(w, map[string]any{"ok": true, "email": user.Email})
 }
 
-// startSession is the last step of signing up, signing in, and changing a
-// password — every path that should leave this browser holding a NEW session.
+// startSession is the last step of signing up and of changing a password.
+//
+// Signing in does NOT come through here: it has to create its session inside
+// the same transaction that checked the password, so it writes its own cookie.
 func (a *API) startSession(w http.ResponseWriter, r *http.Request, user store.User) {
 	token, expires, err := a.store.StartSession(r.Context(), user.ID, r.UserAgent(), clientIP(r))
 	if err != nil {
@@ -261,17 +299,37 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 
 	if cookie, err := r.Cookie(auth.CookieName(a.cfg.SecureCookie)); err == nil {
 		if body.Everywhere {
-			if user, ok, uerr := a.store.SessionUser(r.Context(), cookie.Value); uerr == nil && ok {
+			// Every failure here is reported. "Sign out everywhere" is the
+			// button somebody presses because they think a device is in the
+			// wrong hands, and answering {"ok":true} while the sessions are
+			// still live is the worst thing this endpoint could do — the owner
+			// stops worrying about exactly the thing that is still true.
+			user, ok, uerr := a.store.SessionUser(r.Context(), cookie.Value)
+			if uerr != nil {
+				a.fail(w, errors.New("could not reach the database, so nothing was signed out"),
+					http.StatusServiceUnavailable)
+				return
+			}
+			if !ok {
+				// This session is already dead, so there is nobody to sign out
+				// everywhere FOR. Clearing the cookie below is the whole job.
+				a.log.Info("sign out everywhere on a session that had already ended")
+			} else {
 				n, derr := a.store.EndAllSessions(r.Context(), user.ID)
 				if derr != nil {
-					a.fail(w, derr, http.StatusInternalServerError)
+					a.fail(w, errors.New("could not sign every device out"),
+						http.StatusInternalServerError)
 					return
 				}
+				a.hub.DisconnectUser(user.ID)
 				a.log.Info("signed out everywhere", "sessions", n)
 			}
-		} else if derr := a.store.EndSession(r.Context(), cookie.Value); derr != nil {
-			a.fail(w, derr, http.StatusInternalServerError)
-			return
+		} else {
+			if derr := a.store.EndSession(r.Context(), cookie.Value); derr != nil {
+				a.fail(w, errors.New("could not sign you out"), http.StatusInternalServerError)
+				return
+			}
+			a.hub.DisconnectSession(string(auth.HashToken(cookie.Value)))
 		}
 	}
 	http.SetCookie(w, auth.ClearCookie(a.cfg.SecureCookie))
@@ -350,6 +408,11 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	// Every session just died, this browser's included. Issuing a fresh one
 	// here keeps the owner signed in without keeping the old token alive — a
 	// copy of it, taken by whoever prompted the change, is now dead too.
+	// The sessions are gone from the database, but a socket opened under one is
+	// still connected and still receiving every conversation event. Closing
+	// them is the difference between "signed out" and "signed out".
+	a.hub.DisconnectUser(user.ID)
+
 	a.log.Info("password changed", "sessions_ended", ended)
 	a.startSession(w, r, user)
 }

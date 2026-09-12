@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
 
@@ -36,12 +37,19 @@ func defaultFolder() string {
 }
 
 func (a *API) browserSocket(w http.ResponseWriter, r *http.Request) {
+	// Behind requireSession, so this is always present. Registered WITH the
+	// socket rather than merely checked before it: a websocket is authenticated
+	// once, at the handshake, and then lives as long as the tab does — so the
+	// hub has to know whose it is in order to close it when that session ends
+	// (docs/Decisions.md D-030).
+	user, token := userFrom(r.Context())
+
 	up := a.upgrader()
 	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	a.hub.AddClient(conn)
+	a.hub.AddClient(conn, user.ID, string(auth.HashToken(token)))
 	defer a.hub.RemoveClient(conn)
 
 	// Browsers only listen. Everything they can do goes through HTTP, so a

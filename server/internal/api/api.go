@@ -23,8 +23,6 @@ import (
 // value of any of them that means "no authentication", because the one mistake
 // this app cannot afford is being reachable without it.
 type Config struct {
-	// PasswordHash is the argon2id PHC string from `server -hashpw`.
-	PasswordHash string
 	// DaemonToken is the shared secret the owner's machine presents.
 	DaemonToken string
 	// Origin is the exact browser origin allowed to call this API, e.g.

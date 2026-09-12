@@ -23,11 +23,20 @@ type User struct {
 // ErrEmailTaken is the unique constraint on users.email, named.
 var ErrEmailTaken = errors.New("that email already has an account")
 
+// ErrAlreadyClaimed is the users_only_one index, named. It is the loser of a
+// race between two sign-ups, which the database decided.
+var ErrAlreadyClaimed = errors.New("this app already has an account")
+
 // ErrNoAccount covers both "no such email" and "wrong password", deliberately
 // as one error. Telling them apart tells a stranger which emails exist.
 var ErrNoAccount = errors.New("that email and password do not match an account")
 
 const uniqueViolation = "23505"
+
+// singletonIndex is the unique index that permits exactly one row in users.
+// Named here because the two constraints on that table mean different things to
+// a caller: one is "pick another email", the other is "you are not the owner".
+const singletonIndex = "users_only_one"
 
 // Claimed reports whether the app has an owner yet.
 //
@@ -42,13 +51,20 @@ func (s *Store) Claimed(ctx context.Context) (bool, error) {
 	return n > 0, nil
 }
 
+// UserCount is how many accounts exist. Claimed answers the question the app
+// asks; this answers the one a test asks, which is whether the "exactly one"
+// rule actually held.
+func (s *Store) UserCount(ctx context.Context) (int64, error) {
+	return s.q.CountUsers(ctx)
+}
+
 // CreateUser makes the account.
 //
 // Two simultaneous sign-ups can both pass the Claimed check — there is no lock
-// between reading a count and inserting a row. The UNIQUE constraint on email
-// is what actually decides it, and a second account with a DIFFERENT email is
-// prevented by the caller re-checking inside the same request. Belt and braces,
-// because the cost of being wrong here is somebody else owning the machine.
+// between counting rows and inserting one, and they may be on different
+// connections seeing different snapshots. So the check is not what enforces
+// "one account": the users_only_one index is, and this reads which constraint
+// refused in order to say the true thing to the loser.
 func (s *Store) CreateUser(ctx context.Context, email, password string) (User, error) {
 	hash, err := auth.HashPassword(password)
 	if err != nil {
@@ -60,6 +76,9 @@ func (s *Store) CreateUser(ctx context.Context, email, password string) (User, e
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+		if pgErr.ConstraintName == singletonIndex {
+			return User{}, ErrAlreadyClaimed
+		}
 		return User{}, ErrEmailTaken
 	}
 	if err != nil {
@@ -68,30 +87,64 @@ func (s *Store) CreateUser(ctx context.Context, email, password string) (User, e
 	return User{ID: uuidToString(row.ID), Email: row.Email}, nil
 }
 
-// Authenticate checks an email and password together.
+// SignIn checks an email and password and, if they match, starts the session —
+// both inside ONE transaction.
+//
+// The two halves cannot be separated. A password change deletes every session,
+// and a sign-in that verified before the change but inserted after it would
+// hand out a working session for a password that no longer exists. Since
+// verifying costs ~50ms of argon2, that window is wide enough to hit by
+// accident, never mind on purpose. The row lock (FOR SHARE, see
+// queries/users.sql) is what closes it: a change waits for this to commit, and
+// then deletes the session this created.
 //
 // A missing email and a wrong password return the SAME error, and both pay for
 // a password hash — the miss hashes against a dummy so that "no such account"
 // and "wrong password" take the same time. Without that, the response time is
 // an oracle for which emails have accounts.
-func (s *Store) Authenticate(ctx context.Context, email, password string) (User, error) {
-	row, err := s.q.GetUserByEmail(ctx, normaliseEmail(email))
+func (s *Store) SignIn(ctx context.Context, email, password, userAgent, ip string) (User, string, time.Time, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+
+	row, err := q.GetUserByEmailForSignIn(ctx, normaliseEmail(email))
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Deliberately wasted work. The cost of the hash is the point.
 		_, _ = auth.VerifyPassword(decoyHash, password)
-		return User{}, ErrNoAccount
+		return User{}, "", time.Time{}, ErrNoAccount
 	}
 	if err != nil {
-		return User{}, err
+		return User{}, "", time.Time{}, err
 	}
 	ok, err := auth.VerifyPassword(row.PasswordHash, password)
 	if err != nil {
-		return User{}, err
+		return User{}, "", time.Time{}, err
 	}
 	if !ok {
-		return User{}, ErrNoAccount
+		return User{}, "", time.Time{}, ErrNoAccount
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, nil
+
+	token, hash, err := auth.NewToken()
+	if err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	expires := time.Now().Add(auth.Lifetime)
+	if _, err := q.CreateSession(ctx, db.CreateSessionParams{
+		TokenHash: hash,
+		UserID:    row.ID,
+		ExpiresAt: stamp(expires),
+		UserAgent: userAgent,
+		Ip:        ip,
+	}); err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	return User{ID: uuidToString(row.ID), Email: row.Email}, token, expires, nil
 }
 
 // decoyHash is a real argon2id hash of a value nobody knows, used only to spend
@@ -124,7 +177,20 @@ func (s *Store) ChangePassword(ctx context.Context, userID, current, next string
 	if err != nil {
 		return 0, err
 	}
-	row, err := s.q.GetUser(ctx, uid)
+	// One transaction for the whole thing, opened BEFORE the current password
+	// is read. Reading outside it and writing inside would let a sign-in that
+	// is already verifying against the old hash slip its session in after the
+	// delete — the exact hole this function exists to close.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+
+	// FOR UPDATE: waits for any in-flight sign-in on this row, and serialises
+	// two simultaneous changes.
+	row, err := q.GetUserForChange(ctx, uid)
 	if err != nil {
 		return 0, err
 	}
@@ -139,16 +205,6 @@ func (s *Store) ChangePassword(ctx context.Context, userID, current, next string
 	if err != nil {
 		return 0, err
 	}
-	// One transaction: a password changed without its sessions ending would
-	// leave the old credential's sessions working, which is the failure this
-	// whole function exists to prevent.
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := s.q.WithTx(tx)
-
 	if _, err := q.SetUserPassword(ctx, db.SetUserPasswordParams{ID: uid, PasswordHash: hash}); err != nil {
 		return 0, err
 	}

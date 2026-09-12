@@ -39,50 +39,12 @@ const (
 	saltLen      = 16
 )
 
-// ErrBadHash means the configured hash is not one we wrote — malformed, or from
+// ErrBadHash means a stored hash is not one we wrote — malformed, or written by
 // some other tool. It is deliberately distinct from "wrong password": one is the
-// deployment being misconfigured and the other is somebody guessing.
+// row being corrupt and the other is somebody guessing.
 var ErrBadHash = errors.New("the stored password hash is not in a format this server understands")
 
-// B64Prefix marks a hash that has been base64-encoded to survive being carried
-// through something that treats `$` as special.
-const B64Prefix = "b64:"
-
-/*
-	An argon2id hash is full of dollar signs, and that is a deployment hazard.
-
-`$argon2id$v=19$m=19456,t=2,p=1$<salt>$<key>` goes through Docker Compose's env
-interpolation — which Coolify uses — and comes out as
-`=19=19456,t=2,p=1+TsiHSIkxFHoxvFtE6g`, because `$argon2id`, `$v` and `$m` are
-read as undefined variables and replaced with nothing. The server then refuses
-every password, correctly, and the reason is nowhere near the symptom.
-
-Telling people to escape each `$` as `$$` works and will be forgotten exactly
-once, at the worst moment. So the hash may instead be given base64-encoded with
-a `b64:` prefix, which contains nothing any shell, env file or dashboard treats
-as special. `server -hashpw` prints both forms and says which to use where.
-*/
-func NormaliseHash(configured string) string {
-	rest, found := strings.CutPrefix(configured, B64Prefix)
-	if !found {
-		return configured
-	}
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(rest))
-	if err != nil {
-		// Returned as-is so the caller's existing "this is not a hash I can
-		// read" path reports it, rather than inventing a second error for the
-		// same outcome.
-		return configured
-	}
-	return string(decoded)
-}
-
-// EncodeHash is the inverse, for printing.
-func EncodeHash(hash string) string {
-	return B64Prefix + base64.StdEncoding.EncodeToString([]byte(hash))
-}
-
-// HashPassword produces the PHC-format string that goes in OWNER_PASSWORD_HASH.
+// HashPassword produces the PHC-format string stored on the account row.
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {

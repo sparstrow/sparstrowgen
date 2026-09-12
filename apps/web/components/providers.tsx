@@ -7,7 +7,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { NotSignedIn } from "@/lib/api";
+import { api, NotSignedIn } from "@/lib/api";
 
 /** One QueryClient per browser session, created in state rather than at module
  *  scope — a module-level client would be shared across requests during SSR and
@@ -22,7 +22,34 @@ export function Providers({ children }: { children: React.ReactNode }) {
        Handled centrally rather than at each call site, because the call sites
        are every feature in the app and the next one added would forget. */
     const signedOut = (err: unknown) => {
-      if (err instanceof NotSignedIn) client.setQueryData(["session"], false);
+      if (!(err instanceof NotSignedIn)) return;
+
+      // ASK the server rather than asserting it here, and the reason is a race
+      // that would otherwise be permanent. Signing in and changing a password
+      // both replace the cookie, and a request that left under the OLD one can
+      // land after that — a straggling 401 arriving a moment after a successful
+      // sign-in. Writing "signed out" on the strength of it would throw the
+      // owner back to the login screen while the browser holds a perfectly good
+      // session, and `staleTime: Infinity` means nothing would ever correct it.
+      //
+      // Fetching instead lets the server settle it, and concurrent 401s collapse
+      // into one request because the key is the same. staleTime 0 because the
+      // cached answer is exactly what is in doubt.
+      void client
+        .fetchQuery({ queryKey: ["session"], queryFn: api.session, staleTime: 0 })
+        .then((session) => {
+          // Only once it is CONFIRMED: everything else was read with a session
+          // that no longer exists, so none of it may sit behind the login form
+          // or be handed to whoever signs in next.
+          if (!session.signedIn) {
+            client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+          }
+        })
+        .catch(() => {
+          // The session endpoint is unreachable too. useSession surfaces that
+          // as "can't reach the server", which is the honest answer and a
+          // different screen from being signed out.
+        });
     };
     const client: QueryClient = new QueryClient({
       queryCache: new QueryCache({ onError: signedOut }),

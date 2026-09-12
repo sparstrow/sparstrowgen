@@ -10,17 +10,16 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
+	"github.com/sparstrow/sparstrowgen/server/internal/testdb"
 )
 
 /* A real server, a real database, and a websocket pretending to be the daemon.
@@ -70,22 +69,7 @@ type rig struct {
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen?sslmode=disable"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Skipf("no database: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skip("no database reachable — run `make db && make migrate`")
-	}
-	t.Cleanup(pool.Close)
+	pool := testdb.Pool(t)
 
 	// Discard the log: these tests deliberately provoke disconnections and
 	// failures, and the warnings they produce are the expected outcome rather
@@ -114,12 +98,11 @@ func newRig(t *testing.T) *rig {
 // claim creates the account these tests sign in with, exactly as the sign-up
 // screen does — setup code included.
 //
-// It wipes the users table first, and that is worth saying out loud: the app
-// can be claimed ONCE, so without this the second test in a run would be told
-// the account already exists. These run against the DEVELOPMENT database, so
-// running the suite deletes whatever development account is there and the next
-// sign-in needs a fresh setup code from the server log. Recorded as
-// docs/KnownGaps.md G-20; the real fix is a database of their own.
+// It wipes the users table first, because the app can be claimed ONCE and
+// without this the second test in a run would be told the account already
+// exists. That is safe to do because these run against the TEST database, which
+// internal/testdb creates and owns — the development database, and whatever
+// account the owner has made in it, is untouched.
 func (r *rig) claim() {
 	r.t.Helper()
 	if _, err := r.store.DeleteEveryUser(context.Background()); err != nil {
@@ -372,6 +355,11 @@ type browser struct {
 	t      *testing.T
 	conn   *websocket.Conn
 	events chan protocol.ClientEvent
+	// gone is closed when the read loop ends, which is how a test learns the
+	// SERVER hung up. It has to come from that one goroutine: a websocket.Conn
+	// allows a single concurrent reader, so a test reading the socket itself to
+	// see whether it is closed is a data race, not an assertion.
+	gone chan struct{}
 }
 
 func (r *rig) watch() *browser {
@@ -380,9 +368,15 @@ func (r *rig) watch() *browser {
 	if err != nil {
 		r.t.Fatalf("dial /ws: %v", err)
 	}
-	b := &browser{t: r.t, conn: conn, events: make(chan protocol.ClientEvent, 64)}
+	b := &browser{
+		t:      r.t,
+		conn:   conn,
+		events: make(chan protocol.ClientEvent, 64),
+		gone:   make(chan struct{}),
+	}
 	r.t.Cleanup(func() { _ = conn.Close() })
 	go func() {
+		defer close(b.gone)
 		for {
 			var ev protocol.ClientEvent
 			if err := conn.ReadJSON(&ev); err != nil {
@@ -392,6 +386,17 @@ func (r *rig) watch() *browser {
 		}
 	}()
 	return b
+}
+
+// closed waits for the server to hang up, and reports whether it did within d.
+func (b *browser) closed(d time.Duration) bool {
+	b.t.Helper()
+	select {
+	case <-b.gone:
+		return true
+	case <-time.After(d):
+		return false
+	}
 }
 
 // await returns the first event matching want, ignoring the others. A single

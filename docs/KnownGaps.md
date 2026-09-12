@@ -202,21 +202,18 @@ Two related things also unproved, and worth knowing before they surprise someone
 **Closes when:** the second deploy to Coolify either works or does not. If it does not, the fallback
 is a Coolify pre-deployment command rather than a compose service.
 
-## G-20 — The test suite deletes the development account
+## G-21 — The chat surface does not work at phone width
 
-**Noticed:** 2026-09-11, moving authentication from an env-var password to real accounts
+**Noticed:** 2026-09-11, verifying the account screens in a browser
 
-The app can be claimed exactly once, so the API test harness wipes the `users` table before
-claiming it — otherwise the second test in a run is told the account already exists. The tests run
-against the **development database**, so `go test ./...` deletes whatever development account is
-there, and the next sign-in needs a fresh setup code from the server's startup log.
+At 375×812 the sidebar keeps its fixed 288px and the transcript is squeezed into what is left, so
+the conversation pane wraps to one or two words a line and the account menu opens off-screen. The
+sign-in and sign-up screens are fine — they are a centred column — so this is the chat surface
+only, and it predates the account work.
 
-Not dangerous, and nothing is lost but the account row: conversations, folders and transcripts are
-untouched, and re-claiming takes seconds. It is still wrong, and it is the same shape as the bug
-that white-screened the sidebar (B-13) — tests and the running app sharing one database.
+Deliberately not fixed here. It needs a real decision about what the sidebar does on a phone
+(drawer, or a list-then-detail view), and that is a design question for the owner rather than a
+CSS patch. Nothing about it is a surprise once seen, which is why it is written down rather than
+guessed at.
 
-**The fix is a database of their own**: point `TEST_DATABASE_URL` at `sparstrowgen_test`, create and
-migrate it in `make db`. Deliberately not done in the same change as the auth rewrite, because it
-touches how every store test is set up and that is a second thing going wrong at once.
-
-**Closes when:** the test database exists and `make test` no longer touches development data.
+**Closes when:** the chat surface has a phone layout the owner has chosen.

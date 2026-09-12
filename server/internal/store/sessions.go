@@ -105,7 +105,7 @@ func (s *Store) EndAllSessions(ctx context.Context, userID string) (int64, error
 }
 
 // SweepSessions deletes rows that can no longer authenticate anything. Purely
-// housekeeping: ValidSession already refuses them, so this is about the table
+// housekeeping: SessionUser already refuses them, so this is about the table
 // not growing forever rather than about security.
 func (s *Store) SweepSessions(ctx context.Context) (int64, error) {
 	return s.q.DeleteDeadSessions(ctx, stamp(time.Now().Add(-auth.IdleLifetime)))

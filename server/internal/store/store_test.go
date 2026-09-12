@@ -2,13 +2,10 @@ package store
 
 import (
 	"context"
-	"os"
 	"testing"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
+	"github.com/sparstrow/sparstrowgen/server/internal/testdb"
 )
 
 /* These need a real Postgres, because the rules being tested live in SQL: seq
@@ -16,28 +13,14 @@ import (
    upsert. Testing them against a fake would only test the fake.
 
    They SKIP rather than fail when no database is reachable, so `go test ./...`
-   stays useful on a machine without Docker running. Start one with
-   `make db && make migrate`. */
+   stays useful on a machine without Docker running. Start one with `make db`.
+
+   The database is the TEST one, not the development one, and testdb creates it
+   the first time. See that package for why. */
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen?sslmode=disable"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Skipf("no database: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skip("no database reachable — run `make db && make migrate`")
-	}
-	t.Cleanup(pool.Close)
-	return New(pool)
+	return New(testdb.Pool(t))
 }
 
 func newConversation(t *testing.T, s *Store) protocol.Conversation {

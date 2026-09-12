@@ -117,10 +117,16 @@ const SetupCodeBytes = 16
 func NewSetupCode() string {
 	raw := make([]byte, SetupCodeBytes)
 	if _, err := rand.Read(raw); err != nil {
-		// Unreachable in practice, and a predictable setup code is worse than
-		// no app at all — so this returns something no one can match rather
-		// than something weak.
-		return ""
+		// This used to return "", with a comment claiming that was a value
+		// nobody could match. It is the opposite: the submitted code is
+		// trimmed and compared in constant time, and comparing "" with "" is a
+		// MATCH — so an entropy failure would have turned the one gate on
+		// creating an account into first-request-wins.
+		//
+		// A process that cannot produce random bytes cannot safely issue
+		// session tokens either. Refusing to run is the only honest outcome,
+		// and it happens at startup where it is loud.
+		panic("no entropy available: cannot generate a setup code (" + err.Error() + ")")
 	}
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 }

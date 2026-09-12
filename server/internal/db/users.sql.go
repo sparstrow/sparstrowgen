@@ -36,9 +36,14 @@ type CreateUserParams struct {
 	PasswordHash string `json:"password_hash"`
 }
 
-// The UNIQUE constraint on email is what makes this safe against two
-// simultaneous sign-ups: both may pass the count check, only one INSERT wins,
-// and the loser gets a constraint violation rather than a second account.
+// Two constraints decide this, not the caller's earlier check:
+//
+//	users_email_key  two people claiming the same address
+//	users_only_one   a SECOND account at all, whatever its address
+//
+// The second is the one that matters here. Without it, simultaneous sign-ups
+// with different emails both pass the count check and both insert
+// (migrations/00008_one_account_only.sql).
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
 	var i User
@@ -89,6 +94,54 @@ SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email =
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByEmailForSignIn = `-- name: GetUserByEmailForSignIn :one
+SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = $1 FOR SHARE
+`
+
+// Signing in, holding the row against a password change.
+//
+// FOR SHARE rather than a plain read, and it matters. Verifying a password
+// takes ~50ms of argon2, and without a lock a sign-in can read the OLD hash,
+// spend that time, and insert its session AFTER a password change has deleted
+// every session — so the password the owner just revoked still produces a
+// working login. FOR SHARE does not block other sign-ins (they share it); it
+// blocks only GetUserForChange below, which is exactly the conflict.
+func (q *Queries) GetUserByEmailForSignIn(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailForSignIn, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserForChange = `-- name: GetUserForChange :one
+SELECT id, email, password_hash, created_at, updated_at FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Changing the password, excluding everything else on this row.
+//
+// FOR UPDATE waits for any sign-in holding FOR SHARE to finish, so the sessions
+// this change is about to delete include that one. It also serialises two
+// simultaneous changes, which would otherwise both verify against the same old
+// hash and one would silently overwrite the other.
+func (q *Queries) GetUserForChange(ctx context.Context, id pgtype.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForChange, id)
 	var i User
 	err := row.Scan(
 		&i.ID,

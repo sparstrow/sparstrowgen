@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { api, connect, type ServerEvent } from "./api";
+import { api, connect, type ServerEvent, type Session } from "./api";
 import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-types";
 
 /* Every read of server state goes through here, and every realtime event
@@ -21,17 +21,62 @@ export const keys = {
   conversation: (id: string) => ["conversation", id] as const,
 };
 
-/** Whether this browser holds a live session.
+/** What the app is right now: unclaimed, signed out, or signed in.
  *
- *  Asked once before anything else, so the app shows the login screen rather
- *  than a chat surface whose every request fails. Not retried: "not signed in"
- *  is an answer, and retrying it three times only delays the login screen. */
+ *  Asked once before anything else, so the app shows the right door rather than
+ *  a chat surface whose every request fails. Not retried: "not signed in" is an
+ *  answer, and retrying it three times only delays the screen that lets the
+ *  owner do something about it. */
 export function useSession() {
   return useQuery({
     queryKey: keys.session,
-    queryFn: api.signedIn,
+    queryFn: api.session,
     staleTime: Infinity,
     retry: false,
+  });
+}
+
+/** Writes a signed-in session into the cache without a round trip.
+ *
+ *  Signing up, signing in and changing a password all end with the server
+ *  having just told us who this is, so asking it again immediately is a request
+ *  whose answer we already hold. */
+function useSessionWriter() {
+  const qc = useQueryClient();
+  return (email: string) =>
+    qc.setQueryData<Session>(keys.session, { claimed: true, signedIn: true, email });
+}
+
+/** Claiming a fresh deployment. Possible exactly once, and the server is what
+ *  enforces that — this only draws the door. */
+export function useSignUp() {
+  const signedIn = useSessionWriter();
+  return useMutation({
+    mutationFn: (input: { setupCode: string; email: string; password: string }) =>
+      api.signUp(input),
+    onSuccess: (email) => signedIn(email),
+  });
+}
+
+export function useSignIn() {
+  const signedIn = useSessionWriter();
+  return useMutation({
+    mutationFn: (input: { email: string; password: string }) =>
+      api.signIn(input.email, input.password),
+    onSuccess: (email) => signedIn(email),
+  });
+}
+
+/** Changing the password, which on the server ends every session and issues
+ *  this browser a new one.
+ *
+ *  So there is nothing to invalidate and nowhere to send the owner: he stays on
+ *  the screen he was on, holding a cookie he did not have a moment ago, and
+ *  every other device is now signed out. */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { current: string; next: string }) =>
+      api.changePassword(input.current, input.next),
   });
 }
 
@@ -39,8 +84,23 @@ export function useSignOut() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (everywhere: boolean) => api.signOut(everywhere),
-    onSettled: () => {
-      // ORDER MATTERS, and getting it wrong looks like sign-out being broken.
+    // onError, not onSettled, for the cache changes below. Signing out is the
+    // one action where pretending it worked is worse than reporting that it
+    // did not: "sign out everywhere" is pressed BECAUSE something may be in
+    // the wrong hands, and showing the login screen over sessions that are
+    // still live would end the owner's worry without ending the exposure.
+    onError: (err: Error, everywhere) =>
+      toast.error(
+        everywhere ? "Could not sign out everywhere" : "Could not sign out",
+        {
+          description: everywhere
+            ? `${err.message}. Your other devices may still be signed in.`
+            : err.message,
+        },
+      ),
+    onSuccess: () => {
+      // ORDER MATTERS, and getting it wrong looks like sign-out being broken
+      // (docs/Bugs.md B-14).
       //
       // The session flag goes first. That re-renders the gate, which swaps the
       // chat surface for the login form and unmounts every component still
@@ -51,7 +111,13 @@ export function useSignOut() {
       // so they are left watching nothing and no re-render is ever triggered.
       // The request succeeds, the cookie is gone, and the screen sits there
       // showing a conversation the server would now refuse to hand over.
-      qc.setQueryData(keys.session, false);
+      //
+      // `claimed` stays true: signing out does not un-create the account, and
+      // saying otherwise would offer the sign-up form to somebody who has one.
+      qc.setQueryData<Session>(keys.session, (prev) => ({
+        claimed: prev?.claimed ?? true,
+        signedIn: false,
+      }));
       // Everything else was read with a session that no longer exists, so none
       // of it may stay behind the login form.
       qc.removeQueries({

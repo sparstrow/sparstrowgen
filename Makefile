@@ -7,14 +7,13 @@ GOOSE_DBSTRING ?= postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowg
 export GOOSE_DRIVER
 export GOOSE_DBSTRING
 
-.PHONY: help db migrate server daemon web build check test test-linux hashpw clean
+.PHONY: help db migrate server daemon web build check test test-linux clean
 
 help:
 	@echo "make db       - start Postgres in Docker"
 	@echo "make migrate  - apply migrations"
 	@echo "make server   - run the API server on :8080"
 	@echo "make daemon   - run the daemon (drives the agent CLIs)"
-	@echo "make hashpw   - hash a password for OWNER_PASSWORD_HASH in production"
 	@echo "make web      - run the Next.js app on :3000"
 	@echo "make check    - typecheck, lint, vet and build everything"
 	@echo "make test-linux - the Go suite on Linux, under the race detector"
@@ -22,8 +21,11 @@ help:
 	@echo "First run:  make db && make migrate"
 	@echo "Then, in three terminals: make server / make daemon / make web"
 
+# -f names the file: docker-compose.yaml in this repo is what COOLIFY deploys,
+# and a bare `docker compose up` here would pick one of the two by a precedence
+# rule nobody remembers.
 db:
-	docker compose up -d
+	docker compose -f compose.dev.yaml up -d
 	@echo "waiting for postgres..."
 	@until docker exec sparstrowgen-db pg_isready -U sparstrowgen -d sparstrowgen >/dev/null 2>&1; do sleep 1; done
 	@echo "postgres ready on :5433"
@@ -31,19 +33,20 @@ db:
 migrate:
 	cd server && goose -dir migrations up
 
-# Development credentials. NOT secrets: this hash is of the password
-# "sparstrowgen-dev", it is in a public repository, and it only ever unlocks a
-# server on localhost. Production sets all of these in Coolify, and the real
-# hash comes from `server -hashpw` (see docs/runbooks/deploy.md).
+# Development configuration. NOT secrets: the token below is in a public
+# repository and only ever unlocks a server on localhost. Production sets these
+# in Coolify (docs/runbooks/deploy.md).
 #
-# They live here rather than as defaults in the program on purpose. The server
+# There is no password here any more. Accounts live in Postgres, so signing in
+# locally means creating an account once with the setup code the server prints
+# when it starts, exactly as in production.
+#
+# These live here rather than as defaults in the program on purpose. The server
 # refuses to start without them, so there is exactly one code path and no
 # "authentication off" mode that could reach production by accident.
-DEV_PASSWORD_HASH ?= $$argon2id$$v=19$$m=19456,t=2,p=1$$Fajya1dgZWWINWrLW54w6Q$$sxOqelkhkixUwTt6CR21pfVYbczrOiM1C6WdNlheoIU
 DEV_DAEMON_TOKEN  ?= dev-daemon-token-not-a-secret-0123456789
 DEV_WEB_ORIGIN    ?= http://localhost:3000
 
-export OWNER_PASSWORD_HASH = $(DEV_PASSWORD_HASH)
 export DAEMON_TOKEN        = $(DEV_DAEMON_TOKEN)
 export WEB_ORIGIN          = $(DEV_WEB_ORIGIN)
 # http://localhost is not https, so a Secure cookie would never be stored.
@@ -56,10 +59,6 @@ server:
 # Runs where the agent CLIs are installed. Needs claude/codex/agy on PATH.
 daemon:
 	cd server && go run ./cmd/daemon
-
-# Prints the value to put in OWNER_PASSWORD_HASH in production.
-hashpw:
-	@cd server && go run ./cmd/server -hashpw
 
 web:
 	pnpm dev

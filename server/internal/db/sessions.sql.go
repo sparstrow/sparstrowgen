@@ -59,28 +59,6 @@ func (q *Queries) DeleteDeadSessions(ctx context.Context, idleSince pgtype.Times
 	return result.RowsAffected(), nil
 }
 
-const deleteOtherUserSessions = `-- name: DeleteOtherUserSessions :execrows
-DELETE FROM sessions
-WHERE user_id = $1 AND token_hash <> $2
-`
-
-type DeleteOtherUserSessionsParams struct {
-	UserID        pgtype.UUID `json:"user_id"`
-	KeepTokenHash []byte      `json:"keep_token_hash"`
-}
-
-// Signing out every OTHER device, which is what changing a password should do:
-// the point of the change is usually that somebody else may hold a session, and
-// ending your own at the same time would log you out of the screen you just
-// used to fix it.
-func (q *Queries) DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteOtherUserSessions, arg.UserID, arg.KeepTokenHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = $1
 `
@@ -94,9 +72,11 @@ const deleteUserSessions = `-- name: DeleteUserSessions :execrows
 DELETE FROM sessions WHERE user_id = $1
 `
 
-// Signing out everywhere. The reason this exists is that the owner may one day
-// need it in a hurry, and "delete the rows by hand in psql" is not a thing to
-// work out under pressure.
+// Signing out everywhere. Used by "sign out everywhere" and by a password
+// change, which ends every session INCLUDING the caller's: the reason to change
+// a password is usually that somebody else may hold a session, and a session
+// token is a something they could hold. The caller then issues itself a fresh
+// one, so the owner stays signed in and the old token is dead.
 func (q *Queries) DeleteUserSessions(ctx context.Context, userID pgtype.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserSessions, userID)
 	if err != nil {
