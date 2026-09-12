@@ -293,3 +293,22 @@ the staging application exercises them on v4.3.19.
 - **Clears when:** the staging application is configured and deployed on
   v4.3.19, each affected runbook step is checked against its actual behavior,
   and the runbook version note is updated.
+
+## G-27 — Conversations and the daemon connection belong to the deployment, not to an account
+
+**Kind:** caveat
+**Raised:** 2026-09-12, mapping the first usable release against the phase 2 exit gate
+
+`conversations` has no `user_id` (`server/migrations/00001_initial_schema.sql`), and the hub holds
+exactly one daemon connection and broadcasts events to every signed-in browser
+(`server/internal/hub/hub.go:38`). That is correct today only because `users_only_one`
+(`00008_one_account_only.sql`) makes a second account impossible.
+
+The approved first usable release removes that boundary. Registration alone would give a second
+account the owner's transcripts and the ability to start agents on the owner's computer.
+
+- **If wrong:** not a guess. Dropping `users_only_one` without ownership on conversations and a
+  per-account daemon route is a data leak and remote code execution on the owner's machine.
+- **Clears when:** conversations carry an owner (existing rows assigned to the current account),
+  every query and hub event is scoped to it, and turns route only to a computer paired to the same
+  account. This must ship before or with ordinary registration, never after.
