@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | **Draft — needs your correction and approval** |
 | **Created** | 2026-09-12 |
-| **Trigger** | "I want the auto update to happen ... The daemon should start automatically", "pair, revoke access, check the models, check about the machine", and computer setup should feel like connecting a Bluetooth device |
+| **Trigger** | "I want the auto update to happen ... The daemon should start automatically", "pair, revoke access, check the models, check about the machine", computer setup should feel like connecting a Bluetooth device, and an update must not affect work while any agent is running |
 | **Design** | not designed yet |
 | **Open questions** | none; feasibility is checked after this draft is approved |
 
@@ -101,11 +101,20 @@ back into a setup exercise.
 
 - **Given** the computer has been paired, **when** I sign in to Windows, **then** it becomes
   reachable without opening a terminal or manually starting sparstrowgen.
-- **Given** a compatible update is available and no agent work is running, **when** the computer
-  checks for updates, **then** it updates, reconnects and keeps its pairing and configuration
-  without asking me to understand where the release came from.
-- **Given** agent work is running, **when** an ordinary update becomes available, **then** that work
-  is not interrupted and the update waits.
+- **Given** a compatible update is available and no agent work is running anywhere on that
+  computer, **when** the computer checks for updates, **then** it updates, reconnects and keeps its
+  pairing and configuration without asking me to understand where the release came from.
+- **Given** any agent work using that computer through sparstrowgen is running, regardless of
+  conversation, workspace, browser tab, agent or provider, **when** an automatic or manually
+  requested update is ready, **then** the working daemon is not stopped, replaced or restarted and
+  the update remains pending.
+- **Given** an update was prepared while the computer appeared idle, **when** new agent work begins
+  before the version change starts, **then** the computer checks again, leaves the working version
+  in place and waits.
+- **Given** more than one agent task is active on the computer, **when** some but not all of them
+  finish or are stopped, **then** the update continues waiting until none remains active.
+- **Given** an update is waiting for work to finish, **when** I inspect its status, **then** I can
+  tell that it is safely waiting for active work rather than stalled or failed.
 - **Given** I have disabled automatic updates, **when** a compatible update becomes available,
   **then** the computer keeps its current version until I deliberately start the update.
 - **Given** I ask the product to check now, **when** no update exists, **then** it confirms the
@@ -135,6 +144,9 @@ back into a setup exercise.
   mistaken for an absent provider or a broken computer.
 - **A computer stays busy for a long time.** Ordinary updates keep waiting rather than killing the
   work. The person can still see that an update is pending.
+- **Work begins during the update decision.** Readiness is checked again immediately before any
+  version change or restart that could interrupt work; an earlier idle result is not treated as
+  permission after the computer becomes busy.
 - **The hosted app is temporarily unavailable.** Existing local configuration is preserved and the
   computer reconnects when service returns; repeated failure does not erase the pairing.
 - **A revoked computer still has an old credential.** Possessing it never restores access and does

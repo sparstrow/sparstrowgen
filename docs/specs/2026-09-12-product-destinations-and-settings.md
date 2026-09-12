@@ -4,13 +4,14 @@
 |---|---|
 | **Status** | **Draft — needs your correction and approval** |
 | **Created** | 2026-09-12 |
-| **Trigger** | "right now we have chat, we need settings ... we need a runtime [area]" and multiple workspaces must be created and managed |
+| **Trigger** | "right now we have chat, we need settings ... we need a runtime [area]", multiple workspaces must be created and managed, and the previous app's colour theme plus light/dark choices should return as user-wide settings |
 | **Design** | not designed yet |
-| **Open questions** | none; the owner selected update checking, automatic-update preference and release notes |
+| **Open questions** | none; the owner selected update controls, release notes and the previous app's account-wide appearance choices |
 
 > You suggested a sidebar. I translated that into the jobs you need to reach and deliberately left
-> the navigation form open for the design step. The first concrete Settings content is now defined:
-> check for updates, choose automatic-update behaviour and read release notes.
+> the navigation form open for the design step. Update controls are defined below. Account-wide
+> appearance behaviour is defined separately in
+> [`2026-09-12-appearance-preferences.md`](2026-09-12-appearance-preferences.md).
 
 ## What's wrong today
 
@@ -88,7 +89,14 @@ control away from me.
   updates, **then** I see whether it is current, an update is available, or the check could not be
   completed.
 - **Given** automatic updates are enabled, **when** a trusted compatible update is available and
-  the computer is idle, **then** it can update without requiring a manual download.
+  no agent work is active anywhere on that computer, **then** it can update without requiring a
+  manual download.
+- **Given** any sparstrowgen agent work is active on a computer, **when** an automatic update or an
+  update I requested is ready, **then** that computer does not change versions or restart and the
+  update is shown as waiting for work to finish.
+- **Given** the computer was idle when an update became ready, **when** agent work starts before the
+  version change begins, **then** the update re-checks the computer, remains pending and does not
+  interrupt that work.
 - **Given** I have not changed the preference, **when** a supported computer is first connected,
   **then** automatic updates are enabled so security and compatibility fixes do not depend on me
   remembering to check.
@@ -125,9 +133,10 @@ control away from me.
   hierarchy, density and responsive behaviour belongs to rendered design options.
 - **A general-purpose administration console.** Coolify, databases, deployment secrets and release
   publishing remain outside the installed user's product.
-- **Additional customization options.** Theme, notification, agent defaults and other preferences
-  enter this spec only when there is a real user scenario for them. They are not added merely to
-  make Settings look fuller.
+- **Additional customization options.** Notifications, agent defaults and other preferences enter
+  this spec only when there is a real user scenario for them. Appearance has its own draft that
+  must be approved before design; unrelated controls are not added merely to make Settings look
+  fuller.
 - **The behaviour inside Runtimes.** Installation, pairing, status, revocation and updating are
   specified in [`2026-09-12-managed-runtimes.md`](2026-09-12-managed-runtimes.md).
 - **The account and workspace onboarding journey.** Account creation, personal workspaces and the
@@ -137,6 +146,6 @@ control away from me.
 ## What I need from you
 
 Confirm that Chat, workspace management, Runtimes and Settings are the jobs you intended, and that
-update checking, automatic-update choice and release notes are the correct first Settings content.
-Design will decide whether workspace management is its own destination or part of switching
-context.
+update checking, automatic-update choice, release notes and the separately specified appearance
+preferences are the correct first Settings content. Design will decide whether workspace
+management is its own destination or part of switching context.

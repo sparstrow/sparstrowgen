@@ -39,7 +39,9 @@ production deployment.
 The owner-visible outcomes are drafted in
 [`2026-09-12-account-workspace-onboarding.md`](../specs/2026-09-12-account-workspace-onboarding.md),
 [`2026-09-12-managed-runtimes.md`](../specs/2026-09-12-managed-runtimes.md) and
-[`2026-09-12-product-destinations-and-settings.md`](../specs/2026-09-12-product-destinations-and-settings.md).
+[`2026-09-12-product-destinations-and-settings.md`](../specs/2026-09-12-product-destinations-and-settings.md),
+with account-wide appearance choices in
+[`2026-09-12-appearance-preferences.md`](../specs/2026-09-12-appearance-preferences.md).
 They remain drafts until the owner approves them; implementation does not start merely because
 this workflow selected the feature.
 
@@ -62,9 +64,12 @@ From an installed user's point of view, the finished experience is:
 4. The app shows the machine's name, connection state, daemon version, update
    health, detected providers and models. Access for one machine can be revoked
    without disturbing another.
-5. The supervisor checks the stable update channel, waits until the daemon is
-   idle, verifies the signed download and checksum, switches versions, restarts
-   and reconnects. If startup or compatibility checks fail, it rolls back.
+5. The supervisor checks the stable update channel and may prepare a download,
+   but it does not switch versions or restart while any sparstrowgen agent work
+   is active on that computer. It checks for active work again immediately
+   before activation, verifies the signed download and checksum, switches
+   versions, restarts and reconnects. If startup or compatibility checks fail,
+   it rolls back.
 6. Successful updates are quiet. The app surfaces only action that a person
    needs to take: pairing approval, an incompatible version, a failed update,
    missing provider authentication, or a revoked machine.
@@ -77,7 +82,7 @@ own destination or whether, for example, workspace management is part of switchi
 - **Runtimes** — pair and revoke computers; inspect connection, machine,
   daemon, provider and model state.
 - **Settings** — account and product preferences that do not belong to one
-  conversation or one runtime.
+  conversation or one runtime, including appearance and update behaviour.
 
 A sidebar is the current navigation direction, but this document does not lock
 its layout or require four permanent navigation items. The feature still follows
@@ -113,7 +118,11 @@ Phase 2 may begin only after the owner can verify all of these as a normal user:
 - Chat can use the machine's providers and models;
 - a signed test update waits for idle work, updates, reconnects and preserves
   configuration;
+- an update that was ready while idle remains pending if any agent starts before
+  activation, and waits until every active agent on that computer has finished;
 - an intentionally broken test update rolls back;
+- appearance mode, surface and accent choices persist across sign-in and another
+  supported browser without changing semantic status meanings;
 - an older daemon gets a useful compatibility message rather than failing
   mysteriously.
 

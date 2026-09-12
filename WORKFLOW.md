@@ -26,8 +26,10 @@ Phase 2 only after the managed daemon exit gate in
    not its visual design or backend contract. The owner-facing drafts are
    [`account and workspace onboarding`](docs/specs/2026-09-12-account-workspace-onboarding.md),
    [`managed-runtimes`](docs/specs/2026-09-12-managed-runtimes.md) and
-   [`product destinations and settings`](docs/specs/2026-09-12-product-destinations-and-settings.md);
-   neither may drive design or implementation until the owner approves it.
+   [`product destinations and settings`](docs/specs/2026-09-12-product-destinations-and-settings.md),
+   with account-wide choices in
+   [`appearance preferences`](docs/specs/2026-09-12-appearance-preferences.md). None may drive design
+   or implementation until the owner approves it.
 2. Preserve the existing `DAEMON_TOKEN` path while the paired path is being
    introduced. Removal is a later contract step after installed clients are
    proven.
@@ -119,9 +121,12 @@ Use expand/contract for every server-daemon protocol change:
 5. old protocol support is removed only in a later release with evidence that
    the supported compatibility window permits it.
 
-The installed supervisor updates only while idle, verifies signature and
-checksum, keeps the previous version, verifies restart and reconnect, and rolls
-back on failure. A production server must never require an unpublished daemon.
+The installed supervisor may prepare an update in the background, but it must
+not change versions or restart while any sparstrowgen agent work is active on
+that computer. It checks again immediately before activation, verifies signature
+and checksum, keeps the previous version, verifies restart and reconnect, and
+rolls back on failure. A production server must never require an unpublished
+daemon.
 
 ### Evidence and authority
 
