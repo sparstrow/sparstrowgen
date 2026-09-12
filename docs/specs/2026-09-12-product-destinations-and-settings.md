@@ -6,11 +6,11 @@
 | **Created** | 2026-09-12 |
 | **Trigger** | "right now we have chat, we need settings ... we need a runtime [area]" and multiple workspaces must be created and managed |
 | **Design** | not designed yet |
-| **Open questions** | L-18 — which new account-wide customizations are useful enough to ship first |
+| **Open questions** | none; the owner selected update checking, automatic-update preference and release notes |
 
 > You suggested a sidebar. I translated that into the jobs you need to reach and deliberately left
-> the navigation form open for the design step. This draft also refuses to invent a collection of
-> switches merely so Settings looks populated.
+> the navigation form open for the design step. The first concrete Settings content is now defined:
+> check for updates, choose automatic-update behaviour and read release notes.
 
 ## What's wrong today
 
@@ -72,9 +72,39 @@ computer's controls **so that** I understand the scope and consequence before ch
   system.
 - **Given** a future preference can be restored to its normal behaviour, **when** I have changed it,
   **then** I can understand what the normal behaviour is and return to it.
-- **Given** there are no useful new preferences yet, **when** this feature is designed, **then** it
-  does not invent meaningless configuration simply to fill space; the existing account actions
-  remain useful and machine actions stay with Runtimes.
+- **Given** another preference is proposed without a real user scenario, **when** this feature is
+  designed, **then** it is not added merely to fill space; account actions remain useful and
+  machine actions stay with Runtimes.
+
+### US3 — Control and understand product updates (P1)
+
+**As** a person using sparstrowgen **I want** to check for an update, choose whether updates happen
+automatically and understand what changed **so that** the product stays current without taking
+control away from me.
+
+**Acceptance**
+
+- **Given** I want to know whether my installed computer component is current, **when** I check for
+  updates, **then** I see whether it is current, an update is available, or the check could not be
+  completed.
+- **Given** automatic updates are enabled, **when** a trusted compatible update is available and
+  the computer is idle, **then** it can update without requiring a manual download.
+- **Given** I have not changed the preference, **when** a supported computer is first connected,
+  **then** automatic updates are enabled so security and compatibility fixes do not depend on me
+  remembering to check.
+- **Given** automatic updates are disabled, **when** an update becomes available, **then** it is not
+  installed automatically and I can still see and start it myself.
+- **Given** I change the automatic-update preference, **when** I return later or restart the
+  product, **then** my choice is preserved, applies to my paired computers, and becomes the default
+  for a computer I pair later.
+- **Given** one paired computer is offline, **when** I check for updates, **then** results for other
+  computers still complete and the offline computer is reported as not checked rather than current.
+- **Given** an update is available or has been installed, **when** I want to understand it, **then**
+  I can read release notes written in product language rather than being sent to release storage.
+- **Given** release notes are unavailable for a version, **when** I inspect it, **then** the product
+  says that plainly rather than showing notes from a different version.
+- **Given** a check, download or installation fails, **when** I inspect update status, **then** I can
+  distinguish those failures and know whether the existing version is still usable.
 
 ## Edge cases
 
@@ -95,8 +125,9 @@ computer's controls **so that** I understand the scope and consequence before ch
   hierarchy, density and responsive behaviour belongs to rendered design options.
 - **A general-purpose administration console.** Coolify, databases, deployment secrets and release
   publishing remain outside the installed user's product.
-- **Inventing customization options.** Theme, notification, agent defaults and other preferences
-  enter this spec only when there is a real user scenario for them; L-18 records that open scope.
+- **Additional customization options.** Theme, notification, agent defaults and other preferences
+  enter this spec only when there is a real user scenario for them. They are not added merely to
+  make Settings look fuller.
 - **The behaviour inside Runtimes.** Installation, pairing, status, revocation and updating are
   specified in [`2026-09-12-managed-runtimes.md`](2026-09-12-managed-runtimes.md).
 - **The account and workspace onboarding journey.** Account creation, personal workspaces and the
@@ -105,7 +136,7 @@ computer's controls **so that** I understand the scope and consequence before ch
 
 ## What I need from you
 
-Confirm that Chat, workspace management, Runtimes and Settings are the jobs you intended. Design
-will decide whether workspace management is its own destination or part of switching context.
-Then tell me the first two or three account-wide customizations you would personally change; that
-answer closes L-18 without blocking onboarding or managed runtimes.
+Confirm that Chat, workspace management, Runtimes and Settings are the jobs you intended, and that
+update checking, automatic-update choice and release notes are the correct first Settings content.
+Design will decide whether workspace management is its own destination or part of switching
+context.

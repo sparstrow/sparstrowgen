@@ -106,6 +106,10 @@ back into a setup exercise.
   without asking me to understand where the release came from.
 - **Given** agent work is running, **when** an ordinary update becomes available, **then** that work
   is not interrupted and the update waits.
+- **Given** I have disabled automatic updates, **when** a compatible update becomes available,
+  **then** the computer keeps its current version until I deliberately start the update.
+- **Given** I ask the product to check now, **when** no update exists, **then** it confirms the
+  current version is up to date rather than appearing to do nothing.
 - **Given** a download is incomplete, altered or cannot be trusted, **when** an update is attempted,
   **then** it is not installed and the currently working version remains available.
 - **Given** an installed update cannot start, reconnect or work with the hosted app, **when** its
@@ -114,7 +118,8 @@ back into a setup exercise.
 - **Given** the computer is too old for the hosted app, **when** I try to use it, **then** I see a
   useful compatibility explanation and recovery action instead of a generic offline state.
 - **Given** an update succeeds normally, **when** I continue using the product, **then** release
-  files, release pages and routine update notices do not become part of my work.
+  files, release pages and routine update notices do not become part of my work; readable release
+  notes remain available when I choose to look.
 
 ## Edge cases
 
@@ -144,8 +149,8 @@ back into a setup exercise.
 - **Creating accounts, workspaces or inviting other people.** This spec replaces machine
   credentials. Account and personal-workspace onboarding is defined separately; shared workspace
   membership still needs its own feature.
-- **A visible release catalogue or release-management controls.** Installed users should not need
-  to know that release storage exists.
+- **Release-management controls.** Installed users can read release notes but do not publish
+  releases or need to know where release files are stored.
 - **Automatically updating development builds.** A developer running source needs predictable
   local code, not a background process that replaces it.
 - **Forced ordinary updates that stop active work.** A separate emergency-security policy can be

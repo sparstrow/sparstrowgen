@@ -237,15 +237,3 @@ Normal pushes to `main` can still deploy automatically without that permission.
 
 **Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
 matching origins, and automatic cleanup when its pull request closes.
-
-## L-18 — First account-wide customization settings
-
-**Status:** question **Raised:** 2026-09-12, drafting the product-destinations spec
-
-The owner wants a Settings destination for customization and configuration, but has not yet named
-which account-wide behaviours he would actually change. Do not invent theme, notification or
-agent-default switches to fill a page. Existing password and session actions are real; new
-preferences need equally concrete user scenarios.
-
-**Unblocks when:** the owner names the first two or three product-wide preferences he would
-personally change. This blocks only new Settings content, not managed runtimes or navigation.

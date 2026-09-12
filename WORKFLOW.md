@@ -36,8 +36,9 @@ Phase 2 only after the managed daemon exit gate in
 4. Test installer and updater behaviour with development or candidate artifacts.
    A source build must never replace itself automatically.
 5. Do not expose GitHub Releases, Coolify or deployment credentials in the
-   product UI. Installed users interact with install, pair, status and any
-   actionable failure—not release plumbing.
+   product UI. Installed users can check for updates, choose automatic-update
+   behaviour and read product release notes, but do not interact with release
+   plumbing.
 6. Do not implement a generic Settings page or commit to a sidebar layout before
    the owner approves the feature spec and design. The required jobs are Chat,
    workspace management, Runtimes and Settings; whether those become separate
