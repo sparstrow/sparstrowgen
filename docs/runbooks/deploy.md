@@ -91,9 +91,17 @@ Set:
 
 ## 4. Set the environment variables
 
-**Configuration → Environment Variables.** All four are required — the compose
-file uses `${VAR:?}`, so a missing one fails the deploy immediately and names
-itself, rather than producing a container that restarts forever.
+**Configuration → Environment Variables.** All four are required. The compose
+file uses `${VAR:?}` so Coolify marks them required and can stop an incomplete
+deployment before a container starts.
+
+> **Coolify v4.3.18 gotcha:** do not put a human-readable message after `:?` in
+> the compose expression. On the first production deploy, Coolify imported that
+> message as the variable's actual value. `migrate` received `set this to the
+> Postgres resource internal URL` as `DATABASE_URL` and Goose rejected it as a
+> malformed connection string. This repository now uses message-free `${VAR:?}`.
+> Still open every generated variable and replace any placeholder text before
+> deploying; reloading Compose preserves an existing value.
 
 | Variable | Value |
 |---|---|
@@ -123,6 +131,12 @@ and `SERVICE_FQDN_SERVER_8080` so they appear):
 trailing slash. A mismatch is not a vague failure: the API refuses the browser's
 requests by CORS and refuses its websocket, so the app loads and nothing in it
 works.
+
+`docker-compose.yaml` declares the private internal ports (`3000` for `web`,
+`8080` for `server`) with Compose `expose:` entries. After loading the current
+Compose file, the Domains table must display those numeric ports, not a red
+warning triangle. `expose:` is proxy-routing metadata only: it does **not**
+publish a host port or add `:3000` / `:8080` to either public URL.
 
 Deploy. Expect, in order: `migrate` runs and exits 0, `server` becomes healthy,
 `web` starts. That ordering was verified by running this exact compose file
@@ -196,7 +210,8 @@ not look like a network problem.
 
 | Symptom | Cause |
 |---|---|
-| Deploy fails naming a variable | That variable is unset. The compose file is telling you which. |
+| Deploy is blocked naming a variable | That required variable is still empty. Set it in Configuration → Environment Variables. |
+| Goose says it cannot parse `set this to the Postgres resource internal URL` | Coolify saved the old `${DATABASE_URL:?message}` prompt as the value. Replace `DATABASE_URL` with the Postgres internal URL. |
 | `migrate` fails on hostname resolution | Step 2's gotcha — predefined network not enabled, or wrong container name. |
 | App loads, everything inside it fails | `WEB_ORIGIN` does not exactly match the web domain. |
 | Sign-in succeeds, next request says signed out | `SESSION_SECURE` is not `true`, or the site is not on HTTPS. The `__Host-` cookie prefix requires both. |

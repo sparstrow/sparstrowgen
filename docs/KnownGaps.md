@@ -217,3 +217,43 @@ CSS patch. Nothing about it is a surprise once seen, which is why it is written 
 guessed at.
 
 **Closes when:** the chat surface has a phone layout the owner has chosen.
+
+## G-22 — Coolify v4.3.18 imports a Compose required-value message as the value
+
+**Noticed:** 2026-09-12, first production deployment to Coolify v4.3.18
+
+The initial Compose definition used expressions such as
+`${DATABASE_URL:?set this to the Postgres resource internal URL}`. Coolify
+created an environment variable whose value was the text after `:?`, then
+started the stack. The `migrate` container therefore received that sentence as
+`DATABASE_URL`; Goose exited with `cannot parse ... as keyword/value`, and the
+`service_completed_successfully` dependency correctly prevented `server` and
+`web` from starting.
+
+The Compose file now uses message-free `${VAR:?}` expressions and the deploy
+runbook tells the operator to inspect every generated value. This existing
+Coolify resource still retains its imported placeholder until it is manually
+replaced because reloading Compose preserves saved variable values.
+
+**Closes when:** creating a fresh v4.3.18 Compose resource from the corrected
+file leaves required variables empty and blocks deployment before starting a
+container.
+
+## G-23 — Coolify warns that the first Compose service ports are unrecognized
+
+**Noticed:** 2026-09-12, configuring the first production domain on Coolify v4.3.18
+
+When replacing Coolify's generated `sslip.io` domains, the v4.3.18 Domains
+editor showed a red missing-port triangle for both services. It reads Compose
+`expose:` / `ports:` entries when choosing an internal proxy target; it does not
+recognize the Dockerfiles' `EXPOSE` instructions or the
+`SERVICE_FQDN_<SERVICE>_<PORT>` names alone. Typing a port into the domain modal
+did not persist it.
+
+`docker-compose.yaml` now declares `expose: ["8080"]` for `server` and
+`expose: ["3000"]` for `web`. Those are private network declarations, not host
+port publishing. The runbook now requires reloading the corrected Compose file
+and checking that the Domains table displays both numeric ports.
+
+**Closes when:** the live Coolify resource reloads the corrected Compose file
+and shows `8080` and `3000` for the two custom domains.
