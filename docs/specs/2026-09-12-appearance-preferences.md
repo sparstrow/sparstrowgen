@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — needs your correction and approval** |
+| **Status** | **Draft — later scope; not part of the approved first usable release** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "for the theme and user wide setting refer to this old app's setting I have added the colour theme, dark and light mode etc" |
 | **Design** | not designed yet |

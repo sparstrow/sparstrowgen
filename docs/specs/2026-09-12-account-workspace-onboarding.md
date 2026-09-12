@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — needs your correction and approval** |
+| **Status** | **Draft — later scope; account creation and initial pairing moved to the approved first usable release** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "I want account to be created and then lets have multiple workspace creation and manage as well. Then the setup should take to computer setup." |
 | **Design** | not designed yet |
@@ -12,6 +12,10 @@
 > computer. I also inferred that a computer is paired once to the person and can then be made
 > available where that person works, rather than being reinstalled for every workspace. Correct
 > either inference if that is not what you mean.
+>
+> The smaller first delivery is approved in
+> [`2026-09-12-first-usable-release.md`](2026-09-12-first-usable-release.md). This draft now retains
+> the later workspace-management outcomes and must not expand that first delivery.
 
 ## What's wrong today
 

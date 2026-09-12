@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — needs your correction and approval** |
+| **Status** | **Draft — later scope; initial pairing and safe updates moved to the approved first usable release** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "I want the auto update to happen ... The daemon should start automatically", "pair, revoke access, check the models, check about the machine", computer setup should feel like connecting a Bluetooth device, and an update must not affect work while any agent is running |
 | **Design** | not designed yet |
@@ -12,6 +12,10 @@
 > installed user. Account, workspace and first-run behaviour are in the separate account and
 > workspace onboarding draft. This document begins with discovering or installing the computer
 > component and deliberately leaves its visual treatment to design.
+>
+> The smaller first delivery is approved in
+> [`2026-09-12-first-usable-release.md`](2026-09-12-first-usable-release.md). Broader computer
+> management in this draft follows later.
 
 ## What's wrong today
 

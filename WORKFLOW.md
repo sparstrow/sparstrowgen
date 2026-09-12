@@ -19,17 +19,13 @@ Phase 2 only after the managed daemon exit gate in
 
 ### Phase 1 agent rules
 
-1. Implement self-service accounts, personal workspaces, guided computer setup,
-   pairing, per-machine revocation, version negotiation, installation,
-   per-user auto-start and safe updating as the next product capability. Follow
-   the feature process in `AGENTS.md`; this statement selects the capability,
-   not its visual design or backend contract. The owner-facing drafts are
-   [`account and workspace onboarding`](docs/specs/2026-09-12-account-workspace-onboarding.md),
-   [`managed-runtimes`](docs/specs/2026-09-12-managed-runtimes.md) and
-   [`product destinations and settings`](docs/specs/2026-09-12-product-destinations-and-settings.md),
-   with account-wide choices in
-   [`appearance preferences`](docs/specs/2026-09-12-appearance-preferences.md). None may drive design
-   or implementation until the owner approves it.
+1. Implement the approved
+   [`first usable release`](docs/specs/2026-09-12-first-usable-release.md): normal account creation
+   and sign-in without the server-log setup code, guided installation and pairing without a shared
+   machine secret, per-user auto-start, and safe updating with check-now and automatic-update
+   controls. Complete one story through the feature process in `AGENTS.md` before beginning the
+   next. The broader account/workspace, runtime-management, navigation and appearance drafts are
+   later scope and must not expand this release.
 2. Preserve the existing `DAEMON_TOKEN` path while the paired path is being
    introduced. Removal is a later contract step after installed clients are
    proven.
@@ -41,17 +37,17 @@ Phase 2 only after the managed daemon exit gate in
    product UI. Installed users can check for updates, choose automatic-update
    behaviour and read product release notes, but do not interact with release
    plumbing.
-6. Do not implement a generic Settings page or commit to a sidebar layout before
-   the owner approves the feature spec and design. The required jobs are Chat,
-   workspace management, Runtimes and Settings; whether those become separate
-   destinations is a design decision.
+6. Do not implement a generic Settings page or commit to a sidebar layout. The
+   first release designs only the approved update jobs; broader Settings and
+   navigation remain later work.
 
 ### Gate to Phase 2
 
 Agents must not change this file to Phase 2 based on code completion alone. The
-owner must verify the phase 1 exit checklist in the runbook as a normal installed
-user. Phase activation, branch protection and deployment automation belong in
-one explicit owner-approved change.
+owner must verify the approved first usable release against the phase 1 exit
+checklist in the runbook as a normal installed user. Phase activation, branch
+protection and deployment automation belong in one explicit owner-approved
+change.
 
 ## Phase 2 protocol — inactive until the gate passes
 

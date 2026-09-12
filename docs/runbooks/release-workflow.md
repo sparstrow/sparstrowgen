@@ -36,14 +36,11 @@ Keep the existing `main`-only workflow while this phase is built. Feature
 branches still reach `main` through pull requests, and `main` remains the
 production deployment.
 
-The owner-visible outcomes are drafted in
-[`2026-09-12-account-workspace-onboarding.md`](../specs/2026-09-12-account-workspace-onboarding.md),
-[`2026-09-12-managed-runtimes.md`](../specs/2026-09-12-managed-runtimes.md) and
-[`2026-09-12-product-destinations-and-settings.md`](../specs/2026-09-12-product-destinations-and-settings.md),
-with account-wide appearance choices in
-[`2026-09-12-appearance-preferences.md`](../specs/2026-09-12-appearance-preferences.md).
-They remain drafts until the owner approves them; implementation does not start merely because
-this workflow selected the feature.
+The owner approved the deliberately narrow
+[`first usable release`](../specs/2026-09-12-first-usable-release.md): normal accounts, initial
+computer pairing, auto-start and safe update controls. The broader account/workspace,
+runtime-management, navigation and appearance documents remain later drafts. They do not expand
+this phase merely because they are already written down.
 
 The current static `DAEMON_TOKEN` remains valid while the replacement is
 introduced. The server first learns both credential types, then paired daemons
@@ -61,9 +58,8 @@ From an installed user's point of view, the finished experience is:
 3. Pair the computer in the browser. The server issues a separate credential
    for that machine and stores only a hash of it. No Coolify access and no
    shared production secret are given to the user.
-4. The app shows the machine's name, connection state, daemon version, update
-   health, detected providers and models. Access for one machine can be revoked
-   without disturbing another.
+4. The app confirms that this computer is connected and shows enough version and
+   update state to check now, leave safe automatic updating on, or turn it off.
 5. The supervisor checks the stable update channel and may prepare a download,
    but it does not switch versions or restart while any sparstrowgen agent work
    is active on that computer. It checks for active work again immediately
@@ -74,20 +70,10 @@ From an installed user's point of view, the finished experience is:
    needs to take: pairing approval, an incompatible version, a failed update,
    missing provider authentication, or a revoked machine.
 
-The product must make four jobs directly reachable. Design decides whether each job becomes its
-own destination or whether, for example, workspace management is part of switching context:
-
-- **Chat** — conversations and agent work.
-- **Workspaces** — create, switch and manage separate bodies of work.
-- **Runtimes** — pair and revoke computers; inspect connection, machine,
-  daemon, provider and model state.
-- **Settings** — account and product preferences that do not belong to one
-  conversation or one runtime, including appearance and update behaviour.
-
-A sidebar is the current navigation direction, but this document does not lock
-its layout or require four permanent navigation items. The feature still follows
-the repository's design process before UI code is written, including populated,
-empty, loading and error states.
+This phase does not establish a permanent product navigation or a general
+Settings area. Design covers only the first-use journey and the approved update
+jobs. Workspaces, broader computer management, appearance and other preferences
+follow later through their own approved designs.
 
 ### Compatibility during phase 1
 
@@ -108,21 +94,22 @@ server.
 
 Phase 2 may begin only after the owner can verify all of these as a normal user:
 
-- a new person can create and verify an account without a server-log setup code;
-- that person can create, switch and manage more than one workspace;
+- a new person can create, verify and later sign in to an account without a
+  server-log setup code;
 - a clean Windows machine can install without cloning the repository;
 - first setup can discover the local component, offer installation when absent,
   finish pairing when present, or be skipped and resumed later;
-- browser pairing creates a separately revocable machine;
+- browser pairing connects the computer without exposing or asking the person to
+  paste a shared machine secret;
 - the daemon starts after sign-in without a terminal;
-- Chat can use the machine's providers and models;
+- Chat can complete a real agent turn through the connected computer;
+- the person can check update status and change the automatic-update preference,
+  which begins enabled;
 - a signed test update waits for idle work, updates, reconnects and preserves
   configuration;
 - an update that was ready while idle remains pending if any agent starts before
   activation, and waits until every active agent on that computer has finished;
 - an intentionally broken test update rolls back;
-- appearance mode, surface and accent choices persist across sign-in and another
-  supported browser without changing semantic status meanings;
 - an older daemon gets a useful compatibility message rather than failing
   mysteriously.
 

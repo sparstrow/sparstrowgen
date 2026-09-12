@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — needs your correction and approval** |
+| **Status** | **Draft — later scope; update controls moved to the approved first usable release** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "right now we have chat, we need settings ... we need a runtime [area]", multiple workspaces must be created and managed, and the previous app's colour theme plus light/dark choices should return as user-wide settings |
 | **Design** | not designed yet |
@@ -12,6 +12,9 @@
 > the navigation form open for the design step. Update controls are defined below. Account-wide
 > appearance behaviour is defined separately in
 > [`2026-09-12-appearance-preferences.md`](2026-09-12-appearance-preferences.md).
+> The first delivery contains only the update controls approved in
+> [`2026-09-12-first-usable-release.md`](2026-09-12-first-usable-release.md); broader navigation and
+> Settings remain later work.
 
 ## What's wrong today
 
