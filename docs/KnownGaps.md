@@ -275,3 +275,21 @@ interpretation has not been verified from Coolify itself.
 - **Clears when:** Coolify shows the individual service health state, or its
   v4.3.18 behavior/documentation establishes exactly what the aggregate label
   represents. Until then, use `/api/health` and the service runtime log.
+
+## G-26 — The deployment runbook has not been re-verified on Coolify v4.3.19
+
+**Kind:** caveat
+**Raised:** 2026-09-12, reviewing the proposed production/staging pipeline
+
+The first production deployment and `docs/runbooks/deploy.md` were verified on
+Coolify v4.3.18. The project dashboard now reports v4.3.19. No changed behavior
+has been observed yet, but the version boundary is real: the environment-variable,
+Compose parsing, network and domain screens are instructions for v4.3.18 until
+the staging application exercises them on v4.3.19.
+
+- **If wrong:** a click path or one of the v4.3.18-specific workarounds in the
+  runbook may be stale. Production is already running, so the immediate cost is
+  misleading setup guidance rather than an outage.
+- **Clears when:** the staging application is configured and deployed on
+  v4.3.19, each affected runbook step is checked against its actual behavior,
+  and the runbook version note is updated.
