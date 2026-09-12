@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -99,4 +100,33 @@ func ClearCookie(secure bool) *http.Cookie {
 	c := Cookie("", secure, time.Unix(0, 0))
 	c.MaxAge = -1
 	return c
+}
+
+// SetupCodeBytes is the entropy behind the code that claims the first account.
+// Sixteen bytes is not guessable, and base32 without padding makes it readable
+// off a log line and typeable without ambiguity about case.
+const SetupCodeBytes = 16
+
+// NewSetupCode mints the code printed at startup while the app is unclaimed.
+//
+// Held in memory only, never written to the database. A restart therefore
+// invalidates it and prints a new one, which is deliberate: the owner reads the
+// newest startup log, and a code that leaked into an older one is already dead.
+// The cost is that a code copied before a restart stops working, which is a
+// retry rather than a lockout.
+func NewSetupCode() string {
+	raw := make([]byte, SetupCodeBytes)
+	if _, err := rand.Read(raw); err != nil {
+		// This used to return "", with a comment claiming that was a value
+		// nobody could match. It is the opposite: the submitted code is
+		// trimmed and compared in constant time, and comparing "" with "" is a
+		// MATCH — so an entropy failure would have turned the one gate on
+		// creating an account into first-request-wins.
+		//
+		// A process that cannot produce random bytes cannot safely issue
+		// session tokens either. Refusing to run is the only honest outcome,
+		// and it happens at startup where it is loud.
+		panic("no entropy available: cannot generate a setup code (" + err.Error() + ")")
+	}
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 }

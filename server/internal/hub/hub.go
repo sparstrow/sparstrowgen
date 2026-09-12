@@ -28,7 +28,12 @@ var ErrDaemonOffline = errors.New("the machine is not connected")
 type Hub struct {
 	mu sync.RWMutex
 
-	clients map[*websocket.Conn]bool
+	// Browsers, and WHOSE they are. The session is carried here so that ending
+	// a session can close the socket it opened: a websocket is authenticated
+	// once, at the handshake, and then stays open for as long as the tab does.
+	// Without this, "sign out everywhere" deletes rows while the tab it was
+	// pressed about keeps receiving every conversation event.
+	clients map[*websocket.Conn]client
 
 	// One daemon, because one machine. A second connection replaces the first
 	// rather than being rejected: a daemon that restarted after a network drop
@@ -50,17 +55,27 @@ type Hub struct {
 	OnDaemonMessage func(protocol.DaemonMessage)
 }
 
+// client is who is on the other end of a browser socket.
+type client struct {
+	// UserID is the account. Used by DisconnectUser, which is what a password
+	// change and "sign out everywhere" need.
+	UserID string
+	// SessionHash identifies the one session, so an ordinary sign-out closes
+	// only the tab that pressed it and not the owner's other devices.
+	SessionHash string
+}
+
 func New(log *slog.Logger) *Hub {
-	return &Hub{clients: map[*websocket.Conn]bool{}, log: log, providers: []protocol.Provider{}}
+	return &Hub{clients: map[*websocket.Conn]client{}, log: log, providers: []protocol.Provider{}}
 }
 
 // ---------------------------------------------------------------------------
 // browsers
 // ---------------------------------------------------------------------------
 
-func (h *Hub) AddClient(c *websocket.Conn) {
+func (h *Hub) AddClient(c *websocket.Conn, userID, sessionHash string) {
 	h.mu.Lock()
-	h.clients[c] = true
+	h.clients[c] = client{UserID: userID, SessionHash: sessionHash}
 	h.mu.Unlock()
 
 	// Tell it what it needs to render immediately, rather than leaving the
@@ -74,6 +89,45 @@ func (h *Hub) RemoveClient(c *websocket.Conn) {
 	delete(h.clients, c)
 	h.mu.Unlock()
 	_ = c.Close()
+}
+
+// DisconnectUser closes every browser socket belonging to one account.
+//
+// Called after the sessions have been deleted, not instead of deleting them.
+// The database is what decides whether a token is valid; this only stops a
+// connection that was authorised before that decision from outliving it.
+func (h *Hub) DisconnectUser(userID string) int {
+	return h.disconnect(func(c client) bool { return c.UserID == userID })
+}
+
+// DisconnectSession closes the socket or sockets opened under one session.
+func (h *Hub) DisconnectSession(sessionHash string) int {
+	if sessionHash == "" {
+		return 0
+	}
+	return h.disconnect(func(c client) bool { return c.SessionHash == sessionHash })
+}
+
+func (h *Hub) disconnect(match func(client) bool) int {
+	h.mu.Lock()
+	var closing []*websocket.Conn
+	for conn, c := range h.clients {
+		if match(c) {
+			closing = append(closing, conn)
+			delete(h.clients, conn)
+		}
+	}
+	h.mu.Unlock()
+
+	// Closed outside the lock: Close can block, and holding the hub's lock
+	// while it does would stall every other browser's events.
+	for _, conn := range closing {
+		_ = conn.Close()
+	}
+	if len(closing) > 0 {
+		h.log.Info("closed revoked browser sockets", "count", len(closing))
+	}
+	return len(closing)
 }
 
 func (h *Hub) Broadcast(ev protocol.ClientEvent) {

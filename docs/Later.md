@@ -188,3 +188,25 @@ exactly the gap and nothing more. Retry, rewind and fork all want to remove or d
 a transcript, and none of them can do that by deleting rows without deciding what a `seen_seq`
 pointing past the cut now means. Whichever of the three is built first pays for that decision, and
 the other two get it free. Worth doing them as one piece of work rather than three.
+
+## L-16 — Pair a machine from the browser, and a screen that lists them
+
+**Raised:** 2026-09-11, while building accounts against Multica's model
+
+`DAEMON_TOKEN` is one static shared secret, the same on the server and on every machine that dials
+in. It cannot be revoked for one machine, it does not expire, it says nothing about WHICH machine
+is connected, and rotating it means editing configuration in two places at once.
+
+Multica (`Reference/multica-main`) does the better thing, and their Runtimes screen is the proof of
+what it buys: `multica login` opens a browser, the already-signed-in human approves, and the server
+issues that machine its own token — a hashed row bound to one daemon id, with an expiry, revocable
+on its own. The prefix on the token (`mdt_` for a daemon, `mul_` for a user) lets the middleware
+route by credential type and fail closed on anything it does not recognise.
+
+What it would give us: a "Computers" screen listing every machine that has been paired, when it was
+last seen, which agent CLIs it found, and a button to revoke one — plus `sparstrowgen login` on a
+new machine instead of copying a secret into a service file.
+
+**Trigger:** a second machine, or the first time a machine needs to be revoked without disturbing
+the other. Until then one static token on one laptop is honest about what it is.
+

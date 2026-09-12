@@ -39,12 +39,12 @@ const (
 	saltLen      = 16
 )
 
-// ErrBadHash means the configured hash is not one we wrote — malformed, or from
+// ErrBadHash means a stored hash is not one we wrote — malformed, or written by
 // some other tool. It is deliberately distinct from "wrong password": one is the
-// deployment being misconfigured and the other is somebody guessing.
+// row being corrupt and the other is somebody guessing.
 var ErrBadHash = errors.New("the stored password hash is not in a format this server understands")
 
-// HashPassword produces the PHC-format string that goes in OWNER_PASSWORD_HASH.
+// HashPassword produces the PHC-format string stored on the account row.
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {

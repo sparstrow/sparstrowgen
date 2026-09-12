@@ -17,7 +17,7 @@ import type { Conversation } from "@/lib/chat-types";
 import { useChatView } from "@/lib/store";
 import { providerStyle } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
-import { SignOutMenu } from "@/components/auth/sign-out";
+import { AccountMenu } from "@/components/auth/account-menu";
 import {
   ConversationName,
   conversationName,
@@ -245,7 +245,7 @@ export function ConversationList({
           >
             <Plus className="size-4" />
           </Button>
-          <SignOutMenu />
+          <AccountMenu />
         </div>
       </div>
 

@@ -461,3 +461,51 @@ unmounts everything watching a query — and only then removing the rest of the 
 Worth remembering beyond this bug: `clear()` is not "invalidate everything harder". It detaches
 live observers, so anything that must re-render as a result has to be told before the clear, not
 after.
+
+## B-15 — Four holes in the accounts change, none of which anything was doing wrong yet
+
+**Found:** 2026-09-11, adversarial review of the accounts change before merging
+**Status:** fixed 2026-09-11
+
+Grouped because they arrived together, from reading the diff rather than from using it. Each now
+has a test that fails when its fix is removed — checked by removing each fix and watching the test
+go red, because a security test that cannot fail is worse than no test.
+
+**1. Two people could both get an account.** Sign-up counted the users, then hashed a password
+(~50ms), then inserted. Simultaneous requests with DIFFERENT emails all passed the count and all
+inserted; the UNIQUE constraint on email only arbitrates the same address. Eight parallel sign-ups
+produced **four accounts** — four separate owners of the machine. The comment in the query claiming
+the constraint made this safe was simply wrong.
+Fixed with `CREATE UNIQUE INDEX users_only_one ON users ((true))` (migration 00008), so every row
+produces the same key and the second insert cannot land.
+
+**2. A revoked password could still mint a session.** Sign-in verified the password and then, in a
+separate call, created the session. A password change deletes every session — so a sign-in could
+read the old hash, spend its 50ms while the change committed, and insert a session afterwards.
+Fixed by doing both in one transaction with `SELECT … FOR SHARE` on the account row, against the
+change's `FOR UPDATE`. That also stops two simultaneous changes both verifying against the same old
+hash and one silently overwriting the other.
+
+**3. A stranger could lock the owner out.** Sign-up consumed a login-throttle attempt *before*
+checking whether the app was already claimed, and the throttle is keyed by client IP — which behind
+a reverse proxy is one value for the whole internet. Five knocks at a closed sign-up put the
+owner's sign-in into back-off. Fixed by answering 409 before touching the throttle: refusing is now
+free for the server and worthless to an attacker.
+
+**4. "Sign out everywhere" could report success having done nothing.** The server swallowed a
+database error while looking up the session, and the client never checked the response at all — so
+a failure cleared the screen and showed the login form, which reads as "done". That is the worst
+possible lie from this particular button: it is pressed *because* a device may be in the wrong
+hands, and it ended the owner's worry without ending the exposure. Fixed on both sides; a failure
+now keeps the owner where they are and says "your other devices may still be signed in".
+
+A fifth, from the same review, is D-030: revoking a session did not close the websocket it had
+opened.
+
+Two more were mine and never shipped: the 401 handler wrote a bare "signed out" into a cache slot
+that now holds an object, which would have offered the *create an account* screen to somebody whose
+session had merely expired; and `NewSetupCode` returned `""` on an entropy failure, with a comment
+claiming that was a value nobody could match — but the submitted code is trimmed and compared in
+constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
+first-request-wins. It now refuses to start instead.
+

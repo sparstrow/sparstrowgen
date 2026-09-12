@@ -1,107 +1,89 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Loader2, LockKeyhole } from "lucide-react";
-import { api } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useSignIn } from "@/lib/queries";
+import { AuthShell, Field, FormError, SubmitButton } from "./shell";
 
-/* The way in.
+/* The way in, for somebody who already has an account here.
  *
- * One field, because there is one user. No "forgot password", because there is
- * nobody to email and no account to recover — the password is set in the
- * server's own configuration, and the recovery procedure is to change it there
- * (docs/runbooks/deploy.md). Offering a link that could not work would be worse
- * than not offering one.
+ * No "forgot password" link, because there is nobody to email: this deployment
+ * has one account and no mail server, and a link that could not work would be
+ * worse than not offering one. What actually recovers a lost password is
+ * documented where a locked-out owner can still read it
+ * (docs/runbooks/deploy.md), not behind the login he cannot get through.
  *
- * The wording never says whether a password EXISTS, only whether this one was
- * right, and the server's throttling message is passed through as written: "try
- * again in 8s" is the one thing the owner actually needs when he has mistyped
- * four times, and it tells an attacker nothing they could not measure.
+ * The wording never distinguishes a wrong password from an email with no
+ * account — the server sends one message for both, and telling them apart tells
+ * a stranger which addresses exist here.
  */
-export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
+export function SignIn() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const signIn = useMutation({
-    mutationFn: () => api.signIn(password),
-    onSuccess: () => {
-      setPassword("");
-      onSignedIn();
-    },
-  });
-
+  const signIn = useSignIn();
   const busy = signIn.isPending;
 
+  // Clear a previous failure the moment he starts correcting it. Leaving "that
+  // did not match an account" under a field he is actively retyping reads as
+  // though the new attempt failed too.
+  const edit = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    if (signIn.isError) signIn.reset();
+  };
+
   return (
-    <main className="flex min-h-dvh items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2.5">
-          <LockKeyhole className="size-5 text-muted-foreground" aria-hidden />
-          <h1 className="text-lg font-medium tracking-tight">sparstrowgen</h1>
-        </div>
+    <AuthShell
+      title="Sign in"
+      footer="This signs you in to the machine that runs your agents. Sessions last a week, and signing out ends them everywhere."
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy && email && password) signIn.mutate({ email, password });
+        }}
+        className="space-y-4"
+      >
+        <Field
+          id="email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => edit(setEmail)(e.target.value)}
+          disabled={busy}
+          autoFocus
+          autoComplete="username"
+          invalid={signIn.isError}
+          describedBy={signIn.isError ? "signin-error" : undefined}
+        />
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!busy && password) signIn.mutate();
-          }}
-          className="space-y-4"
-        >
-          <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm text-muted-foreground">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                // Clear a previous failure the moment he starts correcting it.
-                // Leaving "that password is not right" under a field he is
-                // actively retyping reads as though the new attempt failed too.
-                if (signIn.isError) signIn.reset();
-              }}
-              disabled={busy}
-              autoFocus
-              autoComplete="current-password"
-              aria-invalid={signIn.isError || undefined}
-              aria-describedby={signIn.isError ? "signin-error" : undefined}
-              className="text-base"
-            />
-          </div>
+        <Field
+          id="password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => edit(setPassword)(e.target.value)}
+          disabled={busy}
+          autoComplete="current-password"
+          invalid={signIn.isError}
+          describedBy={signIn.isError ? "signin-error" : undefined}
+        />
 
-          {signIn.isError && (
-            <p id="signin-error" role="alert" className="text-sm text-destructive">
-              {signIn.error.message}
-            </p>
-          )}
+        {signIn.isError && (
+          <FormError id="signin-error" message={signIn.error.message} />
+        )}
 
-          <Button type="submit" disabled={busy || !password} className="w-full">
-            {busy ? (
-              <>
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-                Signing in
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
-        </form>
-
-        <p className="mt-8 text-xs leading-relaxed text-muted-foreground">
-          This signs you in to the machine that runs your agents. Sessions last a
-          week, and signing out ends them everywhere.
-        </p>
-      </div>
-    </main>
+        <SubmitButton busy={busy} busyLabel="Signing in" disabled={!email || !password}>
+          Sign in
+        </SubmitButton>
+      </form>
+    </AuthShell>
   );
 }
 
-/** Shown while the browser is asking whether it already has a session. Almost
- *  always a single frame — but on a cold server it is the difference between a
- *  blank page and a page that is visibly doing something. */
+/** Shown while the browser is asking what it is allowed to see. Almost always a
+ *  single frame — but on a cold server it is the difference between a blank
+ *  page and a page that is visibly doing something. */
 export function SignInChecking() {
   return (
     <main className="flex min-h-dvh items-center justify-center">
@@ -115,11 +97,19 @@ export function SignInChecking() {
  *  being signed out and must not be shown as a login failure — no password will
  *  fix it, and saying "wrong password" would send the owner hunting for the
  *  wrong problem. */
-export function SignInUnreachable({ error, onRetry }: { error: string; onRetry: () => void }) {
+export function SignInUnreachable({
+  error,
+  onRetry,
+}: {
+  error: string;
+  onRetry: () => void;
+}) {
   return (
     <main className="flex min-h-dvh items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-lg font-medium tracking-tight">Can&rsquo;t reach the server</h1>
+        <h1 className="text-lg font-medium tracking-tight">
+          Can&rsquo;t reach the server
+        </h1>
         <p className="text-sm text-muted-foreground">
           The app is running, but the API did not answer. It may be starting up,
           or stopped.

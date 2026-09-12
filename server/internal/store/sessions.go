@@ -30,7 +30,11 @@ func stamp(t time.Time) pgtype.Timestamptz {
 // The token is returned and never stored; what goes in the row is its hash. The
 // caller gets the only copy that will ever exist, which is why it goes straight
 // into a cookie and nowhere else — not a log line, not an error message.
-func (s *Store) StartSession(ctx context.Context, userAgent, ip string) (string, time.Time, error) {
+func (s *Store) StartSession(ctx context.Context, userID, userAgent, ip string) (string, time.Time, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return "", time.Time{}, err
+	}
 	token, hash, err := auth.NewToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -38,6 +42,7 @@ func (s *Store) StartSession(ctx context.Context, userAgent, ip string) (string,
 	expires := time.Now().Add(auth.Lifetime)
 	if _, err := s.q.CreateSession(ctx, db.CreateSessionParams{
 		TokenHash: hash,
+		UserID:    uid,
 		ExpiresAt: stamp(expires),
 		UserAgent: userAgent,
 		Ip:        ip,
@@ -47,27 +52,38 @@ func (s *Store) StartSession(ctx context.Context, userAgent, ip string) (string,
 	return token, expires, nil
 }
 
-// ValidSession reports whether a presented token is a live session, and marks it
-// used in the same statement.
+// SessionUser returns who a presented token belongs to, and marks it used in
+// the same statement.
 //
 // A token that never existed, one that was signed out, one that is too old and
-// one that has gone unused too long all return false. The caller cannot tell
-// them apart, and neither can an attacker.
-func (s *Store) ValidSession(ctx context.Context, token string) (bool, error) {
+// one that has gone unused too long all come back the same way: no user, no
+// error. The caller cannot tell them apart, and neither can an attacker.
+//
+// The user comes back from the session row itself rather than from a second
+// lookup, so there is no window where the session is valid and the account it
+// belonged to has gone — deleting the account cascades to the session.
+func (s *Store) SessionUser(ctx context.Context, token string) (User, bool, error) {
 	if token == "" {
-		return false, nil
+		return User{}, false, nil
 	}
-	_, err := s.q.TouchSession(ctx, db.TouchSessionParams{
+	row, err := s.q.TouchSession(ctx, db.TouchSessionParams{
 		TokenHash: auth.HashToken(token),
 		IdleSince: stamp(time.Now().Add(-auth.IdleLifetime)),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return User{}, false, nil
 	}
 	if err != nil {
-		return false, err
+		return User{}, false, err
 	}
-	return true, nil
+	user, err := s.q.GetUser(ctx, row.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, false, nil
+	}
+	if err != nil {
+		return User{}, false, err
+	}
+	return User{ID: uuidToString(user.ID), Email: user.Email}, true, nil
 }
 
 // EndSession signs one session out. Signing out a token that is already gone is
@@ -79,21 +95,29 @@ func (s *Store) EndSession(ctx context.Context, token string) error {
 	return s.q.DeleteSession(ctx, auth.HashToken(token))
 }
 
-// EndAllSessions signs every device out.
-func (s *Store) EndAllSessions(ctx context.Context) (int64, error) {
-	return s.q.DeleteAllSessions(ctx)
+// EndAllSessions signs every one of this user's devices out.
+func (s *Store) EndAllSessions(ctx context.Context, userID string) (int64, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.q.DeleteUserSessions(ctx, uid)
 }
 
 // SweepSessions deletes rows that can no longer authenticate anything. Purely
-// housekeeping: ValidSession already refuses them, so this is about the table
+// housekeeping: SessionUser already refuses them, so this is about the table
 // not growing forever rather than about security.
 func (s *Store) SweepSessions(ctx context.Context) (int64, error) {
 	return s.q.DeleteDeadSessions(ctx, stamp(time.Now().Add(-auth.IdleLifetime)))
 }
 
-// Sessions lists the live logins, newest use first.
-func (s *Store) Sessions(ctx context.Context) ([]Session, error) {
-	rows, err := s.q.ListSessions(ctx)
+// Sessions lists this user's live logins, newest use first.
+func (s *Store) Sessions(ctx context.Context, userID string) ([]Session, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListUserSessions(ctx, uid)
 	if err != nil {
 		return nil, err
 	}

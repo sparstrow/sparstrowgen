@@ -29,6 +29,31 @@ function request(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, credentials: "include" });
 }
 
+/** POSTs JSON and throws the server's own wording on failure.
+ *
+ *  The thing that actually changed — the session cookie — is set by the browser
+ *  out of reach of this code, so what comes back is only what the server wants
+ *  to say about the account. */
+async function post<T>(url: string, body: unknown): Promise<T> {
+  const res = await request(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const failed = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(failed?.error ?? `${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** What every path that starts a session answers with.
+ *
+ *  The email comes back from the SERVER rather than being echoed from the form,
+ *  because the server normalises it — trimmed and lowercased — and the account
+ *  menu should show the address that exists, not the one that was typed. */
+type SignedIn = { ok: true; email: string };
+
 /** Thrown when the server says "not signed in", so the app can show the login
  *  screen rather than an error toast about a conversation list. */
 export class NotSignedIn extends Error {
@@ -49,37 +74,65 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Who the server thinks this browser is.
+ *
+ *  `email` is present only when signed in, which is why it is optional rather
+ *  than an empty string — an empty string would render as a blank account menu
+ *  instead of an obviously missing one. */
+export type Session = {
+  claimed: boolean;
+  signedIn: boolean;
+  email?: string;
+};
+
 export const api = {
-  /** Whether this browser currently holds a live session. Asked before anything
-   *  else, so the app can show the login screen instead of firing a request
-   *  that 401s. */
-  async signedIn(): Promise<boolean> {
+  /** What this browser is allowed to see, asked before anything else.
+   *
+   *  Three answers, not two, and the app shows a different screen for each.
+   *  `claimed` is whether ANYBODY has an account here yet: a fresh deployment
+   *  has none, and the person in front of it has to create one rather than sign
+   *  in to an account that does not exist. */
+  async session(): Promise<Session> {
     const res = await request(`${BASE}/api/auth/session`, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const body = (await res.json()) as { signedIn: boolean };
-    return body.signedIn;
+    return res.json() as Promise<Session>;
   },
 
-  /** Exchange the password for a session cookie. The cookie is HttpOnly, so
-   *  nothing here ever sees it — the browser holds it and sends it back. */
-  async signIn(password: string): Promise<void> {
-    const res = await request(`${BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
-    }
+  /** Creates the one account, using the setup code the server printed when it
+   *  started. Reachable only while nobody has claimed this deployment. */
+  async signUp(input: {
+    setupCode: string;
+    email: string;
+    password: string;
+  }): Promise<string> {
+    const { email } = await post<SignedIn>(`${BASE}/api/auth/signup`, input);
+    return email;
   },
 
+  /** Exchanges an email and password for a session cookie. The cookie is
+   *  HttpOnly, so nothing here ever sees it — the browser holds it and sends it
+   *  back on every request. */
+  async signIn(email: string, password: string): Promise<string> {
+    const signedIn = await post<SignedIn>(`${BASE}/api/auth/login`, { email, password });
+    return signedIn.email;
+  },
+
+  /** Changes the password. On the server this ends every session including this
+   *  browser's, which is then handed a fresh one in the same response — so it
+   *  resolves with the owner still signed in, holding a different cookie, and
+   *  every other device signed out. */
+  async changePassword(current: string, next: string): Promise<void> {
+    await post<SignedIn>(`${BASE}/api/auth/password`, { current, next });
+  },
+
+  /** Ends this session, and optionally every other one.
+   *
+   *  Throws when the server could not do it. That matters most for
+   *  `everywhere`: it is the button somebody presses because they think a
+   *  device is in the wrong hands, and a silent failure would tell them the
+   *  danger had passed while it had not. */
   async signOut(everywhere = false): Promise<void> {
-    await request(`${BASE}/api/auth/logout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ everywhere }),
-    });
+    await post<{ ok: true }>(`${BASE}/api/auth/logout`, { everywhere });
   },
 
   async providers(): Promise<Provider[]> {

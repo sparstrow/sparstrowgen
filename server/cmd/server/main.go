@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -15,14 +14,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/term"
-
-	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/api"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
@@ -31,15 +26,6 @@ import (
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-
-	// `server -hashpw` prints the value for OWNER_PASSWORD_HASH and exits. It
-	// lives in this binary rather than a second one so that the thing which
-	// writes the hash and the thing which reads it can never be different
-	// versions of the same algorithm.
-	if len(os.Args) > 1 && os.Args[1] == "-hashpw" {
-		hashPassword(log)
-		return
-	}
 
 	// `server -healthcheck` asks the running server whether it is alive and
 	// exits 0 or 1. It lives in this binary because the deployed image is
@@ -70,9 +56,33 @@ func main() {
 	}
 
 	h := hub.New(log)
+	st := store.New(pool)
+	a := api.New(st, h, log, cfg)
+
+	// The setup code is only meaningful while nobody has signed up. Printed
+	// here, loudly, because the deployment log is where the owner reads it —
+	// and NOT printed once the app is claimed, so it never sits in a log of a
+	// running system where it would be a credential with nothing to protect.
+	// A failed check prints the code as well. If the database was briefly
+	// unreachable at startup and recovers, the app would otherwise offer the
+	// sign-up screen while the only code that could complete it was never
+	// printed — unclaimable without a restart. Printing it when the answer is
+	// unknown costs nothing: if the app IS claimed, the code opens nothing,
+	// because sign-up answers 409 whatever is presented.
+	if claimed, err := st.Claimed(ctx); err != nil {
+		log.Warn("could not tell whether this app has been claimed yet", "err", err)
+		log.Info("printing the setup code anyway, in case it has not been",
+			"setup_code", a.SetupCode())
+	} else if !claimed {
+		log.Info("this app has no account yet")
+		log.Info("open it in a browser and use this setup code to create one",
+			"setup_code", a.SetupCode())
+		log.Info("the code changes every time this server restarts; use the newest one")
+	}
+
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: api.New(store.New(pool), h, log, cfg).Routes(),
+		Handler: a.Routes(),
 		// No write timeout: these are long-lived websockets, and a deadline
 		// here would cut a turn off mid-answer.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -140,9 +150,8 @@ cost of the strictness is one line in a file, not a branch in the program.
 */
 func authConfig(log *slog.Logger) api.Config {
 	cfg := api.Config{
-		PasswordHash: os.Getenv("OWNER_PASSWORD_HASH"),
-		DaemonToken:  os.Getenv("DAEMON_TOKEN"),
-		Origin:       os.Getenv("WEB_ORIGIN"),
+		DaemonToken: os.Getenv("DAEMON_TOKEN"),
+		Origin:      os.Getenv("WEB_ORIGIN"),
 		// Secure unless explicitly turned off, so forgetting it is the safe
 		// mistake: a cookie that will not travel over http://localhost is an
 		// obvious local annoyance, while one sent in the clear over the internet
@@ -151,9 +160,6 @@ func authConfig(log *slog.Logger) api.Config {
 	}
 
 	var missing []string
-	if cfg.PasswordHash == "" {
-		missing = append(missing, "OWNER_PASSWORD_HASH (generate one with: server -hashpw)")
-	}
 	if cfg.DaemonToken == "" {
 		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses)")
 	}
@@ -168,75 +174,9 @@ func authConfig(log *slog.Logger) api.Config {
 		os.Exit(1)
 	}
 
-	// Fail here rather than on the owner's first sign-in attempt. A hash that
-	// cannot be parsed means nobody can ever get in, and finding that out at
-	// startup is worth more than finding it out from a login screen.
-	if _, err := auth.VerifyPassword(cfg.PasswordHash, "any probe value"); err != nil {
-		log.Error("OWNER_PASSWORD_HASH is not a hash this server can read", "err", err)
-		log.Error("generate one with: server -hashpw")
-		os.Exit(1)
-	}
 	if len(cfg.DaemonToken) < 32 {
 		log.Error("DAEMON_TOKEN is too short to be a secret", "length", len(cfg.DaemonToken), "want_at_least", 32)
 		os.Exit(1)
 	}
 	return cfg
-}
-
-// hashPassword reads a password from the terminal without echoing it and prints
-// the hash to put in OWNER_PASSWORD_HASH.
-func hashPassword(log *slog.Logger) {
-	// Two ways in, because this is used by two different things. A person at a
-	// terminal gets a hidden prompt and a confirmation; a deploy pipeline pipes
-	// the password in and gets the hash out, which is the only way this is
-	// usable from a container or a CI job.
-	var first []byte
-	if term.IsTerminal(int(syscall.Stdin)) {
-		var err error
-		fmt.Fprint(os.Stderr, "New password: ")
-		first, err = term.ReadPassword(int(syscall.Stdin))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			log.Error("could not read the password", "err", err)
-			os.Exit(1)
-		}
-		fmt.Fprint(os.Stderr, "Again: ")
-		second, err := term.ReadPassword(int(syscall.Stdin))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			log.Error("could not read the password", "err", err)
-			os.Exit(1)
-		}
-		if string(first) != string(second) {
-			log.Error("those did not match")
-			os.Exit(1)
-		}
-	} else {
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil && line == "" {
-			log.Error("nothing was piped in to hash", "err", err)
-			os.Exit(1)
-		}
-		// Only the line ending: a password may legitimately start or end with a
-		// space, and silently trimming one would hash something other than what
-		// the owner typed.
-		first = []byte(strings.TrimRight(line, "\r\n"))
-	}
-
-	if len(first) < 12 {
-		// A floor, not a character-class rule. Length is what actually resists
-		// guessing, and the usual "one capital, one symbol" advice mostly
-		// produces passwords people cannot remember and therefore reuse.
-		log.Error("too short", "length", len(first), "want_at_least", 12)
-		os.Exit(1)
-	}
-
-	hash, err := auth.HashPassword(string(first))
-	if err != nil {
-		log.Error("could not hash the password", "err", err)
-		os.Exit(1)
-	}
-	// To stdout, alone, so it can be piped or copied. Everything else this
-	// command says goes to stderr.
-	fmt.Println(hash)
 }

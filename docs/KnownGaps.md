@@ -176,3 +176,44 @@ wrong rather than the outcome.
 - **Clears when:** either the daemon is only ever run under an init (worth asserting when it is
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
+
+## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
+
+**Noticed:** 2026-09-11, codex reviewing the deployment artifacts before the first deploy
+
+`docker-compose.yaml` runs migrations as a `migrate` service with `restart: "no"`, and the server
+waits on `condition: service_completed_successfully`. That ordering is **verified**: running this
+compose file locally against a real Postgres, `migrate` ran, exited 0, and only then did `server`
+start.
+
+What is not verified is what Coolify v4.3.18 does with an *exited* container on the **second**
+deploy — whether it recreates it, reuses it, or treats a zero-exit container as a failed service
+and reports the deployment unhealthy. That is Coolify lifecycle behaviour, and nothing short of
+deploying twice will answer it.
+
+Two related things also unproved, and worth knowing before they surprise someone:
+
+- The dependency orders **startup**, and does not stop the previously-running API while migrations
+  run during a redeploy. A migration that breaks compatibility with the old server would be applied
+  underneath it.
+- A migration that fails leaves the old server running and the new one never starting, which is the
+  safe direction but will look like "the deploy hung".
+
+**Closes when:** the second deploy to Coolify either works or does not. If it does not, the fallback
+is a Coolify pre-deployment command rather than a compose service.
+
+## G-21 — The chat surface does not work at phone width
+
+**Noticed:** 2026-09-11, verifying the account screens in a browser
+
+At 375×812 the sidebar keeps its fixed 288px and the transcript is squeezed into what is left, so
+the conversation pane wraps to one or two words a line and the account menu opens off-screen. The
+sign-in and sign-up screens are fine — they are a centred column — so this is the chat surface
+only, and it predates the account work.
+
+Deliberately not fixed here. It needs a real decision about what the sidebar does on a phone
+(drawer, or a list-then-detail view), and that is a design question for the owner rather than a
+CSS patch. Nothing about it is a surprise once seen, which is why it is written down rather than
+guessed at.
+
+**Closes when:** the chat surface has a phone layout the owner has chosen.

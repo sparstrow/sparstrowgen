@@ -117,7 +117,7 @@ commands:
   typecheck: "pnpm typecheck"
   go_test: "cd server && go test ./..."
   go_test_linux: "make test-linux   # the Go suite on Linux under -race, in a container. Needed because the daemon only ever runs on Windows and -race needs a C compiler this machine does not have. --init is load-bearing; see docs/KnownGaps.md G-17"
-  db: "docker compose up -d      # postgres on :5433"
+  db: "docker compose -f compose.dev.yaml up -d   # postgres on :5433"
   migrate: "cd server && goose -dir migrations up"
   server: "cd server && go run ./cmd/server   # :8080"
   daemon: "cd server && go run ./cmd/daemon   # drives the agent CLIs"

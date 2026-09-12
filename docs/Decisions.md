@@ -538,9 +538,8 @@ is not the same risk as one abandoned in a browser tab.
 
 ## D-027 — The server refuses to start without its secrets
 
-No default password, no `AUTH_DISABLED` switch, no development shortcut. `OWNER_PASSWORD_HASH`,
-`DAEMON_TOKEN` and `WEB_ORIGIN` are all required, and the process exits naming the ones it is
-missing.
+No default password, no `AUTH_DISABLED` switch, no development shortcut. `DAEMON_TOKEN` and
+`WEB_ORIGIN` are both required, and the process exits naming the ones it is missing.
 
 Every convenience considered here was a way for an unauthenticated server to reach production
 quietly. A default password ships as the real one. An "auth off for local dev" flag gets set in a
@@ -552,6 +551,10 @@ The cost is that development needs the variables too, which the `Makefile` and `
 supply. That is one line in a file rather than a branch in the program — and it means there is
 exactly **one** code path through authentication, which is the part that actually matters, because
 the second path is the one nobody tests.
+
+There used to be an `OWNER_PASSWORD_HASH` here too. It is gone: the password now lives on an
+account row in Postgres (D-029), so there is no hash in any configuration to require, to mangle in
+an env file, or to redeploy in order to change.
 
 ## D-028 — The daemon gets its own credential, not the owner's password
 
@@ -567,3 +570,72 @@ machine. They should be able to change independently, because they will need to.
 The daemon socket is checked **before** the websocket upgrade, so an unauthorised dialler gets a
 plain 401 rather than a working socket that is then closed — and nothing is registered in the hub
 on the strength of a connection that is about to be rejected.
+
+## D-029 — Accounts in Postgres, and one setup code to create the first one
+
+Authentication began as a password hash in an environment variable. It worked, and it was the
+wrong thing: signing in meant reading a runbook, and changing the password meant editing a Coolify
+variable and redeploying. The owner's verdict was that from his side it was the worst part of the
+app, and he was right — it was a deployment chore wearing a login's clothes.
+
+So there is a `users` table: email (`citext`, unique), an argon2id hash, and sessions that belong
+to a user. Signing in is an email and a password. Changing the password is a menu item.
+
+**The first account is the hard part, and it is not an ordinary sign-up.** What is behind this
+login runs coding agents on the owner's machine, so a sign-up form left open to whoever finds the
+URL is a form that hands a stranger a shell. Four options were considered:
+
+| | Why not |
+|---|---|
+| An invite code in configuration | Back to editing a variable to deploy — the thing being removed |
+| Email confirmation | No mail server, and none wanted for one account |
+| First request wins | A race with the internet, decided by who loads the page first |
+| **A setup code printed at startup** | **Chosen** |
+
+The server generates a random code per process, prints it while the app is unclaimed, and accepts
+it once. Reading it requires the deployment's logs, and having those is the same thing as owning
+the deployment — which is exactly the fact that needs proving. The owner is reading the deploy log
+anyway, so it costs him nothing. The code is held in memory only: a restart kills it and prints a
+new one, so a code that leaked into an old log is already dead.
+
+Taken from Multica (`Reference/multica-main`), whose `multica login` proves a machine by having an
+already-signed-in human approve it in a browser rather than by pasting a shared secret. Their
+browser-approval flow for per-machine daemon tokens is the better version of this and is parked as
+L-16; the setup code is the part that works before there is anybody to approve anything.
+
+Once an account exists the endpoint answers 409 to the correct code, so sign-up closes permanently
+rather than merely being hidden by the interface.
+
+## D-030 — A websocket is authenticated once, so the hub has to be able to hang up
+
+A session cookie is checked on every HTTP request. A websocket is checked once,
+at the handshake, and then the connection lives as long as the tab does. So
+deleting session rows — which is what signing out, signing out everywhere, and
+changing a password all do — did not disconnect anything. A browser that had
+been revoked kept receiving every conversation event, indefinitely.
+
+That is worst in exactly the case the feature exists for. "Sign out everywhere"
+is pressed because a device may be in the wrong hands; it deleted the rows,
+reported success, and left that device's socket streaming.
+
+Three ways to fix it were available:
+
+| | |
+|---|---|
+| Re-check the session on every frame | Browsers only listen, so there are no incoming frames to hang the check on |
+| Poll: revalidate each socket every N seconds | Simple, but leaves a window whose size is N, chosen by nobody for any reason |
+| **Register the socket against its session and close it on revoke** | **Chosen** — deterministic, and the close happens in the same request that revoked |
+
+So the hub stores who each socket belongs to (user, and session hash) rather
+than a bare set of connections, and exposes `DisconnectUser` and
+`DisconnectSession`. The API calls them **after** the rows are gone, never
+instead: the database still decides whether a token is valid, and this only
+stops a connection authorised before that decision from outliving it.
+
+The close happens outside the hub's lock, because `Close` can block and holding
+the lock through it would stall every other browser's events.
+
+Found by adversarial review rather than by use, along with three other defects
+in the same change (`docs/Bugs.md` B-15). Each has a test that fails without its
+fix.
+
