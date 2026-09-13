@@ -5,7 +5,7 @@
 | **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
-| **Design** | not designed yet |
+| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2, US3: not designed yet |
 | **Open questions** | none |
 
 > **Revision 2026-09-12.** Mapping this release against the phase 2 exit gate found five gaps. You

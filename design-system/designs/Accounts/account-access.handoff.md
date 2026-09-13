@@ -54,26 +54,28 @@ The prototype carries a simulated inbox so the email half of each journey can be
 
 ## Data contract
 
-The backend's brief for US1. Checked against [`Capabilities.md`](../../../docs/Capabilities.md).
+Built 2026-09-12. Server routes in `server/internal/api/accounts.go`; decisions D-031 and D-032.
 
-| Field / behaviour | Source | Deliverable? |
+| Field / behaviour | Source | Status |
 |---|---|---|
-| Account email, password hash, confirmed flag | users table (exists) | **partly** — accounts exist; the confirmed flag and removing the one-account index do not |
-| Invitation list (address, trimmed and case-folded) | owner-maintained list | **no — not built.** Capabilities says hosting configuration is acceptable for this release |
-| One-time confirmation link, 30-minute expiry, single use, newest-wins | new token record (hashed) | **no — not built** |
-| Access request per uninvited address: address, first asked, times asked | new request record | **no — not built** |
-| Owner emailed on an address's first request only | email delivery, to a configured owner address | **no — not built** |
-| Approving a request | allowing the address like an invitation (hosting configuration) until L-18 | **partly** — same mechanism as invitations, once that exists |
-| One-time reset link, same rules | new token record | **no — not built** |
-| Sending the four emails | email delivery | **no — not built.** `agent@sparstrow.com` exists for end-to-end testing; the sending path is undecided |
-| "Password changed" email | email delivery | **no — not built** (invented; see below) |
-| Signing out every other session on reset | sessions table (exists) | **yes** — sign-out-everywhere already works |
-| Conversations filtered to the signed-in account | conversations + hub | **no — G-27.** Must ship with registration |
-| Throttle message "too many attempts — try again in 8s" | existing throttle | **yes** — same wording the server sends today |
-| Resend cooldown of 30 s | server-enforced | **no — not built**; the countdown must mirror a server limit, not replace it |
+| Account email, password hash | `users` | **built** — any number of accounts; `users_only_one` dropped (migration 00009) |
+| Who may register | `OWNER_EMAIL` + `ALLOWED_EMAILS`, normalised | **built** — configuration until L-18 |
+| Confirmation link: 30 minutes, single use, newest wins | `email_links` (hashed token) | **built and tested** |
+| Reset link, same rules | `email_links` | **built and tested** |
+| Access request per uninvited address | `access_requests` | **built and tested** — owner emailed on the first request only |
+| Sending the emails | SMTP over TLS; `MAIL_TRANSPORT=log` in development | **built; real delivery unproved (KnownGaps G-29)** |
+| "Password changed" email | same | **built** |
+| Signing out every other session on reset | `sessions`, in the reset transaction | **built and tested** |
+| Conversations filtered to the signed-in account | `conversations.user_id`, hub per account | **built and tested** |
+| Resend spacing of 30 s | in-memory per address and kind | **built and tested** — the browser countdown mirrors it |
 
-Nothing streams. What must survive a refresh: an unfinished registration is resumable purely from
-the email link, so no browser state is required between "check your email" and the link.
+`POST /api/auth/register {email}` → `{outcome: "check-email"|"request-sent", email}` ·
+`POST /api/auth/register/resend {email}` · `POST /api/auth/links/check {kind, token}` →
+`{usable, email}` or `{usable: false, reason, accountReady}` · `POST /api/auth/register/complete
+{token, password}` and `POST /api/auth/password/reset {token, password}` → session cookie +
+`{ok, email}` · `POST /api/auth/password/forgot {email}` → `{ok, email}` whatever the address.
+
+Nothing streams. An unfinished registration is resumable purely from the email link.
 
 ## Interactions
 
