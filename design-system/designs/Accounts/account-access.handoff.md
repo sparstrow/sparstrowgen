@@ -135,3 +135,57 @@ decision.
 - Connecting a computer after sign-up — US2, designed next.
 - Changing password while signed in — already built (`change-password.tsx`), unchanged.
 - The chat surface itself — stand-in only.
+
+## Verification — 2026-09-12
+
+**Tested:** `http://localhost:4173/designs/Accounts/account-access.dc.html` (launch config
+`design-system`), against this handoff's States and Interactions and US1's acceptance criteria.
+Scripted DOM clicks drove the real handlers; each item asserted the resulting screen, error text,
+mail count or list length. Final full pass: **65 checks, 0 failures, 0 console errors.**
+
+### Checklist
+- [x] Sign in: wrong password error; typing clears the error and keeps the form; owner lands with 9 conversations
+- [x] Account menu shows the signed-in email; Escape closes it; sign out returns to sign in
+- [x] Register: invalid email; not-invited error (variant 1A); invited address with spaces and capitals normalised
+- [x] Confirmation email arrives; link opens choose-password; short password refused; new account lands empty
+- [x] Reused confirmation link → "Your account is already set up" → Sign in prefilled
+- [x] New person signs in again and still sees no conversations (isolation from the owner's nine)
+- [x] Registering an already-registered address → same screen, "already have an account" email, its Sign in link prefills
+- [x] Forgot password: unknown address and real address get identical copy; only the real one gets mail
+- [x] Reset link → new password → signed in with the signed-out-elsewhere notice; "password changed" email sent; notice dismisses
+- [x] Old password refused, new password accepted; reused reset link → "already been used"
+- [x] Expired link → "has expired" → "Send a new reset link" prefilled
+- [x] Variant 1B: uninvited and invited get identical copy; only the invited address gets mail; "Use a different address" keeps the address
+- [x] Resend: 30 s countdown disabled, enables after, sends, restarts; the earlier link becomes "A newer link was sent"
+- [x] Variant 2B: password on first form; short refused; unconfirmed sign-in refused with "Send the link again"; link confirms and signs in
+- [x] Variant 3B: code field shown (also to an uninvited address); wrong code refused; the emailed code with its space accepted
+- [x] Changing a variant resets the run to a clean sign in with an empty inbox
+- [x] Faults: email can't send (register and forgot); too many attempts; server unreachable; retry busy, stays down, recovers when cleared
+- [x] Presets and `?state=`: loading holds, error sets the fault, populated shows 9, empty shows 0
+- [x] Phone width 375 px: no horizontal overflow; sign-in column 327 px; inbox stacks below
+- [x] Screenshots: sign in (first render) and the not-invited error, checked visually
+
+### Found & fixed
+- **Typing after an error deleted the submit button.** Root cause: the error-clearing selector
+  `#form-error + .btn` matched the submit button whenever no extra action followed the error.
+  Fix: the optional action gets its own `#form-error-extra` wrapper, and only that is removed.
+- **Code field never appeared with variants 1B + 3B.** Root cause: the field was hidden on the
+  neutral screen, which made the combination unusable. Hiding it only for addresses that got no
+  email would also reveal invitation status. Fix: show it whenever the code variant is on.
+- **Autofocus console notice.** The native `autofocus` attribute collided with programmatic focus
+  after re-render; replaced with `data-autofocus`.
+- **Invited-address rows were right-aligned** in the seed panel (a `td:last-child` rule caught the
+  colspan cells). Fix: explicit class on the action cell.
+
+### Found & not fixed
+- Opening a confirmation or reset link while already signed in as another account shows the
+  link's screen over the existing session rather than asking first. Recorded under Invented; the
+  real behaviour is a backend decision.
+
+### Environment caveats
+- Most screenshot attempts timed out while the Browser pane was hidden; state was asserted
+  structurally for every item and only two states were checked visually.
+- An info-level "Autofocus processing was blocked" line kept appearing in the unfiltered console
+  after the attribute was removed; no `autofocus` attribute remains in the prototype, and the
+  errors-only console was empty on every pass.
+- Geist is not bundled; the prototype falls back to the system sans unless Geist is installed.
