@@ -136,18 +136,20 @@ the shadcn registry before being hand-built.
 | Centred agent reading column | Expected | Chat | Agent output is the primary reading surface |
 | Right-aligned compact user prompts | Expected | Chat | Prompts are context, not equal chat bubbles |
 | Single-column account access | Expected | Account routes | One clear action per screen |
-| Progressive computer setup | Expected | First use and a resumable in-product entry | US2 decides its rendered layout |
+| Machines navigation | Expected | Persistent product sidebar | A dedicated destination because computer capabilities will expand |
+| Machines list | Expected | Machines | Shows only the signed-in person's computers and scales beyond the current machine |
+| Machine profile | Expected | Machines | Durable home for connection, providers, folders, disconnect and later approved capabilities |
+| Progressive computer setup | Expected | Machines and first use | Setup begins from the dedicated destination and can be resumed later |
 | Inline persistent machine attention state | Expected | Where Chat needs the machine | Must contain a next action |
 | Disconnect confirmation | Expected | US2 computer action | Names the effect on active work and reconnection |
 | Generic dashboard | Not building | — | Conversation remains the product's centre |
 | Generic Settings page | Not building in Phase 1 | — | Only approved setup and update jobs are designed |
 | Command palette | Not building | — | No proven navigation volume or owner request |
-| Full computer-management inventory | Not yet | — | Only pairing and disconnect are in US2 |
 | Appearance preferences | Not yet | — | Separate draft feature after the Phase 1 gate |
 
-The conversation list answers which conversation is open. Progressive computer setup answers
-whether this account can send work through this computer. Neither becomes top-level navigation
-without a later approved navigation design.
+The persistent product sidebar contains Chat and Machines. Chat remains the daily work surface;
+Machines owns the computer list, computer profiles, pairing and disconnect. A machine profile may
+gain later approved capabilities without turning Chat into a management screen.
 
 **Rule:** A new persistent surface or navigation mechanism is added here with owner approval before
 it appears in an individual feature.
@@ -198,5 +200,6 @@ it appears in an individual feature.
 - The final narrow-screen Chat structure, tracked as G-21.
 - Semantic success, warning, and information tokens. US2 may communicate connection states with
   icon, label, foreground, muted, and destructive tokens until an approved palette adds them.
-- The layout and interaction model of US2 computer setup, which must be chosen from rendered shots.
+- Whether Machines uses a separate list and profile route or a master-detail workspace, which must
+  be chosen from the current rendered shots.
 - The later account-wide appearance preferences and their Paper, Slate, Soft, and Mono expressions.

@@ -6,6 +6,18 @@ to the next screen.
 
 ---
 
+## DD-006 — Machines is a durable product destination
+
+**2026-09-13 · US2 computer pairing.** The first three shots placed pairing inside Chat, on a
+temporary setup page, or in a side panel. The owner replaced that premise: "I want a separate
+sidebar menu for machines ... and a profile for the machine. Because we are gonna enhance the
+feature later."
+
+**Why:** a computer is not just a transient prerequisite for sending a message. It is an account-
+scoped entity whose connection, providers, folders, disconnect action and later approved
+capabilities need a stable home. The persistent sidebar therefore contains Chat and Machines.
+Whether Machines uses list-to-profile navigation or master-detail remains a rendered choice.
+
 ## DD-005 — The current chat choices are the product foundation
 
 **2026-09-13 · product foundation.** The owner chose the familiar Claude Code desktop-style shell,
