@@ -239,7 +239,6 @@ Normal pushes to `main` can still deploy automatically without that permission.
 **Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
 matching origins, and automatic cleanup when its pull request closes.
 
-<<<<<<< HEAD
 ## L-18 — Administration: invite people, approve or decline access requests
 
 **Status:** parked **Raised:** 2026-09-12, owner, reviewing the account-access prototype
@@ -402,7 +401,7 @@ stay the real mailbox's, since an alias has no login of its own.
 `MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) and the design-system mock/handoff
 back to `no-reply@sparstrow.com`.
 
-## L-20 — Configure Coolify's own instance email
+## L-28 — Configure Coolify's own instance email
 
 **Status:** idea **Raised:** 2026-09-13, deploy runbook for US1's SMTP settings
 

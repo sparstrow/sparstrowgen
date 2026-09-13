@@ -1,9 +1,10 @@
 # Deploying sparstrowgen to Coolify
 
 Only a human can complete this runbook: it requires access to Coolify, DNS and
-secrets. It is written against **Coolify v4.3.18** and records what the first
-real production deployment did, including the parts where Coolify behaved
-differently from its labels.
+secrets. It is written against **Coolify v4.3.18**, updated against **v4.3.19**
+for the SMTP variables added in the first-usable-release deployment, and
+records what production deployments actually did, including the parts where
+Coolify behaved differently from its labels.
 
 Follow the seven steps in order. Each step says both **what to do** and **what
 becomes true afterwards**, so a failure can be located without guessing.
@@ -156,40 +157,98 @@ required variables are not safe to deploy until step 4.
 
 ---
 
-## 4. Enter the environment variables
+## 4. Set up mail once, then enter the environment variables
 
-Open **Environment Variables**. Coolify creates the required rows from
-`docker-compose.yaml`. Open each row using its gear icon and set it exactly as
-shown below.
+### Shared Variables, once per Coolify project
 
-| Variable | Value | Literal | Build time | Runtime |
-|---|---|---:|---:|---:|
-| `DATABASE_URL` | internal URL copied in step 2 | Yes | Off | On |
-| `WEB_ORIGIN` | `https://app.sparstrow.com` | No | Off | On |
-| `API_ORIGIN` | `https://api.sparstrow.com` | No | **On** | **On** |
-| `OWNER_EMAIL` | the address you will sign in with | No | Off | On |
-| `ALLOWED_EMAILS` | other invited addresses, comma-separated; may be empty | No | Off | On |
-| `SMTP_HOST` | the mailbox's outgoing server, e.g. `smtp.hostinger.com` | No | Off | On |
-| `SMTP_PORT` | `465` (TLS) — or `587` if the mailbox only offers STARTTLS | No | Off | On |
-| `SMTP_USERNAME` | the sending mailbox's full address | No | Off | On |
-| `SMTP_PASSWORD` | that mailbox's password | Yes | Off | On |
-| `MAIL_FROM` | `sparstrowgen <agent@sparstrow.com>` | No | Off | On |
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME` and `SMTP_PASSWORD` are the same
+Hostinger mailbox login regardless of which environment (production, staging)
+or which project uses it, so they don't belong copied into every application
+separately. Coolify's **Shared Variables** feature exists for exactly this:
 
-No dedicated sending mailbox is needed — `agent@sparstrow.com` (the same mailbox
-already used as `OWNER_EMAIL`) sends its own confirmation and reset mail, so
-`SMTP_USERNAME` and the address inside `MAIL_FROM` are that same mailbox. Read
-its outgoing (SMTP) server and port from that mailbox's configuration page in
-Hostinger rather than copying the example above. Mail sent through the
-domain's own mailbox is what keeps confirmation links out of spam folders.
+1. Open the **sparstrowgen project** (not an individual application) →
+   **Shared Variables**.
+2. **+ Add Variable** four times, with these exact names — the name is what a
+   reference later points at, so it must match verbatim:
 
-**Upgrading an existing deployment:** set these seven before the release that
-introduced them reaches `main`. Compose refuses to deploy with any required one
-empty, and the server refuses to start with incomplete mail settings — both name
-the variable and never its value.
+   | Name | Value |
+   |---|---|
+   | `SMTP_HOST` | the mailbox's outgoing server, from its Hostinger configuration page, e.g. `smtp.hostinger.com` |
+   | `SMTP_PORT` | `465` (TLS) — or `587` if the mailbox only offers STARTTLS |
+   | `SMTP_USERNAME` | the sending mailbox's full address, e.g. `agent@sparstrow.com` |
+   | `SMTP_PASSWORD` | that mailbox's real password |
 
-`Literal` means Coolify keeps `$` characters unchanged. It is important for a
-database password or token that happens to contain one. No password hash is
-needed: the first browser account is created in step 6.
+   Value type stays **Single line** for all four.
+
+Project scope (rather than Team) was chosen because sparstrowgen's production
+and staging environments both live inside this one project and both want the
+same mailbox; a project deployed for someone else would get its own Shared
+Variables rather than reusing these.
+
+No dedicated sending mailbox is needed — the mailbox already used as
+`OWNER_EMAIL` sends its own confirmation and reset mail too. Mail sent through
+the domain's own mailbox is what keeps confirmation links out of spam folders.
+
+### The application's own environment variables
+
+Open the **application** (not the project) → **Environment Variables**.
+Coolify creates the required rows from `docker-compose.yaml`. Open each row's
+gear icon and set it exactly as shown below.
+
+| Variable | Value | Interpolation | Build time | Runtime |
+|---|---|---|---|---|
+| `DATABASE_URL` | internal URL copied in step 2 | Don't interpolate | Not available during build | Available in the container |
+| `WEB_ORIGIN` | `https://app.sparstrow.com` | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `API_ORIGIN` | `https://api.sparstrow.com` | Interpolate $VARIABLES | **Available during build** | **Available in the container** |
+| `OWNER_EMAIL` | the address of the account this deployment already belongs to — see the warning below, not a free choice | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `ALLOWED_EMAILS` | other invited addresses, comma-separated — or leave the **value genuinely empty**, not a description of what goes there | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `SMTP_HOST` | `{{project.SMTP_HOST}}` | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `SMTP_PORT` | `{{project.SMTP_PORT}}` | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `SMTP_USERNAME` | `{{project.SMTP_USERNAME}}` | Interpolate $VARIABLES | Not available during build | Available in the container |
+| `SMTP_PASSWORD` | `{{project.SMTP_PASSWORD}}` | Don't interpolate if the real password contains a `$`, otherwise either | Not available during build | Available in the container |
+| `MAIL_FROM` | `sparstrowgen <agent@sparstrow.com>` | Interpolate $VARIABLES | Not available during build | Available in the container |
+
+`{{project.NAME}}` is Coolify's own reference syntax, resolved by Coolify
+before the container starts — it has no meaning to plain Docker Compose, so it
+only works typed into this dashboard field, never into `docker-compose.yaml`
+itself. That's deliberate, not a limitation: the compose file is committed to
+git and must never contain a real secret or even a hint of which Coolify
+project holds one: it only declares that the service *needs* a variable called
+`SMTP_HOST`. Where that value actually comes from is decided here, per
+deployment, outside version control. `MAIL_FROM` is a literal value rather
+than a reference on purpose — a different project sharing this same mailbox
+login would still want its own sender line.
+
+**Two mistakes made during the first attempt at this step, worth avoiding:**
+
+- A browser password manager can autofill the **Comment** field (and
+  potentially **Value**) on this dialog the same way it autofills a login
+  form, because Value is masked like a password field. Check what's actually
+  in Value before saving — don't trust that it's what you meant to type.
+- The description column of a table like the one above is not the value.
+  Typing "comma-separated invited addresses" literally into `ALLOWED_EMAILS`
+  produces `not an email address in OWNER_EMAIL or ALLOWED_EMAILS
+  value="comma-separated invited addresses"` in the server log, in a
+  restart loop. Leave the field **empty**, or put real addresses in it.
+
+**Warning on `OWNER_EMAIL`:** this is a lookup key, not a preference. On an
+**existing** deployment it must match the email address that account was
+already created with — the migration hands existing conversations to whichever
+account is already in that production database, and the daemon's connection is
+authorized against the same lookup; a mismatch orphans the real account and
+creates an empty second one under the new address. On a **fresh** database
+(nobody has registered yet) any address you control is fine — the server logs
+`the owner account does not exist yet — create it at /register with
+OWNER_EMAIL owner=<address>` rather than refusing to start, which is the
+signal that this is a first-time setup, not a mistake.
+
+**Upgrading an existing deployment:** set the seven mail-and-account variables
+before the release that introduced them reaches `main`. Compose refuses to
+deploy with any required one empty, and the server refuses to start with
+incomplete mail settings — both name the variable and never its value.
+
+No password hash is needed for `OWNER_EMAIL`: the first browser account is
+created in step 6.
 
 ### Build time versus runtime
 
@@ -197,13 +256,14 @@ needed: the first browser account is created in step 6.
   API address is compiled into the Next.js bundle, so changing `API_ORIGIN`
   requires a rebuild.
 - **Runtime** supplies a value while Compose evaluates and starts the deployed
-  services. The server needs its database URL and allowed browser origin then.
+  services. The server needs its database URL, mail settings and allowed browser
+  origin then.
 
-Although `API_ORIGIN` is used as a build argument, Coolify v4.3.18 also needs
-its Runtime switch on. Coolify runs `docker compose pull` with the runtime
-`.env` first, and Compose interpolates the build argument during that command.
-With Runtime off, deployment fails with `API_ORIGIN is missing a value` before
-the build begins. Keeping Runtime on does not place it in the running web
+Although `API_ORIGIN` is used as a build argument, Coolify also needs its
+Runtime switch on. Coolify runs `docker compose pull` with the runtime `.env`
+first, and Compose interpolates the build argument during that command. With
+Runtime off, deployment fails with `API_ORIGIN is missing a value` before the
+build begins. Keeping Runtime on does not place it in the running web
 container; the Compose file only maps it to a build argument.
 
 ### Required-variable trap in v4.3.18
@@ -273,6 +333,17 @@ there is still no owner account and no computer connected.
 ---
 
 ## 6. Create the owner account
+
+A clean start on a fresh database logs exactly this, and nothing else, from
+`server`:
+
+```text
+the owner account does not exist yet — create it at /register with OWNER_EMAIL owner=<address>
+server listening addr=0.0.0.0:8080
+```
+
+That first line is not an error — it's confirmation the server read
+`OWNER_EMAIL` correctly and is simply waiting for you to register it.
 
 Open `https://app.sparstrow.com/register` and enter the address you set as
 `OWNER_EMAIL`. The page says **Check your email**, and the email arrives from
@@ -394,6 +465,8 @@ message (`Unverified.md` U-10), and publishing a deliberately broken update to w
 | App loads but its requests fail | Confirm the browser is at exactly `https://app.sparstrow.com` and `WEB_ORIGIN` matches it. |
 | Sign-in succeeds, then the next request says signed out | Verify HTTPS and `SESSION_SECURE=true`; the `__Host-` cookie requires both. |
 | The server exits at start naming `SMTP_...`, `MAIL_FROM` or `OWNER_EMAIL` | That setting is missing or malformed. The log names the variable, never its value. |
+| `not an email address in OWNER_EMAIL or ALLOWED_EMAILS value="..."` | The value shown is literally what's stored — most often a table's description text pasted in instead of a real address, or instead of an empty value. Fix the value, not the code. |
+| `the owner account does not exist yet — create it at /register...` | Not an error. The server started correctly; nobody has registered `OWNER_EMAIL` yet. Continue to step 6. |
 | No confirmation or reset email arrives | Check spam, then read the `server` log for `could not send`; the error is the mail server's answer. |
 | The daemon is refused: the owner account does not exist yet | Register `OWNER_EMAIL` at `/register` (step 6), then start the daemon again. |
 | Somebody uninvited says they signed up | They sent an access request and you were emailed about it. Add the address to `ALLOWED_EMAILS` to approve. |
