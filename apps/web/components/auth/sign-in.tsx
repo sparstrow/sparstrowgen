@@ -4,15 +4,13 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSignIn } from "@/lib/queries";
-import { AuthShell, Field, FormError, SubmitButton } from "./shell";
+import { AuthLinks, AuthShell, Field, FormError, SubmitButton, TextLink } from "./shell";
 
 /* The way in, for somebody who already has an account here.
  *
- * No "forgot password" link, because there is nobody to email: this deployment
- * has one account and no mail server, and a link that could not work would be
- * worse than not offering one. What actually recovers a lost password is
- * documented where a locked-out owner can still read it
- * (docs/runbooks/deploy.md), not behind the login he cannot get through.
+ * Under the form: forgot password, and create an account. Both lead to pages
+ * that are still on mock data until the account-access endpoints exist
+ * (lib/auth.mock.ts).
  *
  * The wording never distinguishes a wrong password from an email with no
  * account — the server sends one message for both, and telling them apart tells
@@ -35,7 +33,7 @@ export function SignIn() {
   return (
     <AuthShell
       title="Sign in"
-      footer="This signs you in to the machine that runs your agents. Sessions last a week, and signing out ends them everywhere."
+      footer="Sessions last a week. Signing out everywhere ends them on every device."
     >
       <form
         onSubmit={(e) => {
@@ -77,6 +75,11 @@ export function SignIn() {
           Sign in
         </SubmitButton>
       </form>
+
+      <AuthLinks>
+        <TextLink href="/forgot">Forgot your password?</TextLink>
+        <TextLink href="/register">Create an account</TextLink>
+      </AuthLinks>
     </AuthShell>
   );
 }

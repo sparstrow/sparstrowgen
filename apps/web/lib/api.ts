@@ -85,6 +85,44 @@ export type Session = {
   email?: string;
 };
 
+/* Account access (US1): the contract the Go endpoints will serve.
+   lib/auth.mock.ts implements it until they exist; see
+   design-system/designs/Accounts/account-access.handoff.md for the data contract. */
+
+/** What registering an address led to. The server decides; the screen reports.
+ *  An address that already has an account answers "check-email" too — the email
+ *  says it exists — so the response never reveals which addresses are
+ *  registered. `email` is the address as the server normalised it. */
+export type RegisterResult = {
+  outcome: "check-email" | "request-sent";
+  email: string;
+};
+
+export type EmailLinkKind = "verify" | "reset";
+
+/** What a link from an email is still good for, asked before showing a form.
+ *  An unknown token is reported as expired rather than as its own case. */
+export type EmailLink =
+  | { usable: true; email: string }
+  | {
+      usable: false;
+      reason: "expired" | "used" | "superseded";
+      /** For a used confirmation link: the account it created exists. */
+      accountReady: boolean;
+    };
+
+export type AccountAccess = {
+  register(email: string): Promise<RegisterResult>;
+  resendConfirmation(email: string): Promise<void>;
+  emailLink(kind: EmailLinkKind, token: string): Promise<EmailLink>;
+  /** Resolves with the new account's email; the real endpoint also starts a session. */
+  completeRegistration(token: string, password: string): Promise<string>;
+  /** Resolves with the normalised address whether or not it has an account. */
+  requestPasswordReset(email: string): Promise<string>;
+  /** Resolves with the account's email; the real endpoint ends every other session. */
+  completePasswordReset(token: string, password: string): Promise<string>;
+};
+
 export const api = {
   /** What this browser is allowed to see, asked before anything else.
    *

@@ -312,3 +312,18 @@ account the owner's transcripts and the ability to start agents on the owner's c
 - **Clears when:** conversations carry an owner (existing rows assigned to the current account),
   every query and hub event is scoped to it, and turns route only to a computer paired to the same
   account. This must ship before or with ordinary registration, never after.
+
+## G-28 — Account-access pages are wired to mock data on this branch
+
+**Kind:** caveat
+**Raised:** 2026-09-12, wiring the approved US1 design into `apps/web`
+
+`/register`, `/verify`, `/forgot` and `/reset` run against `apps/web/lib/auth.mock.ts`, which keeps
+fake accounts, tokens and requests in the browser's localStorage and shows "emails" as toasts. It is
+the design-confirmation step, not a feature: nothing is created on the server, and finishing
+registration or a reset returns to sign in with a note instead of starting a session.
+
+- **If wrong:** merged to `main` as is, production would offer a sign-up that appears to work and
+  creates nothing, and a reset page that changes no password.
+- **Clears when:** the Go account-access endpoints exist, `queries.ts` imports the real client
+  instead of the mock, and no shipped route imports `auth.mock.ts`.

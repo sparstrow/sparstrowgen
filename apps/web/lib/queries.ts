@@ -8,7 +8,10 @@ import {
 } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { api, connect, type ServerEvent, type Session } from "./api";
+import { api, connect, type EmailLinkKind, type ServerEvent, type Session } from "./api";
+// MOCK until the account-access endpoints exist. Swapping this one import for
+// the real client is the backend step (design-system/designs/Accounts/account-access.handoff.md).
+import { accountAccessMock as accountAccess } from "./auth.mock";
 import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-types";
 
 /* Every read of server state goes through here, and every realtime event
@@ -19,6 +22,7 @@ export const keys = {
   providers: ["providers"] as const,
   conversations: (q: string) => ["conversations", q] as const,
   conversation: (id: string) => ["conversation", id] as const,
+  emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
 };
 
 /** What the app is right now: unclaimed, signed out, or signed in.
@@ -77,6 +81,54 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (input: { current: string; next: string }) =>
       api.changePassword(input.current, input.next),
+  });
+}
+
+export function useRegister() {
+  return useMutation({ mutationFn: (email: string) => accountAccess.register(email) });
+}
+
+export function useResendConfirmation() {
+  return useMutation({ mutationFn: (email: string) => accountAccess.resendConfirmation(email) });
+}
+
+/** Whether an emailed link still works. Asked once per visit and never retried:
+ *  "expired" is an answer, not a blip. */
+export function useEmailLink(kind: EmailLinkKind, token: string) {
+  return useQuery({
+    queryKey: keys.emailLink(kind, token),
+    queryFn: () => accountAccess.emailLink(kind, token),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/** Finishing an account from its confirmation link.
+ *
+ *  A failure re-asks the server about the link, so a link that died while the
+ *  form was open (a newer email sent from another tab) turns the page into the
+ *  explanation instead of leaving a form that can never succeed. */
+export function useCompleteRegistration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { token: string; password: string }) =>
+      accountAccess.completeRegistration(input.token, input.password),
+    onError: (_err, { token }) =>
+      qc.invalidateQueries({ queryKey: keys.emailLink("verify", token) }),
+  });
+}
+
+export function useRequestPasswordReset() {
+  return useMutation({ mutationFn: (email: string) => accountAccess.requestPasswordReset(email) });
+}
+
+export function useCompletePasswordReset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { token: string; password: string }) =>
+      accountAccess.completePasswordReset(input.token, input.password),
+    onError: (_err, { token }) =>
+      qc.invalidateQueries({ queryKey: keys.emailLink("reset", token) }),
   });
 }
 
