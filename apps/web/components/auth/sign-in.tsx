@@ -9,8 +9,7 @@ import { AuthLinks, AuthShell, Field, FormError, SubmitButton, TextLink } from "
 /* The way in, for somebody who already has an account here.
  *
  * Under the form: forgot password, and create an account. Both lead to pages
- * that are still on mock data until the account-access endpoints exist
- * (lib/auth.mock.ts).
+ * served by server/internal/api/accounts.go.
  *
  * The wording never distinguishes a wrong password from an email with no
  * account — the server sends one message for both, and telling them apart tells

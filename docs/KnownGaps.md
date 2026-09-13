@@ -294,36 +294,36 @@ the staging application exercises them on v4.3.19.
   v4.3.19, each affected runbook step is checked against its actual behavior,
   and the runbook version note is updated.
 
-## G-27 — Conversations and the daemon connection belong to the deployment, not to an account
+## G-29 — Real email delivery through SMTP has not been proved
+
+**Kind:** unproved
+**Raised:** 2026-09-12, building US1's backend
+
+Everything up to the mail server is verified: links are issued, stored hashed, superseded and spent
+once (store and API tests), the message is composed as valid RFC 5322 with the link intact after
+quoted-printable decoding (`internal/mail` tests), and the whole journey was walked in the browser
+with `MAIL_TRANSPORT=log`. What has never happened is `mail.SMTP.Send` talking to a real server —
+TLS on 465 or STARTTLS on 587, PLAIN authentication, and the message landing in an inbox rather than
+spam. No SMTP credentials exist on this machine, and an agent must not type a mailbox password.
+
+- **If wrong:** nobody can create an account or reset a password on a deployment; the page says
+  "the email could not be sent", and the server log carries the mail server's own error.
+- **Clears when:** SMTP settings for a mailbox on `sparstrow.com` are set (locally or on staging),
+  a registration for `agent@sparstrow.com` is submitted, and the email is read from that inbox
+  through the Hostinger mailbox API and its link completes the account.
+
+## G-30 — Behind the proxy, "per client" throttling is per proxy
 
 **Kind:** caveat
-**Raised:** 2026-09-12, mapping the first usable release against the phase 2 exit gate
+**Raised:** 2026-09-12, adding access requests
 
-`conversations` has no `user_id` (`server/migrations/00001_initial_schema.sql`), and the hub holds
-exactly one daemon connection and broadcasts events to every signed-in browser
-(`server/internal/hub/hub.go:38`). That is correct today only because `users_only_one`
-(`00008_one_account_only.sql`) makes a second account impossible.
+`clientIP` deliberately reads `RemoteAddr` rather than a spoofable `X-Forwarded-For`, so on Coolify
+every visitor is the proxy's address. Sign-in and access requests have separate counters, which
+keeps a stranger flooding requests from locking the owner's sign-in — but a flood of requests does
+slow down other people's requests, and repeated wrong passwords from anyone slow down everyone's
+sign-in. Per-address spacing of emails is unaffected: it is keyed by recipient.
 
-The approved first usable release removes that boundary. Registration alone would give a second
-account the owner's transcripts and the ability to start agents on the owner's computer.
-
-- **If wrong:** not a guess. Dropping `users_only_one` without ownership on conversations and a
-  per-account daemon route is a data leak and remote code execution on the owner's machine.
-- **Clears when:** conversations carry an owner (existing rows assigned to the current account),
-  every query and hub event is scoped to it, and turns route only to a computer paired to the same
-  account. This must ship before or with ordinary registration, never after.
-
-## G-28 — Account-access pages are wired to mock data on this branch
-
-**Kind:** caveat
-**Raised:** 2026-09-12, wiring the approved US1 design into `apps/web`
-
-`/register`, `/verify`, `/forgot` and `/reset` run against `apps/web/lib/auth.mock.ts`, which keeps
-fake accounts, tokens and requests in the browser's localStorage and shows "emails" as toasts. It is
-the design-confirmation step, not a feature: nothing is created on the server, and finishing
-registration or a reset returns to sign in with a note instead of starting a session.
-
-- **If wrong:** merged to `main` as is, production would offer a sign-up that appears to work and
-  creates nothing, and a reset page that changes no password.
-- **Clears when:** the Go account-access endpoints exist, `queries.ts` imports the real client
-  instead of the mock, and no shipped route imports `auth.mock.ts`.
+- **If wrong:** at invitation-only scale, a nuisance rather than an outage: "too many attempts —
+  try again in Ns" for a real person while someone else misbehaves.
+- **Clears when:** the proxy's forwarded address is trusted only from the proxy's own IP (Coolify's
+  Traefik network), and both throttles key on that.

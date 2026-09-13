@@ -7,7 +7,6 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { buttonVariants } from "@/components/ui/button";
-import { MOCK_LANDING_NOTE } from "@/lib/auth.mock";
 import type { EmailLink, EmailLinkKind } from "@/lib/api";
 import {
   useCompletePasswordReset,
@@ -59,8 +58,8 @@ export function ConfirmEmail({ token }: { token: string }) {
             complete.mutate(
               { token, password },
               {
-                onSuccess: (created) => {
-                  toast.success(`Account created for ${created}`, { description: MOCK_LANDING_NOTE });
+                onSuccess: () => {
+                  toast.success("Your account is ready.");
                   router.replace("/");
                 },
               },
@@ -94,9 +93,9 @@ export function ResetPassword({ token }: { token: string }) {
             complete.mutate(
               { token, password },
               {
-                onSuccess: (changed) => {
-                  toast.success(`Password changed for ${changed}`, {
-                    description: `Every other browser signed in to this account has been signed out. ${MOCK_LANDING_NOTE}`,
+                onSuccess: () => {
+                  toast.success("Password changed", {
+                    description: "Every other browser signed in to this account has been signed out.",
                   });
                   router.replace("/");
                 },

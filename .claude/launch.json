@@ -9,6 +9,33 @@
       "autoPort": true
     },
     {
+      "name": "api-us1",
+      "runtimeExecutable": "go",
+      "runtimeArgs": ["-C", "server", "run", "./cmd/server"],
+      "port": 8317,
+      "autoPort": false,
+      "env": {
+        "ADDR": ":8317",
+        "DATABASE_URL": "postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen_us1?sslmode=disable",
+        "DAEMON_TOKEN": "dev-daemon-token-not-a-secret-0123456789",
+        "WEB_ORIGIN": "http://localhost:3317",
+        "SESSION_SECURE": "false",
+        "OWNER_EMAIL": "agent@sparstrow.com",
+        "ALLOWED_EMAILS": "priya.nair@northwindlogistics.com",
+        "MAIL_TRANSPORT": "log"
+      }
+    },
+    {
+      "name": "web-us1",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "web", "exec", "next", "dev", "-p", "3317"],
+      "port": 3317,
+      "autoPort": false,
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8317"
+      }
+    },
+    {
       "name": "design-system",
       "runtimeExecutable": "node",
       "runtimeArgs": ["scripts/serve-design-system.mjs", "4173"],

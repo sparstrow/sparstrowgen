@@ -205,7 +205,7 @@ func TestTheDaemonSocketRefusesAnythingWithoutTheToken(t *testing.T) {
 			t.Errorf("header %v was refused with %v, want a 401", header, res)
 		}
 	}
-	if r.api.hub.DaemonOnline() {
+	if r.api.hub.DaemonOnline(r.userID) {
 		t.Error("a refused connection still registered as the owner's machine")
 	}
 }

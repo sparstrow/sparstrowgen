@@ -8,10 +8,14 @@ import {
 } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { api, connect, type EmailLinkKind, type ServerEvent, type Session } from "./api";
-// MOCK until the account-access endpoints exist. Swapping this one import for
-// the real client is the backend step (design-system/designs/Accounts/account-access.handoff.md).
-import { accountAccessMock as accountAccess } from "./auth.mock";
+import {
+  accountAccess,
+  api,
+  connect,
+  type EmailLinkKind,
+  type ServerEvent,
+  type Session,
+} from "./api";
 import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-types";
 
 /* Every read of server state goes through here, and every realtime event
@@ -25,7 +29,7 @@ export const keys = {
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
 };
 
-/** What the app is right now: unclaimed, signed out, or signed in.
+/** Whether this browser is signed in, and as whom.
  *
  *  Asked once before anything else, so the app shows the right door rather than
  *  a chat surface whose every request fails. Not retried: "not signed in" is an
@@ -48,18 +52,7 @@ export function useSession() {
 function useSessionWriter() {
   const qc = useQueryClient();
   return (email: string) =>
-    qc.setQueryData<Session>(keys.session, { claimed: true, signedIn: true, email });
-}
-
-/** Claiming a fresh deployment. Possible exactly once, and the server is what
- *  enforces that — this only draws the door. */
-export function useSignUp() {
-  const signedIn = useSessionWriter();
-  return useMutation({
-    mutationFn: (input: { setupCode: string; email: string; password: string }) =>
-      api.signUp(input),
-    onSuccess: (email) => signedIn(email),
-  });
+    qc.setQueryData<Session>(keys.session, { signedIn: true, email });
 }
 
 export function useSignIn() {
@@ -110,9 +103,13 @@ export function useEmailLink(kind: EmailLinkKind, token: string) {
  *  explanation instead of leaving a form that can never succeed. */
 export function useCompleteRegistration() {
   const qc = useQueryClient();
+  const signedIn = useSessionWriter();
   return useMutation({
     mutationFn: (input: { token: string; password: string }) =>
       accountAccess.completeRegistration(input.token, input.password),
+    // The response carried the new session's cookie, so the answer to "who is
+    // this browser" is already known.
+    onSuccess: (email) => signedIn(email),
     onError: (_err, { token }) =>
       qc.invalidateQueries({ queryKey: keys.emailLink("verify", token) }),
   });
@@ -124,9 +121,11 @@ export function useRequestPasswordReset() {
 
 export function useCompletePasswordReset() {
   const qc = useQueryClient();
+  const signedIn = useSessionWriter();
   return useMutation({
     mutationFn: (input: { token: string; password: string }) =>
       accountAccess.completePasswordReset(input.token, input.password),
+    onSuccess: (email) => signedIn(email),
     onError: (_err, { token }) =>
       qc.invalidateQueries({ queryKey: keys.emailLink("reset", token) }),
   });
@@ -164,12 +163,7 @@ export function useSignOut() {
       // The request succeeds, the cookie is gone, and the screen sits there
       // showing a conversation the server would now refuse to hand over.
       //
-      // `claimed` stays true: signing out does not un-create the account, and
-      // saying otherwise would offer the sign-up form to somebody who has one.
-      qc.setQueryData<Session>(keys.session, (prev) => ({
-        claimed: prev?.claimed ?? true,
-        signedIn: false,
-      }));
+      qc.setQueryData<Session>(keys.session, { signedIn: false });
       // Everything else was read with a session that no longer exists, so none
       // of it may stay behind the login form.
       qc.removeQueries({

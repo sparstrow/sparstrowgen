@@ -12,7 +12,7 @@ import (
 
 // errDaemonOffline is a real outcome, not an internal error. Everything already
 // said stays readable when the machine is unreachable; only sending something
-// new is impossible, and the surface must say so before the owner types rather
+// new is impossible, and the surface must say so before the person types rather
 // than after.
 var errDaemonOffline = errors.New("your machine is unreachable, so nothing new can be sent")
 
@@ -24,10 +24,11 @@ var errTurnNotRunning = errors.New("that turn has already finished")
 // when the daemon disconnected. Phrased as what happened rather than as a fault:
 // a laptop closing mid-answer is ordinary, and the turn can simply be sent
 // again.
-// Deliberately one clause. The surface already adds "what arrived before it
-// stopped is kept above" under every failure, and saying it here too printed
-// the same reassurance twice in one box.
 var errMachineWentAway = errors.New("your machine disconnected before this turn finished")
+
+// errNoOwnerAccount refuses the shared-token daemon before the account it works
+// for exists. Nothing it did could be shown to anybody.
+var errNoOwnerAccount = errors.New("the owner account does not exist yet — create it, then restart the daemon")
 
 func defaultFolder() string {
 	if wd, err := os.Getwd(); err == nil {
@@ -40,8 +41,8 @@ func (a *API) browserSocket(w http.ResponseWriter, r *http.Request) {
 	// Behind requireSession, so this is always present. Registered WITH the
 	// socket rather than merely checked before it: a websocket is authenticated
 	// once, at the handshake, and then lives as long as the tab does — so the
-	// hub has to know whose it is in order to close it when that session ends
-	// (docs/Decisions.md D-030).
+	// hub has to know whose it is, both to close it when that session ends
+	// (docs/Decisions.md D-030) and to send it only that account's events.
 	user, token := userFrom(r.Context())
 
 	up := a.upgrader()
@@ -71,20 +72,35 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errors.New("this machine is not authorised"), http.StatusUnauthorized)
 		return
 	}
+
+	// The shared token proves "the owner's machine", so this machine works for
+	// the owner's account. Pairing (US2) replaces this with a credential per
+	// computer that names its own account.
+	owner, exists, err := a.store.UserByEmail(r.Context(), a.cfg.OwnerEmail)
+	if err != nil {
+		a.fail(w, errors.New("could not reach the database"), http.StatusServiceUnavailable)
+		return
+	}
+	if !exists {
+		a.fail(w, errNoOwnerAccount, http.StatusConflict)
+		return
+	}
+
 	up := a.upgrader()
 	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	a.log.Info("daemon connected", "remote", r.RemoteAddr)
-	a.hub.SetDaemon(conn)
+	a.log.Info("daemon connected", "remote", r.RemoteAddr, "account", owner.Email)
+	a.hub.SetDaemon(owner.ID, conn)
 	defer func() {
-		a.log.Info("daemon disconnected")
-		// Only if this socket was still the current daemon. One that has already
-		// reconnected has replaced it, and abandoning turns then would kill the
-		// new connection's work on the strength of the old one's teardown.
-		if a.hub.ClearDaemon(conn) {
-			a.abandonTurns(errMachineWentAway.Error())
+		a.log.Info("daemon disconnected", "account", owner.Email)
+		// Only if this socket was still the account's current machine. One that
+		// has already reconnected has replaced it, and abandoning turns then
+		// would kill the new connection's work on the strength of the old one's
+		// teardown.
+		if a.hub.ClearDaemon(owner.ID, conn) {
+			a.abandonTurns(owner.ID, errMachineWentAway.Error())
 		}
 	}()
 
@@ -100,9 +116,9 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		// A reply to something the server asked (a directory listing) belongs to
 		// whoever is waiting for it, not to the event handling below.
-		if a.hub.Deliver(msg) {
+		if a.hub.Deliver(owner.ID, msg) {
 			continue
 		}
-		a.handleDaemonMessage(msg)
+		a.handleDaemonMessage(owner.ID, msg)
 	}
 }
