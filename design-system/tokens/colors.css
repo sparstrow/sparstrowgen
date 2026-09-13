@@ -1,9 +1,5 @@
 /* MIRRORED from apps/web/app/globals.css — do not change values here.
- *
- * There is no DESIGN.md or design-system manifest yet, so prototypes build on
- * the tokens the live app already ships rather than inventing a palette. When
- * the design-system skill runs, it takes ownership of this file and records a
- * fingerprint of the source so drift can be checked.
+ * The source path and fingerprint are recorded in ../system.json.
  */
 :root {
   --radius: 0.625rem;
@@ -31,6 +27,19 @@
   --provider-claude: oklch(0.7 0.128 45);
   --provider-codex: oklch(0.82 0.012 250);
   --provider-agy: oklch(0.7 0.115 255);
+
+  --capacity-out: oklch(0.63 0.2 25);
+  --capacity-unknown: oklch(0.55 0.01 250);
+
+  --mine: oklch(0.93 0.02 255);
+  --mine-foreground: oklch(0.2 0.02 255);
+
+  --code-keyword: oklch(0.52 0.19 300);
+  --code-string: oklch(0.5 0.14 145);
+  --code-number: oklch(0.55 0.15 40);
+  --code-comment: oklch(0.6 0.02 250);
+  --code-function: oklch(0.5 0.16 255);
+  --code-type: oklch(0.52 0.13 195);
 }
 
 .dark {
@@ -57,4 +66,17 @@
   --provider-claude: oklch(0.74 0.13 45);
   --provider-codex: oklch(0.86 0.01 250);
   --provider-agy: oklch(0.74 0.12 255);
+
+  --capacity-out: oklch(0.68 0.2 25);
+  --capacity-unknown: oklch(0.48 0.01 250);
+
+  --mine: oklch(0.3 0.028 258);
+  --mine-foreground: oklch(0.96 0.003 260);
+
+  --code-keyword: oklch(0.75 0.15 300);
+  --code-string: oklch(0.78 0.13 145);
+  --code-number: oklch(0.8 0.12 60);
+  --code-comment: oklch(0.58 0.015 250);
+  --code-function: oklch(0.76 0.12 255);
+  --code-type: oklch(0.78 0.1 195);
 }

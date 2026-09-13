@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Typography</title>
+<meta name="description" content="Typography — foundation">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html { color-scheme: dark; }
+  body { margin:0; padding:var(--space-5,20px); background:var(--card,#161618); color:var(--foreground,#f4f4f5);
+         font-family:var(--font-sans,system-ui); font-size:13px; }
+  .row { display:grid; grid-template-columns:110px 1fr; gap:var(--space-4,16px); align-items:center;
+         padding:var(--space-4,16px) 0; border-bottom:1px solid var(--border,#26262b); }
+  .row:last-child { border-bottom:0; }
+  .lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted-fg,#8a8a93); }
+  .specimens { display:flex; flex-wrap:wrap; gap:var(--space-3,12px); align-items:center; }
+  .stack { display:grid; gap:8px; width:min(100%, 560px); }
+  .title { font-size:var(--text-title); font-weight:500; letter-spacing:-.015em; }
+  .surface { font-size:var(--text-ui); font-weight:500; }
+  .body-copy { font-size:var(--text-body); line-height:1.65; }
+  .meta { font-size:var(--text-meta); color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
+  .literal { font:var(--text-ui)/1.5 var(--font-mono); }
+</style></head>
+<body class="dark">
+<div class="row"><div class="lbl">Product</div><div class="specimens"><div class="stack">
+  <div class="title">Connect this computer</div>
+  <div class="surface">Waiting for approval</div>
+  <div class="body-copy">sparstrowgen needs a small local component to send work to the coding agents installed here.</div>
+  <div class="meta">DESKTOP-RIVER · last seen 14 seconds ago</div>
+</div></div></div>
+<div class="row"><div class="lbl">Literal</div><div class="specimens"><div class="literal">C:\work\sparstrowgen · 1,842 tokens · $0.074</div></div></div>
+</body></html>

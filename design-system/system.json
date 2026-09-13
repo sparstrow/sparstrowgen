@@ -1,0 +1,99 @@
+{
+  "name": "sparstrowgen",
+  "mode": "mirror",
+  "version": 1,
+  "theme": {
+    "default": "dark",
+    "toggleAttr": "data-theme"
+  },
+  "sources": {
+    "tokens": [
+      "apps/web/app/globals.css"
+    ],
+    "components": [
+      "apps/web/components/ui"
+    ]
+  },
+  "tokens": {
+    "--radius": "0.625rem",
+    "--background": "oklch(0.155 0.006 260)",
+    "--foreground": "oklch(0.95 0.003 260)",
+    "--card": "oklch(0.195 0.007 260)",
+    "--card-foreground": "oklch(0.95 0.003 260)",
+    "--popover": "oklch(0.215 0.008 260)",
+    "--popover-foreground": "oklch(0.95 0.003 260)",
+    "--primary": "oklch(0.92 0.003 260)",
+    "--primary-foreground": "oklch(0.205 0.007 260)",
+    "--secondary": "oklch(0.25 0.008 260)",
+    "--secondary-foreground": "oklch(0.95 0.003 260)",
+    "--muted": "oklch(0.25 0.008 260)",
+    "--muted-foreground": "oklch(0.68 0.01 260)",
+    "--accent": "oklch(0.3 0.01 260)",
+    "--accent-foreground": "oklch(0.95 0.003 260)",
+    "--destructive": "oklch(0.68 0.19 22)",
+    "--destructive-foreground": "oklch(0.98 0 0)",
+    "--border": "oklch(1 0 0 / 10%)",
+    "--input": "oklch(1 0 0 / 14%)",
+    "--ring": "oklch(0.55 0.01 260)",
+    "--provider-claude": "oklch(0.74 0.13 45)",
+    "--provider-codex": "oklch(0.86 0.01 250)",
+    "--provider-agy": "oklch(0.74 0.12 255)",
+    "--capacity-out": "oklch(0.68 0.2 25)",
+    "--capacity-unknown": "oklch(0.48 0.01 250)",
+    "--mine": "oklch(0.3 0.028 258)",
+    "--mine-foreground": "oklch(0.96 0.003 260)",
+    "--code-keyword": "oklch(0.75 0.15 300)",
+    "--code-string": "oklch(0.78 0.13 145)",
+    "--code-number": "oklch(0.8 0.12 60)",
+    "--code-comment": "oklch(0.58 0.015 250)",
+    "--code-function": "oklch(0.76 0.12 255)",
+    "--code-type": "oklch(0.78 0.1 195)",
+    "--radius-sm": "calc(var(--radius) - 4px)",
+    "--radius-md": "calc(var(--radius) - 2px)",
+    "--radius-lg": "var(--radius)",
+    "--radius-xl": "calc(var(--radius) + 4px)",
+    "--color-background": "var(--background)",
+    "--color-foreground": "var(--foreground)",
+    "--color-card": "var(--card)",
+    "--color-card-foreground": "var(--card-foreground)",
+    "--color-popover": "var(--popover)",
+    "--color-popover-foreground": "var(--popover-foreground)",
+    "--color-primary": "var(--primary)",
+    "--color-primary-foreground": "var(--primary-foreground)",
+    "--color-secondary": "var(--secondary)",
+    "--color-secondary-foreground": "var(--secondary-foreground)",
+    "--color-muted": "var(--muted)",
+    "--color-muted-foreground": "var(--muted-foreground)",
+    "--color-accent": "var(--accent)",
+    "--color-accent-foreground": "var(--accent-foreground)",
+    "--color-destructive": "var(--destructive)",
+    "--color-destructive-foreground": "var(--destructive-foreground)",
+    "--color-border": "var(--border)",
+    "--color-input": "var(--input)",
+    "--color-ring": "var(--ring)",
+    "--color-provider-claude": "var(--provider-claude)",
+    "--color-provider-codex": "var(--provider-codex)",
+    "--color-provider-agy": "var(--provider-agy)",
+    "--color-capacity-out": "var(--capacity-out)",
+    "--color-capacity-unknown": "var(--capacity-unknown)",
+    "--color-mine": "var(--mine)",
+    "--color-mine-foreground": "var(--mine-foreground)",
+    "--font-sans": "var(--font-geist-sans)",
+    "--font-mono": "var(--font-geist-mono)"
+  },
+  "mirrors": [
+    {
+      "card": "components/Actions/button.card.html",
+      "source": "apps/web/components/ui/button.tsx",
+      "fingerprint": "sha256:452fdc47e27eb902"
+    },
+    {
+      "card": "components/Feedback/alert-dialog.card.html",
+      "source": "apps/web/components/ui/alert-dialog.tsx",
+      "fingerprint": "sha256:73e6d23a00809329"
+    }
+  ],
+  "created": "2026-09-13T18:39:08.162Z",
+  "lastBuild": "2026-09-13T18:42:21.995Z",
+  "cardCount": 6
+}

@@ -6,11 +6,19 @@ to the next screen.
 
 ---
 
+## DD-005 — The current chat choices are the product foundation
+
+**2026-09-13 · product foundation.** The owner chose the familiar Claude Code desktop-style shell,
+then adopted the provider-switch divider from the terminal direction and the centred agent reading
+column from the document direction. These choices now live in root `DESIGN.md`; feature directions
+may vary their local composition but do not reopen the shell, reading geometry, or restrained-color
+rules without a new rendered decision.
+
 ## DD-004 — Prototypes mirror the live app's tokens until a design system exists
 
-**2026-09-12 · all prototypes.** There is no `DESIGN.md` yet. Rather than invent a palette per
-prototype, `tokens/colors.css` copies `apps/web/app/globals.css` verbatim. When `design-brief` and
-`design-system` run, they take that file over.
+**2026-09-12 · all prototypes.** Prototypes mirror `apps/web/app/globals.css` rather than inventing
+a palette per prototype. The design system now records that source and its fingerprint in
+`system.json`; `ds.mjs check` reports drift.
 
 ## DD-003 — Email confirmation is a link only
 

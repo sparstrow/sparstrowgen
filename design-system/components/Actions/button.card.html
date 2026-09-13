@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Button</title>
+<meta name="description" content="Button — variants and states">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  html { color-scheme: dark; }
+  body { margin:0; padding:var(--space-5,20px); background:var(--card,#161618); color:var(--foreground,#f4f4f5);
+         font-family:var(--font-sans,system-ui); font-size:13px; }
+  .row { display:grid; grid-template-columns:110px 1fr; gap:var(--space-4,16px); align-items:center;
+         padding:var(--space-4,16px) 0; border-bottom:1px solid var(--border,#26262b); }
+  .row:last-child { border-bottom:0; }
+  .lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted-fg,#8a8a93); }
+  .specimens { display:flex; flex-wrap:wrap; gap:var(--space-3,12px); align-items:center; }
+  button { height:32px; padding:0 10px; border-radius:var(--radius-lg); border:1px solid transparent; font:500 var(--text-ui)/1 var(--font-sans); cursor:pointer; }
+  .default { background:var(--primary); color:var(--primary-foreground); }
+  .secondary { background:var(--secondary); color:var(--secondary-foreground); }
+  .outline { background:var(--background); color:var(--foreground); border-color:var(--input); }
+  .ghost { background:transparent; color:var(--foreground); }
+  .destructive { background:color-mix(in oklch,var(--destructive) 18%,transparent); color:var(--destructive); }
+  .focus { outline:3px solid color-mix(in oklch,var(--ring) 50%,transparent); border-color:var(--ring); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+</style></head>
+<body class="dark">
+<div class="row"><div class="lbl">Variants</div><div class="specimens">
+  <button class="default">Connect computer</button><button class="secondary">Try again</button>
+  <button class="outline">Not now</button><button class="ghost">Cancel</button><button class="destructive">Disconnect</button>
+</div></div>
+<div class="row"><div class="lbl">States</div><div class="specimens">
+  <button class="default focus">Keyboard focus</button><button class="default" disabled>Connecting…</button>
+</div></div>
+</body></html>
