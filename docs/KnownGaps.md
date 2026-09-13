@@ -294,24 +294,6 @@ the staging application exercises them on v4.3.19.
   v4.3.19, each affected runbook step is checked against its actual behavior,
   and the runbook version note is updated.
 
-## G-29 — Real email delivery through SMTP has not been proved
-
-**Kind:** unproved
-**Raised:** 2026-09-12, building US1's backend
-
-Everything up to the mail server is verified: links are issued, stored hashed, superseded and spent
-once (store and API tests), the message is composed as valid RFC 5322 with the link intact after
-quoted-printable decoding (`internal/mail` tests), and the whole journey was walked in the browser
-with `MAIL_TRANSPORT=log`. What has never happened is `mail.SMTP.Send` talking to a real server —
-TLS on 465 or STARTTLS on 587, PLAIN authentication, and the message landing in an inbox rather than
-spam. No SMTP credentials exist on this machine, and an agent must not type a mailbox password.
-
-- **If wrong:** nobody can create an account or reset a password on a deployment; the page says
-  "the email could not be sent", and the server log carries the mail server's own error.
-- **Clears when:** SMTP settings for a mailbox on `sparstrow.com` are set (locally or on staging),
-  a registration for `agent@sparstrow.com` is submitted, and the email is read from that inbox
-  through the Hostinger mailbox API and its link completes the account.
-
 ## G-30 — Behind the proxy, "per client" throttling is per proxy
 
 **Kind:** caveat
