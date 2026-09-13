@@ -401,3 +401,19 @@ stay the real mailbox's, since an alias has no login of its own.
 **Unblocks when:** the owner creates the `no-reply@sparstrow.com` alias in hPanel — then flip
 `MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) and the design-system mock/handoff
 back to `no-reply@sparstrow.com`.
+
+## L-20 — Configure Coolify's own instance email
+
+**Status:** idea **Raised:** 2026-09-13, deploy runbook for US1's SMTP settings
+
+Coolify's own Settings → Email page is unrelated to sparstrowgen's confirmation/reset mail — it's
+what Coolify uses for its own team invites and password resets, and, if turned on, for notifying
+the owner when one of his own deployments or backups fails. Right now it's disabled, so a failed
+deploy or backup is only visible by opening Coolify and looking.
+
+Filling it in costs nothing new: the same Hostinger host/port/username/password already used for
+sparstrowgen's `SMTP_*` variables work here too — this is purely an operational convenience, not
+anything sparstrowgen's code reads.
+
+**Unblocks when:** the owner wants to find out about a failed deploy or backup by email instead of
+by noticing.
