@@ -26,12 +26,12 @@ func testStore(t *testing.T) *Store {
 func newConversation(t *testing.T, s *Store) protocol.Conversation {
 	t.Helper()
 	ctx := context.Background()
-	c, err := s.Create(ctx, "D:\\test", "codex", protocol.Model{ID: "m1", Label: "M One"})
+	c, err := s.Create(ctx, storeOwner(t, s).ID, "D:\\test", "codex", protocol.Model{ID: "m1", Label: "M One"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	// Leave nothing behind: these run against the development database.
-	t.Cleanup(func() { _ = s.Delete(context.Background(), c.ID) })
+	t.Cleanup(func() { _ = s.Delete(context.Background(), storeOwner(t, s).ID, c.ID) })
 	return c
 }
 
@@ -270,7 +270,7 @@ func TestStoppedTurnIsNotAFailure(t *testing.T) {
 
 	// And it survives a reload, because that is the whole reason it is a column
 	// rather than something the client remembers.
-	reloaded, err := s.Get(ctx, c.ID)
+	reloaded, err := s.Get(ctx, storeOwner(t, s).ID, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestDroppingASessionAfterATurnIsNotUndone(t *testing.T) {
 
 	// Moving the conversation drops provider sessions, because a session built
 	// in another directory is reasoning about the wrong tree.
-	if _, err := s.SetFolder(ctx, c.ID, "/projects/elsewhere"); err != nil {
+	if _, err := s.SetFolder(ctx, storeOwner(t, s).ID, c.ID, "/projects/elsewhere"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -403,7 +403,7 @@ func TestSetFolderDropsProviderSessions(t *testing.T) {
 		t.Fatalf("resume id = %q before the move, want thread-abc", got)
 	}
 
-	moved, err := s.SetFolder(ctx, c.ID, somewhereElse)
+	moved, err := s.SetFolder(ctx, storeOwner(t, s).ID, c.ID, somewhereElse)
 	if err != nil {
 		t.Fatalf("set folder: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestSetFolderToTheSamePlaceCostsNothing(t *testing.T) {
 	if err := s.MarkSeen(ctx, c.ID, "codex", "thread-abc", 3); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SetFolder(ctx, c.ID, c.Folder); err != nil {
+	if _, err := s.SetFolder(ctx, storeOwner(t, s).ID, c.ID, c.Folder); err != nil {
 		t.Fatalf("set folder: %v", err)
 	}
 	// Re-choosing the folder a conversation is already in must not silently
@@ -457,7 +457,7 @@ func TestNamingNeverReplacesANameThatIsAlreadyThere(t *testing.T) {
 	ctx := context.Background()
 	c := newConversation(t, s)
 
-	named, took, err := s.NameFrom(ctx, c.ID, "the first thing said")
+	named, took, err := s.NameFrom(ctx, storeOwner(t, s).ID, c.ID, "the first thing said")
 	if err != nil {
 		t.Fatalf("name: %v", err)
 	}
@@ -465,14 +465,14 @@ func TestNamingNeverReplacesANameThatIsAlreadyThere(t *testing.T) {
 		t.Fatalf("took=%v title=%q, want it named from the message", took, named.Title)
 	}
 
-	_, took, err = s.NameFrom(ctx, c.ID, "something said later")
+	_, took, err = s.NameFrom(ctx, storeOwner(t, s).ID, c.ID, "something said later")
 	if err != nil {
 		t.Fatalf("second name: %v", err)
 	}
 	if took {
 		t.Error("a conversation that already had a name was renamed by a message")
 	}
-	after, err := s.Get(ctx, c.ID)
+	after, err := s.Get(ctx, storeOwner(t, s).ID, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,13 +489,33 @@ func TestAMessageWithNoWordsInItLeavesTheConversationUnnamed(t *testing.T) {
 	ctx := context.Background()
 	c := newConversation(t, s)
 
-	if _, took, err := s.NameFrom(ctx, c.ID, "---\n***"); err != nil || took {
+	if _, took, err := s.NameFrom(ctx, storeOwner(t, s).ID, c.ID, "---\n***"); err != nil || took {
 		t.Fatalf("took=%v err=%v, want it declined", took, err)
 	}
-	if after, err := s.Get(ctx, c.ID); err != nil || after.Title != "" {
+	if after, err := s.Get(ctx, storeOwner(t, s).ID, c.ID); err != nil || after.Title != "" {
 		t.Fatalf("title = %q, want it still unnamed", after.Title)
 	}
-	if _, took, err := s.NameFrom(ctx, c.ID, "and now a real one"); err != nil || !took {
+	if _, took, err := s.NameFrom(ctx, storeOwner(t, s).ID, c.ID, "and now a real one"); err != nil || !took {
 		t.Fatalf("took=%v err=%v, want the next message to name it", took, err)
 	}
+}
+
+// storeOwner is the account the conversation tests work in. Found or made on
+// demand, because users_test empties the users table between its tests.
+func storeOwner(t *testing.T, s *Store) User {
+	t.Helper()
+	ctx := context.Background()
+	const email = "store-tests@sparstrow.test"
+	u, ok, err := s.UserByEmail(ctx, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		return u
+	}
+	u, err = s.CreateUser(ctx, email, "a-long-enough-passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }

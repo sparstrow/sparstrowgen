@@ -7,11 +7,13 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const searchConversations = `-- name: SearchConversations :many
 SELECT
-    c.id, c.title, c.folder, c.provider, c.model_id, c.model_label, c.archived, c.spend_ticks, c.tokens, c.created_at, c.updated_at,
+    c.id, c.title, c.folder, c.provider, c.model_id, c.model_label, c.archived, c.spend_ticks, c.tokens, c.created_at, c.updated_at, c.user_id,
     (
         SELECT e.body
         FROM entries e
@@ -22,17 +24,25 @@ SELECT
         LIMIT 1
     ) AS excerpt
 FROM conversations c
-WHERE c.title ILIKE '%' || $1::text || '%'
-   OR c.folder ILIKE '%' || $1::text || '%'
-   OR EXISTS (
-        SELECT 1
-        FROM entries e2
-        WHERE e2.conversation_id = c.id
-          AND e2.role <> 'replay'
-          AND e2.body ILIKE '%' || $1::text || '%'
-   )
+WHERE c.user_id = $2
+  AND (
+        c.title ILIKE '%' || $1::text || '%'
+     OR c.folder ILIKE '%' || $1::text || '%'
+     OR EXISTS (
+            SELECT 1
+            FROM entries e2
+            WHERE e2.conversation_id = c.id
+              AND e2.role <> 'replay'
+              AND e2.body ILIKE '%' || $1::text || '%'
+        )
+  )
 ORDER BY c.updated_at DESC
 `
+
+type SearchConversationsParams struct {
+	Q      string      `json:"q"`
+	UserID pgtype.UUID `json:"user_id"`
+}
 
 type SearchConversationsRow struct {
 	Conversation Conversation `json:"conversation"`
@@ -47,8 +57,11 @@ type SearchConversationsRow struct {
 // The excerpt is the first matching message body, so a hit in a long transcript
 // is explicable rather than mysterious. A title match returns none — the reason
 // for that hit is already on screen.
-func (q *Queries) SearchConversations(ctx context.Context, q_ string) ([]SearchConversationsRow, error) {
-	rows, err := q.db.Query(ctx, searchConversations, q_)
+//
+// One account's conversations only. The account filter wraps the whole match,
+// so no OR branch can reach past it.
+func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error) {
+	rows, err := q.db.Query(ctx, searchConversations, arg.Q, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +81,7 @@ func (q *Queries) SearchConversations(ctx context.Context, q_ string) ([]SearchC
 			&i.Conversation.Tokens,
 			&i.Conversation.CreatedAt,
 			&i.Conversation.UpdatedAt,
+			&i.Conversation.UserID,
 			&i.Excerpt,
 		); err != nil {
 			return nil, err

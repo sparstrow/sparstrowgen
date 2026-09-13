@@ -1,7 +1,7 @@
 // Command server is the web-facing half: HTTP for everything the browser does,
 // a websocket for what it watches, and one websocket the daemon dials in on.
 //
-// It never reaches out to the owner's machine. Nothing inbound to that machine
+// It never reaches out to anybody's machine. Nothing inbound to that machine
 // exists at all — the daemon dials out (AGENTS.md §3).
 package main
 
@@ -12,8 +12,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	netmail "net/mail"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +24,7 @@ import (
 
 	"github.com/sparstrow/sparstrowgen/server/internal/api"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
+	"github.com/sparstrow/sparstrowgen/server/internal/mail"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
@@ -38,7 +42,7 @@ func main() {
 	dsn := env("DATABASE_URL",
 		"postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen?sslmode=disable")
 	addr := env("ADDR", ":8080")
-	cfg := authConfig(log)
+	cfg := serverConfig(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -59,25 +63,14 @@ func main() {
 	st := store.New(pool)
 	a := api.New(st, h, log, cfg)
 
-	// The setup code is only meaningful while nobody has signed up. Printed
-	// here, loudly, because the deployment log is where the owner reads it —
-	// and NOT printed once the app is claimed, so it never sits in a log of a
-	// running system where it would be a credential with nothing to protect.
-	// A failed check prints the code as well. If the database was briefly
-	// unreachable at startup and recovers, the app would otherwise offer the
-	// sign-up screen while the only code that could complete it was never
-	// printed — unclaimable without a restart. Printing it when the answer is
-	// unknown costs nothing: if the app IS claimed, the code opens nothing,
-	// because sign-up answers 409 whatever is presented.
-	if claimed, err := st.Claimed(ctx); err != nil {
-		log.Warn("could not tell whether this app has been claimed yet", "err", err)
-		log.Info("printing the setup code anyway, in case it has not been",
-			"setup_code", a.SetupCode())
-	} else if !claimed {
-		log.Info("this app has no account yet")
-		log.Info("open it in a browser and use this setup code to create one",
-			"setup_code", a.SetupCode())
-		log.Info("the code changes every time this server restarts; use the newest one")
+	// Said once at startup, because it is the first thing to check when a new
+	// deployment has nobody who can sign in: the owner creates their account
+	// through the ordinary registration page with this address.
+	if _, exists, err := st.UserByEmail(ctx, cfg.OwnerEmail); err != nil {
+		log.Warn("could not tell whether the owner account exists", "err", err)
+	} else if !exists {
+		log.Info("the owner account does not exist yet — create it at /register with OWNER_EMAIL",
+			"owner", cfg.OwnerEmail)
 	}
 
 	srv := &http.Server{
@@ -137,18 +130,18 @@ func env(key, fallback string) string {
 }
 
 /*
-	Authentication configuration, which the server refuses to start without.
+	Configuration the server refuses to start without.
 
-There is no default password, no "auth disabled" switch and no development
-shortcut, because every one of those is a thing that can end up in production by
-accident — and what is behind this login is a program that runs code on the
-owner's machine. A server that will not boot is a loud, immediate, local
-failure. A server that boots without a password is a silent, remote one.
+There is no default password, no "auth disabled" switch, no "mail off" and no
+development shortcut, because every one of those is a thing that can end up in
+production by accident — and what is behind this login is a program that runs
+code on people's machines. A server that will not boot is a loud, immediate,
+local failure. A server that boots without them is a silent, remote one.
 
 Development is served by the Makefile setting these to known values, so the
 cost of the strictness is one line in a file, not a branch in the program.
 */
-func authConfig(log *slog.Logger) api.Config {
+func serverConfig(log *slog.Logger) api.Config {
 	cfg := api.Config{
 		DaemonToken: os.Getenv("DAEMON_TOKEN"),
 		Origin:      os.Getenv("WEB_ORIGIN"),
@@ -157,6 +150,8 @@ func authConfig(log *slog.Logger) api.Config {
 		// obvious local annoyance, while one sent in the clear over the internet
 		// is a quiet disaster.
 		SecureCookie: os.Getenv("SESSION_SECURE") != "false",
+		OwnerEmail:   strings.TrimSpace(os.Getenv("OWNER_EMAIL")),
+		Invited:      splitList(os.Getenv("ALLOWED_EMAILS")),
 	}
 
 	var missing []string
@@ -164,19 +159,77 @@ func authConfig(log *slog.Logger) api.Config {
 		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses)")
 	}
 	if cfg.Origin == "" {
-		missing = append(missing, "WEB_ORIGIN (the exact origin the web app is served from, e.g. https://sparstrowgen.example.ts.net)")
+		missing = append(missing, "WEB_ORIGIN (the exact origin the web app is served from, e.g. https://app.sparstrow.com)")
+	}
+	if cfg.OwnerEmail == "" {
+		missing = append(missing, "OWNER_EMAIL (the address of the account this deployment belongs to)")
+	}
+	transport := os.Getenv("MAIL_TRANSPORT")
+	if transport == "" {
+		missing = append(missing, "MAIL_TRANSPORT (smtp, or log on a development machine)")
 	}
 	if len(missing) > 0 {
-		log.Error("refusing to start without authentication configured")
-		for _, m := range missing {
-			log.Error("  missing", "variable", m)
-		}
-		os.Exit(1)
+		refuse(log, missing...)
 	}
 
 	if len(cfg.DaemonToken) < 32 {
 		log.Error("DAEMON_TOKEN is too short to be a secret", "length", len(cfg.DaemonToken), "want_at_least", 32)
 		os.Exit(1)
 	}
+	for _, address := range append([]string{cfg.OwnerEmail}, cfg.Invited...) {
+		if _, err := netmail.ParseAddress(address); err != nil {
+			log.Error("not an email address in OWNER_EMAIL or ALLOWED_EMAILS", "value", address)
+			os.Exit(1)
+		}
+	}
+
+	switch transport {
+	case "smtp":
+		port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
+		sender := mail.SMTP{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     port,
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("MAIL_FROM"),
+		}
+		if err := sender.Validate(); err != nil {
+			// The error names variables, never their values: a password in a
+			// startup log is a password in every log aggregator it reaches.
+			refuse(log, "MAIL_TRANSPORT=smtp needs working settings: "+err.Error())
+		}
+		cfg.Mailer = sender
+	case "log":
+		// Links written to a log are working credentials for whoever reads it.
+		// Fine on a development machine; never on a deployment, which is the
+		// one place SESSION_SECURE must be on.
+		if cfg.SecureCookie {
+			refuse(log, "MAIL_TRANSPORT=log is for development only and cannot be used with secure session cookies")
+		}
+		log.Warn("emails will be written to this log instead of sent (MAIL_TRANSPORT=log)")
+		cfg.Mailer = mail.Log{Logger: log}
+	default:
+		refuse(log, "MAIL_TRANSPORT must be smtp or log, not "+strconv.Quote(transport))
+	}
 	return cfg
+}
+
+func refuse(log *slog.Logger, problems ...string) {
+	log.Error("refusing to start without its configuration")
+	for _, p := range problems {
+		log.Error("  missing or invalid", "setting", p)
+	}
+	os.Exit(1)
+}
+
+// splitList reads a comma-separated list, ignoring blanks, so a trailing comma
+// or a space after one is not an address.
+func splitList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

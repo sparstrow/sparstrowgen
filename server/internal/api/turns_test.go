@@ -105,7 +105,7 @@ func TestAProviderThatHasNotSeenTheConversationIsCaughtUp(t *testing.T) {
 	// The SAME provider, with its session dropped — which is what moving a
 	// conversation to another folder does, because claude keys sessions by
 	// project directory. Under the old condition this replayed nothing.
-	if _, err := r.store.SetFolder(context.Background(), c.ID, "D:\\test\\elsewhere"); err != nil {
+	if _, err := r.store.SetFolder(context.Background(), r.userID, c.ID, "D:\\test\\elsewhere"); err != nil {
 		t.Fatal(err)
 	}
 	r.post("/api/conversations/"+c.ID+"/messages", map[string]any{
@@ -284,7 +284,7 @@ func TestAConversationIsNamedByTheFirstThingSaidInIt(t *testing.T) {
 	})
 	d.nextTurn()
 
-	after, err := r.store.Get(context.Background(), c.ID)
+	after, err := r.store.Get(context.Background(), r.userID, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestANameTheOwnerTypedIsNeverOverwritten(t *testing.T) {
 	d := r.connectDaemon()
 	c := r.conversation("claude")
 
-	if _, err := r.store.Rename(context.Background(), c.ID, "The one about job objects"); err != nil {
+	if _, err := r.store.Rename(context.Background(), r.userID, c.ID, "The one about job objects"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -311,7 +311,7 @@ func TestANameTheOwnerTypedIsNeverOverwritten(t *testing.T) {
 	})
 	d.nextTurn()
 
-	after, err := r.store.Get(context.Background(), c.ID)
+	after, err := r.store.Get(context.Background(), r.userID, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

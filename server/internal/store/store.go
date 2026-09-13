@@ -26,6 +26,34 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, q: db.New(pool)}
 }
 
+// ErrNotFound is a conversation that does not exist FOR THIS ACCOUNT. Somebody
+// else's conversation and one that never existed are deliberately the same
+// answer: telling them apart would confirm that an id belongs to someone.
+var ErrNotFound = errors.New("that conversation does not exist")
+
+// owned parses an account id and a conversation id together. A malformed
+// conversation id is simply not one of this account's conversations; a
+// malformed account id is a bug in the caller, since it comes from a session.
+func owned(userID, id string) (pgtype.UUID, pgtype.UUID, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, fmt.Errorf("account id: %w", err)
+	}
+	cid, err := parseUUID(id)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, ErrNotFound
+	}
+	return owner, cid, nil
+}
+
+// missing turns "no rows" into ErrNotFound and leaves every other error alone.
+func missing(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
 // ---------------------------------------------------------------------------
 // conversions
 // ---------------------------------------------------------------------------
@@ -139,20 +167,24 @@ func toEntry(e db.Entry) protocol.Entry {
 // conversations
 // ---------------------------------------------------------------------------
 
-// List returns every conversation, archived included. The client decides what
-// to show: the archive is a filter, not a separate store, which is what lets
-// search reach into it.
+// List returns every conversation this account owns, archived included. The
+// client decides what to show: the archive is a filter, not a separate store,
+// which is what lets search reach into it.
 //
 // A non-empty query searches titles, folders AND message bodies in Postgres.
 // Searching titles alone would miss the ones that most need finding: a name
 // comes from the first message or from the owner, so it says where a
 // conversation started and never where it went.
-func (s *Store) List(ctx context.Context, query string) ([]protocol.Conversation, error) {
+func (s *Store) List(ctx context.Context, userID, query string) ([]protocol.Conversation, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("account id: %w", err)
+	}
 	query = strings.TrimSpace(query)
 	if query != "" {
-		return s.search(ctx, query)
+		return s.search(ctx, owner, query)
 	}
-	rows, err := s.q.ListConversations(ctx)
+	rows, err := s.q.ListConversations(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +205,8 @@ func (s *Store) List(ctx context.Context, query string) ([]protocol.Conversation
 // sentence, short enough for one line in a 288px sidebar.
 const excerptPad = 34
 
-func (s *Store) search(ctx context.Context, query string) ([]protocol.Conversation, error) {
-	rows, err := s.q.SearchConversations(ctx, query)
+func (s *Store) search(ctx context.Context, owner pgtype.UUID, query string) ([]protocol.Conversation, error) {
+	rows, err := s.q.SearchConversations(ctx, db.SearchConversationsParams{Q: query, UserID: owner})
 	if err != nil {
 		return nil, err
 	}
@@ -220,15 +252,15 @@ func excerptAround(body, query string) string {
 	return out
 }
 
-// Get returns one conversation with its full transcript.
-func (s *Store) Get(ctx context.Context, id string) (protocol.Conversation, error) {
-	uid, err := parseUUID(id)
+// Get returns one of this account's conversations with its full transcript.
+func (s *Store) Get(ctx context.Context, userID, id string) (protocol.Conversation, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
-	row, err := s.q.GetConversation(ctx, uid)
+	row, err := s.q.GetConversation(ctx, db.GetConversationParams{ID: uid, UserID: owner})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	c := toConversation(row)
 	entries, err := s.q.ListEntries(ctx, uid)
@@ -256,8 +288,13 @@ func (s *Store) seenBy(ctx context.Context, id pgtype.UUID) (map[string]int32, e
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, folder, provider string, model protocol.Model) (protocol.Conversation, error) {
+func (s *Store) Create(ctx context.Context, userID, folder, provider string, model protocol.Model) (protocol.Conversation, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return protocol.Conversation{}, fmt.Errorf("account id: %w", err)
+	}
 	row, err := s.q.CreateConversation(ctx, db.CreateConversationParams{
+		UserID:     owner,
 		Folder:     folder,
 		Provider:   provider,
 		ModelID:    model.ID,
@@ -269,14 +306,14 @@ func (s *Store) Create(ctx context.Context, folder, provider string, model proto
 	return toConversation(row), nil
 }
 
-func (s *Store) Rename(ctx context.Context, id, title string) (protocol.Conversation, error) {
-	uid, err := parseUUID(id)
+func (s *Store) Rename(ctx context.Context, userID, id, title string) (protocol.Conversation, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
-	row, err := s.q.RenameConversation(ctx, db.RenameConversationParams{ID: uid, Title: &title})
+	row, err := s.q.RenameConversation(ctx, db.RenameConversationParams{ID: uid, UserID: owner, Title: &title})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	return toConversation(row), nil
 }
@@ -289,8 +326,8 @@ func (s *Store) Rename(ctx context.Context, id, title string) (protocol.Conversa
 // same moment as a send cannot lose — and a message with no words in it (a bare
 // code block, a row of dashes) leaves the conversation unnamed rather than
 // naming it something worse than nothing.
-func (s *Store) NameFrom(ctx context.Context, id, message string) (protocol.Conversation, bool, error) {
-	uid, err := parseUUID(id)
+func (s *Store) NameFrom(ctx context.Context, userID, id, message string) (protocol.Conversation, bool, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, false, err
 	}
@@ -298,7 +335,7 @@ func (s *Store) NameFrom(ctx context.Context, id, message string) (protocol.Conv
 	if title == "" {
 		return protocol.Conversation{}, false, nil
 	}
-	row, err := s.q.NameConversation(ctx, db.NameConversationParams{ID: uid, Title: &title})
+	row, err := s.q.NameConversation(ctx, db.NameConversationParams{ID: uid, UserID: owner, Title: &title})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return protocol.Conversation{}, false, nil
 	}
@@ -308,14 +345,16 @@ func (s *Store) NameFrom(ctx context.Context, id, message string) (protocol.Conv
 	return toConversation(row), true, nil
 }
 
-func (s *Store) SetArchived(ctx context.Context, id string, archived bool) (protocol.Conversation, error) {
-	uid, err := parseUUID(id)
+func (s *Store) SetArchived(ctx context.Context, userID, id string, archived bool) (protocol.Conversation, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
-	row, err := s.q.SetConversationArchived(ctx, db.SetConversationArchivedParams{ID: uid, Archived: archived})
+	row, err := s.q.SetConversationArchived(ctx, db.SetConversationArchivedParams{
+		ID: uid, UserID: owner, Archived: archived,
+	})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	return toConversation(row), nil
 }
@@ -341,23 +380,25 @@ func (s *Store) SetArchived(ctx context.Context, id string, archived bool) (prot
 //
 // What the transcript does NOT record is that earlier answers came from
 // somewhere else; see docs/Later.md L-11.
-func (s *Store) SetFolder(ctx context.Context, id, folder string) (protocol.Conversation, error) {
-	uid, err := parseUUID(id)
+func (s *Store) SetFolder(ctx context.Context, userID, id, folder string) (protocol.Conversation, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
 	// Nothing to invalidate when the folder has not actually moved — and a
 	// no-op must not cost a replay.
-	current, err := s.q.GetConversation(ctx, uid)
+	current, err := s.q.GetConversation(ctx, db.GetConversationParams{ID: uid, UserID: owner})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	if current.Folder == folder {
 		return toConversation(current), nil
 	}
-	row, err := s.q.SetConversationFolder(ctx, db.SetConversationFolderParams{ID: uid, Folder: folder})
+	row, err := s.q.SetConversationFolder(ctx, db.SetConversationFolderParams{
+		ID: uid, UserID: owner, Folder: folder,
+	})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	if err := s.q.DeleteConversationProviderSessions(ctx, uid); err != nil {
 		return protocol.Conversation{}, err
@@ -368,8 +409,12 @@ func (s *Store) SetFolder(ctx context.Context, id, folder string) (protocol.Conv
 // RecentFolders is the picker's shortcut list and the default for a new
 // conversation. Derived from conversations that already exist, so there is no
 // separate list to keep in step with reality.
-func (s *Store) RecentFolders(ctx context.Context, limit int32) ([]string, error) {
-	rows, err := s.q.RecentFolders(ctx, limit)
+func (s *Store) RecentFolders(ctx context.Context, userID string, limit int32) ([]string, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("account id: %w", err)
+	}
+	rows, err := s.q.RecentFolders(ctx, db.RecentFoldersParams{UserID: owner, Limit: limit})
 	if err != nil {
 		return nil, err
 	}
@@ -385,24 +430,29 @@ func (s *Store) RecentFolders(ctx context.Context, limit int32) ([]string, error
 // It returns the updated conversation because the caller has to broadcast it:
 // the browser's cached copy still names the old provider otherwise, and the
 // composer reads that (docs/Bugs.md B-9).
-func (s *Store) SetProvider(ctx context.Context, id, provider string, model protocol.Model) (protocol.Conversation, error) {
-	uid, err := parseUUID(id)
+func (s *Store) SetProvider(ctx context.Context, userID, id, provider string, model protocol.Model) (protocol.Conversation, error) {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
 	row, err := s.q.SetConversationProvider(ctx, db.SetConversationProviderParams{
-		ID: uid, Provider: provider, ModelID: model.ID, ModelLabel: model.Label,
+		ID: uid, UserID: owner, Provider: provider, ModelID: model.ID, ModelLabel: model.Label,
 	})
 	if err != nil {
-		return protocol.Conversation{}, err
+		return protocol.Conversation{}, missing(err)
 	}
 	return toConversation(row), nil
 }
 
 // Delete removes the transcript for good. Foreign keys are kept and cascades
 // are banned (D-009), so the children go first, explicitly, in one transaction.
-func (s *Store) Delete(ctx context.Context, id string) error {
-	uid, err := parseUUID(id)
+//
+// The conversation is locked for its owner BEFORE any child row is touched: the
+// entries query knows nothing about accounts, so without that first step a
+// guessed id would delete another person's transcript and then fail only at the
+// last statement.
+func (s *Store) Delete(ctx context.Context, userID, id string) error {
+	owner, uid, err := owned(userID, id)
 	if err != nil {
 		return err
 	}
@@ -413,13 +463,16 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	defer tx.Rollback(ctx)
 
 	q := s.q.WithTx(tx)
+	if _, err := q.LockConversation(ctx, db.LockConversationParams{ID: uid, UserID: owner}); err != nil {
+		return missing(err)
+	}
 	if err := q.DeleteConversationEntries(ctx, uid); err != nil {
 		return err
 	}
 	if err := q.DeleteConversationProviderSessions(ctx, uid); err != nil {
 		return err
 	}
-	if err := q.DeleteConversation(ctx, uid); err != nil {
+	if err := q.DeleteConversation(ctx, db.DeleteConversationParams{ID: uid, UserID: owner}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -428,6 +481,11 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 // ---------------------------------------------------------------------------
 // entries
 // ---------------------------------------------------------------------------
+
+// Everything from here down is the turn's path, and takes a conversation id
+// alone. Its callers have already fetched the conversation for its owner (a
+// send, a switch quote) or are finishing a turn that such a request started.
+// Nothing a browser sends reaches these without that check first.
 
 func (s *Store) AppendUser(ctx context.Context, conversationID, text string) (protocol.Entry, error) {
 	uid, err := parseUUID(conversationID)

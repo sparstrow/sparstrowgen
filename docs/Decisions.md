@@ -573,6 +573,8 @@ on the strength of a connection that is about to be rejected.
 
 ## D-029 — Accounts in Postgres, and one setup code to create the first one
 
+**Superseded 2026-09-12 by D-032.** The users table and sessions stand; the setup code is gone.
+
 Authentication began as a password hash in an environment variable. It worked, and it was the
 wrong thing: signing in meant reading a runbook, and changing the password meant editing a Coolify
 variable and redeploying. The owner's verdict was that from his side it was the worst part of the
@@ -639,3 +641,63 @@ Found by adversarial review rather than by use, along with three other defects
 in the same change (`docs/Bugs.md` B-15). Each has a test that fails without its
 fix.
 
+## D-031 — An account owns its conversations and its machine; workspaces will group work inside it
+
+**2026-09-12.** Rejected: Multica's model, where a workspace owns everything and people are members
+of it; and adding a personal workspace now so every row could point at one.
+
+Invitation-only registration means more than one person on a deployment, and until now nothing said
+whose a conversation was — the hub even sent every event to every browser (KnownGaps G-27, now
+closed). So `conversations.user_id` is required, every statement a request can reach names the
+account as well as the row, and somebody else's conversation answers exactly like one that never
+existed. The hub holds one machine per account and has no broadcast to everyone at all: the only way
+to send an event is to name whose it is.
+
+Multica scopes everything to a workspace because its workspaces are shared by teams — issues,
+agents and runtimes belong to the group, not the person. The owner's workspaces are different in
+kind: separate areas a person creates inside their own account, with sharing and roles explicitly
+out of scope. Ownership therefore stays with the account, and a workspace, when it arrives, is a
+grouping column on top of it rather than a change of owner. Adding a personal workspace today would
+have been a table and a foreign key that no screen uses (AGENTS.md rule 4), and removing it later if
+the model changed would be the migration this avoids.
+
+**If workspaces ever become shared** — invitations into a workspace, other members' conversations —
+ownership has to move from account to workspace, and that is a real migration. That feature needs
+its own spec first, so the trade is made knowingly.
+
+The machine half is deliberately minimal until pairing (US2). The shared `DAEMON_TOKEN` proves "the
+owner's machine", so it is attributed to the `OWNER_EMAIL` account at connection time and refused
+until that account exists. A second account has no machine and is told so; it can never reach the
+owner's.
+
+## D-032 — Invitations in configuration, links by email, SMTP on the product's own domain
+
+**2026-09-12.** Supersedes D-029's setup code. Rejected: keeping the setup code for the first
+account; an invitation table with no screen to manage it; a transactional email vendor; six-digit
+codes.
+
+**Who may register** is `OWNER_EMAIL` plus `ALLOWED_EMAILS`, read at startup. Anybody else who tries
+becomes one row in `access_requests` and one email to the owner, however often they ask; approving
+means adding the address and restarting. A table would be the right home the day there is a screen
+to edit it (L-18), and a table without one would mean approving by editing production data — the
+exact chore this release removes. The owner registers through the same page as everyone else, which
+is what retires the setup code: the first account is no longer special.
+
+**Proving an address** is a link, not a code (design DD-003), stored like a session token — only
+its SHA-256. `email_links` keeps `used_at` and `superseded_at` separately from expiry because the
+page a dead link opens names which happened. Spending a link is one `UPDATE … WHERE used_at IS NULL
+… RETURNING`, so two tabs cannot both succeed, and registering or resetting commits the link, the
+account change and the new session in one transaction. The password is chosen after the link
+(DD-002), so no unconfirmed account ever exists.
+
+**Revealing nothing** is enforced in the handlers and held by tests: registering an address that
+already has an account answers exactly like a new one (the email says it exists), and a reset
+request answers identically either way, with the reset email sent in the background so response
+time is not the oracle the text refuses to be.
+
+**Sending** is SMTP to the Hostinger mailbox on `sparstrow.com`, TLS only (implicit on 465, required
+STARTTLS otherwise). Mail from the domain it claims to come from is what deliverability mostly
+depends on, and at invitation-only volume a vendor adds an account, a DNS change and a bill for no
+difference the owner would see. The server refuses to start without complete mail settings; a
+`log` transport exists for development and is refused whenever session cookies are Secure, because
+a deployed log is no place for working links.

@@ -2,17 +2,14 @@
 
 import { ChatSurface } from "@/components/chat/chat-surface";
 import { SignIn, SignInChecking, SignInUnreachable } from "@/components/auth/sign-in";
-import { SignUp } from "@/components/auth/sign-up";
 import { useSession } from "@/lib/queries";
 
-/* Which of the three things this app is right now.
+/* Which of the things this app is right now: checking, unreachable, signed out,
+ * or signed in.
  *
- * Three and not two: a deployment that nobody has an account on is a different
- * situation from being signed out of one that exists, and showing a sign-in
- * form on a fresh install asks somebody to sign in to nothing. That is the
- * shape of it from the owner's side — he deploys, opens the URL, and the app
- * asks him to create the account rather than to guess a password that has never
- * been set.
+ * Creating an account is not one of them. It has its own page (/register),
+ * reached from sign in, because it begins with an email rather than with this
+ * browser — the link that finishes it can be opened anywhere.
  *
  * The gate is here rather than in Next.js middleware on purpose. Middleware
  * protects PAGES, and the thing that must be protected is the Go API on its own
@@ -37,7 +34,6 @@ export default function Home() {
     );
   }
 
-  if (!session.data.claimed) return <SignUp />;
   if (!session.data.signedIn) return <SignIn />;
 
   return <ChatSurface />;

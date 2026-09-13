@@ -164,9 +164,9 @@ required variables are not safe to deploy until step 4.
 
 ---
 
-## 4. Enter the four environment variables
+## 4. Enter the environment variables
 
-Open **Environment Variables**. Coolify creates the four required rows from
+Open **Environment Variables**. Coolify creates the required rows from
 `docker-compose.yaml`. Open each row using its gear icon and set it exactly as
 shown below.
 
@@ -176,6 +176,25 @@ shown below.
 | `DAEMON_TOKEN` | saved token from step 1 | Yes | Off | On |
 | `WEB_ORIGIN` | `https://app.sparstrow.com` | No | Off | On |
 | `API_ORIGIN` | `https://api.sparstrow.com` | No | **On** | **On** |
+| `OWNER_EMAIL` | the address you will sign in with | No | Off | On |
+| `ALLOWED_EMAILS` | other invited addresses, comma-separated; may be empty | No | Off | On |
+| `SMTP_HOST` | the mailbox's outgoing server, e.g. `smtp.hostinger.com` | No | Off | On |
+| `SMTP_PORT` | `465` (TLS) — or `587` if the mailbox only offers STARTTLS | No | Off | On |
+| `SMTP_USERNAME` | the sending mailbox's full address | No | Off | On |
+| `SMTP_PASSWORD` | that mailbox's password | Yes | Off | On |
+| `MAIL_FROM` | `sparstrowgen <agent@sparstrow.com>` | No | Off | On |
+
+No dedicated sending mailbox is needed — `agent@sparstrow.com` (the same mailbox
+already used as `OWNER_EMAIL`) sends its own confirmation and reset mail, so
+`SMTP_USERNAME` and the address inside `MAIL_FROM` are that same mailbox. Read
+its outgoing (SMTP) server and port from that mailbox's configuration page in
+Hostinger rather than copying the example above. Mail sent through the
+domain's own mailbox is what keeps confirmation links out of spam folders.
+
+**Upgrading an existing deployment:** set these seven before the release that
+introduced them reaches `main`. Compose refuses to deploy with any required one
+empty, and the server refuses to start with incomplete mail settings — both name
+the variable and never its value.
 
 `Literal` means Coolify keeps `$` characters unchanged. It is important for a
 database password or token that happens to contain one. No password hash is
@@ -265,37 +284,29 @@ there is still no owner account and no computer connected.
 
 ## 6. Create the owner account
 
-Nobody has an account on a fresh deployment. Open **Runtime Logs** in Coolify.
-The three rows are the three Compose services:
+Open `https://app.sparstrow.com/register` and enter the address you set as
+`OWNER_EMAIL`. The page says **Check your email**, and the email arrives from
+`MAIL_FROM` within a minute. Open its link, choose a password of at least 12
+characters (save it in a password manager), and you land signed in.
 
-![Coolify Runtime Logs showing migrate, server and web](images/deploy/runtime-services.png)
+If no email arrives, check spam, then open **Runtime Logs** → the newest
+`server-...` row and look for `could not send a confirmation email`. The text
+after `err=` is the mail server's own answer — most often a wrong
+`SMTP_PASSWORD` or port.
 
-Expand the newest `server-...` row—the middle row in the screenshot—and find:
+**An existing deployment keeps its owner account.** The account created earlier
+with a setup code, and every conversation in it, are kept by the upgrade; sign in
+as before. `OWNER_EMAIL` must be that account's address, or the daemon in step 7
+is refused.
 
-```text
-this app has no account yet
-open it in a browser and use this setup code to create one  setup_code=JINWO3NO...
-the code changes every time this server restarts; use the newest one
-```
+**Inviting someone:** add their address to `ALLOWED_EMAILS` and redeploy. They
+register at `/register` the same way you did. An address that is not invited is
+not refused: it becomes an access request, and you receive one email about it.
+Approve it the same way, by adding the address.
 
-Copy only the value after `setup_code=`. Treat it as a temporary credential:
-do not post it in chat or put it in documentation.
-
-Open `https://app.sparstrow.com` and enter:
-
-- the newest setup code;
-- the email address you want to use as the login;
-- a new password of at least 12 characters, saved in a password manager.
-
-![The first-account form shown by a fresh deployment](images/deploy/create-account.png)
-
-Click **Create account**. This is the deployment's only owner account. Sign-up
-closes permanently as soon as it exists, and the setup code is no longer useful.
-If the server restarted before submission, retrieve the newest code.
-
-Changing the password later is done from the account menu at the top of the
-conversation list. It signs every other browser out; it does not require a
-Coolify edit or redeploy.
+**A forgotten password** is reset from **Forgot your password?** under the sign-in
+form. The link goes to the account's own address, and using it signs every other
+browser out. Changing a password you still know is done from the account menu.
 
 After sign-in, the conversation screen can still say **Your machine is
 unreachable**. That is success for this step: browser authentication works, but
@@ -303,8 +314,8 @@ the separate daemon connection in step 7 has not happened yet.
 
 ![Signed-in application before the local daemon is connected](images/deploy/signed-in-daemon-offline.png)
 
-**After this step:** the owner can sign in, and nobody else can claim the
-deployment through the setup form.
+**After this step:** the owner can sign in, invited people can create their own
+accounts, and nobody else can — each account sees only its own work.
 
 ---
 
@@ -339,6 +350,11 @@ the server rejected this machine: DAEMON_TOKEN does not match the server's
 the Coolify and Windows values differ. Correct the value; do not diagnose that
 message as a DNS or firewall problem.
 
+The daemon works for the `OWNER_EMAIL` account. If the server refuses it because
+the owner account does not exist yet, finish step 6 first and start the daemon
+again. Other accounts cannot use this computer; each person's own computer is
+connected by pairing, which is not built yet.
+
 **After this step:** the hosted UI can send work through the hosted server to
 the coding-agent CLIs on this computer, while the computer still accepts no
 inbound connection.
@@ -356,15 +372,18 @@ inbound connection.
 | Domains shows a red no-internal-port warning | Reload current Compose and verify `expose: 3000` / `8080`; do not keep retyping a port that does not persist. |
 | App loads but its requests fail | Confirm the browser is at exactly `https://app.sparstrow.com` and `WEB_ORIGIN` matches it. |
 | Sign-in succeeds, then the next request says signed out | Verify HTTPS and `SESSION_SECURE=true`; the `__Host-` cookie requires both. |
-| The setup code is rejected | The server restarted after the code was copied. Use the newest `server` runtime log. |
-| Sign-up appears even though an account already exists | The server may be unable to read Postgres. Inspect its actual log before changing configuration. |
+| The server exits at start naming `SMTP_...`, `MAIL_FROM` or `OWNER_EMAIL` | That setting is missing or malformed. The log names the variable, never its value. |
+| No confirmation or reset email arrives | Check spam, then read the `server` log for `could not send`; the error is the mail server's answer. |
+| The daemon is refused: the owner account does not exist yet | Register `OWNER_EMAIL` at `/register` (step 6), then start the daemon again. |
+| Somebody uninvited says they signed up | They sent an access request and you were emailed about it. Add the address to `ALLOWED_EMAILS` to approve. |
 | Signed-in screen says the machine is unreachable | Hosting and login work; the daemon in step 7 is not connected. |
 | Providers remain unavailable | Read the daemon log and verify step 7's WebSocket URL and token. |
 
 ## What this deployment does not have yet
 
-- **One account, with no invite or password-reset flow.** Losing the password
-  currently requires deliberate database recovery.
+- **Invitations are configuration.** Inviting or approving somebody means editing
+  `ALLOWED_EMAILS` and redeploying; a place in the product for it is
+  [`Later.md`](../Later.md) L-18.
 - **One shared daemon token for every machine.** A token cannot yet be revoked
   for only one computer ([`Later.md`](../Later.md) L-16).
 - **No directory allowlist.** The daemon can run an agent in a folder named by
