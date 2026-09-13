@@ -80,33 +80,85 @@ async function json<T>(res: Response): Promise<T> {
  *  than an empty string — an empty string would render as a blank account menu
  *  instead of an obviously missing one. */
 export type Session = {
-  claimed: boolean;
   signedIn: boolean;
   email?: string;
 };
 
+/* Account access (US1). Served by server/internal/api/accounts.go; the data
+   contract is design-system/designs/Accounts/account-access.handoff.md. */
+
+/** What registering an address led to. The server decides; the screen reports.
+ *  An address that already has an account answers "check-email" too — the email
+ *  says it exists — so the response never reveals which addresses are
+ *  registered. `email` is the address as the server normalised it. */
+export type RegisterResult = {
+  outcome: "check-email" | "request-sent";
+  email: string;
+};
+
+export type EmailLinkKind = "verify" | "reset";
+
+/** What a link from an email is still good for, asked before showing a form.
+ *  An unknown token is reported as expired rather than as its own case. */
+export type EmailLink =
+  | { usable: true; email: string }
+  | {
+      usable: false;
+      reason: "expired" | "used" | "superseded";
+      /** For a used confirmation link: the account it created exists. */
+      accountReady: boolean;
+    };
+
+export type AccountAccess = {
+  register(email: string): Promise<RegisterResult>;
+  resendConfirmation(email: string): Promise<void>;
+  emailLink(kind: EmailLinkKind, token: string): Promise<EmailLink>;
+  /** Resolves with the new account's email. The response also sets the session
+   *  cookie, so this browser is signed in when it resolves. */
+  completeRegistration(token: string, password: string): Promise<string>;
+  /** Resolves with the normalised address whether or not it has an account. */
+  requestPasswordReset(email: string): Promise<string>;
+  /** Resolves with the account's email. Every other session is ended and this
+   *  browser is given a new one. */
+  completePasswordReset(token: string, password: string): Promise<string>;
+};
+
+export const accountAccess: AccountAccess = {
+  register: (email) => post<RegisterResult>(`${BASE}/api/auth/register`, { email }),
+
+  async resendConfirmation(email) {
+    await post<{ ok: true }>(`${BASE}/api/auth/register/resend`, { email });
+  },
+
+  /** A POST rather than a GET with the token in the query string: proxies and
+   *  hosting dashboards log query strings, and this token is a working key
+   *  until it is spent. */
+  emailLink: (kind, token) => post<EmailLink>(`${BASE}/api/auth/links/check`, { kind, token }),
+
+  async completeRegistration(token, password) {
+    const { email } = await post<SignedIn>(`${BASE}/api/auth/register/complete`, { token, password });
+    return email;
+  },
+
+  async requestPasswordReset(email) {
+    const sent = await post<{ ok: true; email: string }>(`${BASE}/api/auth/password/forgot`, { email });
+    return sent.email;
+  },
+
+  async completePasswordReset(token, password) {
+    const { email } = await post<SignedIn>(`${BASE}/api/auth/password/reset`, { token, password });
+    return email;
+  },
+};
+
 export const api = {
-  /** What this browser is allowed to see, asked before anything else.
-   *
-   *  Three answers, not two, and the app shows a different screen for each.
-   *  `claimed` is whether ANYBODY has an account here yet: a fresh deployment
-   *  has none, and the person in front of it has to create one rather than sign
-   *  in to an account that does not exist. */
+  /** Whether this browser is signed in, and as whom — asked before anything
+   *  else, so the app shows the right door rather than a chat surface whose
+   *  every request fails. */
   async session(): Promise<Session> {
     const res = await request(`${BASE}/api/auth/session`, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.json() as Promise<Session>;
-  },
-
-  /** Creates the one account, using the setup code the server printed when it
-   *  started. Reachable only while nobody has claimed this deployment. */
-  async signUp(input: {
-    setupCode: string;
-    email: string;
-    password: string;
-  }): Promise<string> {
-    const { email } = await post<SignedIn>(`${BASE}/api/auth/signup`, input);
-    return email;
   },
 
   /** Exchanges an email and password for a session cookie. The cookie is

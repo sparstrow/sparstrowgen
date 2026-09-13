@@ -20,11 +20,14 @@ Phase 2 only after the managed daemon exit gate in
 ### Phase 1 agent rules
 
 1. Implement the approved
-   [`first usable release`](docs/specs/2026-09-12-first-usable-release.md): normal account creation
-   and sign-in without the server-log setup code, guided installation and pairing without a shared
-   machine secret, per-user auto-start, and safe updating with check-now and automatic-update
-   controls. Complete one story through the feature process in `AGENTS.md` before beginning the
-   next. The broader account/workspace, runtime-management, navigation and appearance drafts are
+   [`first usable release`](docs/specs/2026-09-12-first-usable-release.md): invitation-only account
+   creation (an uninvited sign-up becomes an access request emailed to the owner), password reset
+   and sign-in without the server-log setup code, with each account's work
+   and computers isolated from every other account; guided installation, pairing and disconnecting
+   without a shared machine secret; per-user auto-start; and safe updating with check-now,
+   automatic-update and too-old-version handling. Account isolation ships before or with
+   registration, never after (`docs/KnownGaps.md` G-27). Complete one story through the feature
+   process in `AGENTS.md` before beginning the next. The broader account/workspace, runtime-management, navigation and appearance drafts are
    later scope and must not expand this release.
 2. Preserve the existing `DAEMON_TOKEN` path while the paired path is being
    introduced. Removal is a later contract step after installed clients are
@@ -34,9 +37,9 @@ Phase 2 only after the managed daemon exit gate in
 4. Test installer and updater behaviour with development or candidate artifacts.
    A source build must never replace itself automatically.
 5. Do not expose GitHub Releases, Coolify or deployment credentials in the
-   product UI. Installed users can check for updates, choose automatic-update
-   behaviour and read product release notes, but do not interact with release
-   plumbing.
+   product UI. Installed users can check for updates and choose automatic-update
+   behaviour, but do not interact with release plumbing. Release notes are later
+   scope.
 6. Do not implement a generic Settings page or commit to a sidebar layout. The
    first release designs only the approved update jobs; broader Settings and
    navigation remain later work.

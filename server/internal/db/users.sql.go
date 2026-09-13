@@ -15,9 +15,8 @@ const countUsers = `-- name: CountUsers :one
 SELECT count(*) FROM users
 `
 
-// Whether the app has been claimed yet. Sign-up is reachable only while this is
-// zero, which is what stops a stranger who finds the URL from making themselves
-// the owner of a machine that runs agents.
+// How many accounts exist. Tests use it to assert a flow created exactly the
+// accounts it should have.
 func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countUsers)
 	var count int64
@@ -36,14 +35,9 @@ type CreateUserParams struct {
 	PasswordHash string `json:"password_hash"`
 }
 
-// Two constraints decide this, not the caller's earlier check:
-//
-//	users_email_key  two people claiming the same address
-//	users_only_one   a SECOND account at all, whatever its address
-//
-// The second is the one that matters here. Without it, simultaneous sign-ups
-// with different emails both pass the count check and both insert
-// (migrations/00008_one_account_only.sql).
+// users_email_key is the constraint that can refuse this: the same address
+// twice. Any number of people may have accounts (migrations/00009); who may
+// create one is decided before this runs, by the invitation list.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
 	var i User
@@ -57,12 +51,62 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteEveryAccessRequest = `-- name: DeleteEveryAccessRequest :exec
+DELETE FROM access_requests
+`
+
+func (q *Queries) DeleteEveryAccessRequest(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryAccessRequest)
+	return err
+}
+
+const deleteEveryConversation = `-- name: DeleteEveryConversation :exec
+DELETE FROM conversations
+`
+
+func (q *Queries) DeleteEveryConversation(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryConversation)
+	return err
+}
+
+const deleteEveryEmailLink = `-- name: DeleteEveryEmailLink :exec
+
+DELETE FROM email_links
+`
+
+// Tests only, all six. A suite needs a way back to "nobody has an account",
+// and conversations reference users WITHOUT a cascade (D-009), so their rows go
+// first. Sessions go with their users by ON DELETE CASCADE. Links and access
+// requests are keyed by address rather than by account, so they are emptied
+// explicitly — a request left from an earlier run would stop the next run's
+// first request from being the first.
+func (q *Queries) DeleteEveryEmailLink(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryEmailLink)
+	return err
+}
+
+const deleteEveryEntry = `-- name: DeleteEveryEntry :exec
+DELETE FROM entries
+`
+
+func (q *Queries) DeleteEveryEntry(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryEntry)
+	return err
+}
+
+const deleteEveryProviderSession = `-- name: DeleteEveryProviderSession :exec
+DELETE FROM provider_sessions
+`
+
+func (q *Queries) DeleteEveryProviderSession(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryProviderSession)
+	return err
+}
+
 const deleteEveryUser = `-- name: DeleteEveryUser :execrows
 DELETE FROM users
 `
 
-// For tests: the app can be claimed once, so a suite needs a way back to
-// unclaimed. Sessions go with it, by ON DELETE CASCADE.
 func (q *Queries) DeleteEveryUser(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteEveryUser)
 	if err != nil {
@@ -94,6 +138,25 @@ SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email =
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByEmailForChange = `-- name: GetUserByEmailForChange :one
+SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = $1 FOR UPDATE
+`
+
+// Resetting a forgotten password: the same lock as GetUserForChange, found by
+// the address the reset link was sent to rather than by a session.
+func (q *Queries) GetUserByEmailForChange(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailForChange, email)
 	var i User
 	err := row.Scan(
 		&i.ID,

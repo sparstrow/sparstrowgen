@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base32"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -17,8 +16,8 @@ import (
 // the cookie outright unless it is Secure, has Path=/ and carries no Domain. In
 // production that is free protection, and it means no subdomain can overwrite
 // the session. Over plain http://localhost it is the opposite of protection:
-// the cookie cannot be Secure, so the browser drops it, and the owner watches a
-// successful sign-in be followed by "not signed in" on the very next request.
+// the cookie cannot be Secure, so the browser drops it, and a successful
+// sign-in is followed by "not signed in" on the very next request.
 //
 // So the prefix is worn only when it can be honoured. Anything that reads the
 // cookie must ask for the name the same way.
@@ -32,30 +31,29 @@ func CookieName(secure bool) string {
 // Lifetime is how long a session lasts before it must be earned again.
 //
 // A week, because the balance here is not the usual one. Behind this cookie is
-// something that runs code on the owner's machine, so a stolen laptop should not
-// be a standing invitation — but the owner is also the only user, on his own
-// devices, and an app that logs him out every day is an app he will be tempted
-// to leave open on a machine he should not.
+// something that runs code on a person's machine, so a stolen laptop should not
+// be a standing invitation — but an app that logs people out every day is an
+// app they will be tempted to leave open on a machine they should not.
 const Lifetime = 7 * 24 * time.Hour
 
 // IdleLifetime expires a session nobody has used, separately from one that is
 // merely old. An abandoned browser tab is a different risk from a daily habit.
 const IdleLifetime = 48 * time.Hour
 
-// TokenBytes is 256 bits of randomness. Session tokens are not guessed, they are
-// stolen — but only if there are few enough of them to enumerate, and there are
-// not.
+// TokenBytes is 256 bits of randomness. Session tokens and emailed link tokens
+// are not guessed, they are stolen — but only if there are few enough of them to
+// enumerate, and there are not.
 const TokenBytes = 32
 
-// NewToken mints a session token and returns it with its storage hash.
+// NewToken mints a token and returns it with its storage hash.
 //
-// The token goes to the browser and is never written down here; the hash goes to
-// the database and is never enough to log in with. Losing either one alone
-// gives an attacker nothing.
+// The token goes to the browser or into an email and is never written down
+// here; the hash goes to the database and is never enough to use. Losing either
+// one alone gives an attacker nothing.
 func NewToken() (token string, hash []byte, err error) {
 	raw := make([]byte, TokenBytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", nil, fmt.Errorf("generating a session token: %w", err)
+		return "", nil, fmt.Errorf("generating a token: %w", err)
 	}
 	token = base64.RawURLEncoding.EncodeToString(raw)
 	return token, HashToken(token), nil
@@ -86,9 +84,9 @@ func Cookie(token string, secure bool, expires time.Time) *http.Cookie {
 		HttpOnly: true,
 		Secure:   secure,
 		// Lax, not Strict: Strict would mean following a link to the app from
-		// anywhere else lands you logged out, which reads as a broken app. Lax
-		// still refuses to send the cookie on a cross-site POST, which is the
-		// case that matters.
+		// anywhere else — an email included — lands you logged out, which reads
+		// as a broken app. Lax still refuses to send the cookie on a cross-site
+		// POST, which is the case that matters.
 		SameSite: http.SameSiteLaxMode,
 		Expires:  expires,
 	}
@@ -100,33 +98,4 @@ func ClearCookie(secure bool) *http.Cookie {
 	c := Cookie("", secure, time.Unix(0, 0))
 	c.MaxAge = -1
 	return c
-}
-
-// SetupCodeBytes is the entropy behind the code that claims the first account.
-// Sixteen bytes is not guessable, and base32 without padding makes it readable
-// off a log line and typeable without ambiguity about case.
-const SetupCodeBytes = 16
-
-// NewSetupCode mints the code printed at startup while the app is unclaimed.
-//
-// Held in memory only, never written to the database. A restart therefore
-// invalidates it and prints a new one, which is deliberate: the owner reads the
-// newest startup log, and a code that leaked into an older one is already dead.
-// The cost is that a code copied before a restart stops working, which is a
-// retry rather than a lockout.
-func NewSetupCode() string {
-	raw := make([]byte, SetupCodeBytes)
-	if _, err := rand.Read(raw); err != nil {
-		// This used to return "", with a comment claiming that was a value
-		// nobody could match. It is the opposite: the submitted code is
-		// trimmed and compared in constant time, and comparing "" with "" is a
-		// MATCH — so an entropy failure would have turned the one gate on
-		// creating an account into first-request-wins.
-		//
-		// A process that cannot produce random bytes cannot safely issue
-		// session tokens either. Refusing to run is the only honest outcome,
-		// and it happens at startup where it is loud.
-		panic("no entropy available: cannot generate a setup code (" + err.Error() + ")")
-	}
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 }

@@ -216,9 +216,10 @@ last seen, which agent CLIs it found, and a button to revoke one — plus `spars
 new machine instead of copying a secret into a service file.
 
 **Trigger:** a second machine, or the first time a machine needs to be revoked without disturbing
-the other. The owner has now selected browser pairing and per-machine revocation as part of the
-managed-daemon phase before the staging/development workflow is activated. See
-[`runbooks/release-workflow.md`](runbooks/release-workflow.md), phase 1.
+the other. Browser pairing and disconnecting one computer are now in the approved
+[`first usable release`](specs/2026-09-12-first-usable-release.md). What stays parked here is the
+rest of the screen: listing every computer with last-seen, found agent CLIs, renaming and model
+inventory.
 
 ## L-17 — Isolated pull-request preview deployments
 
@@ -237,6 +238,26 @@ Normal pushes to `main` can still deploy automatically without that permission.
 
 **Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
 matching origins, and automatic cleanup when its pull request closes.
+
+## L-18 — Administration: invite people, approve or decline access requests
+
+**Status:** parked **Raised:** 2026-09-12, owner, reviewing the account-access prototype
+
+A separate, protected administration place where the owner invites people by email and approves
+or declines requests from people he did not invite. Drafted as
+[`specs/2026-09-12-admin-invitations-and-approvals.md`](specs/2026-09-12-admin-invitations-and-approvals.md).
+Not needed to reach the phase 2 gate: the first usable release records uninvited sign-ups as
+requests, emails the owner, and approval means allowing the address in hosting configuration.
+
+**Unblocks when:** the owner has invited or approved people by editing the hosting configuration
+more than twice, or before sparstrowgen is offered to anyone he does not know personally —
+whichever comes first. Build it on the phase 2 workflow, not before activation.
+
+The data half already exists: every uninvited attempt is a row in `access_requests`, collapsed to
+one per address regardless of how many times it's retried. What this item removes is the last
+manual step — approving still means adding the address to `ALLOWED_EMAILS` in Coolify and
+redeploying. The screen this item builds reads `access_requests` and writes approval somewhere a
+redeploy isn't required for, rather than inventing new storage.
 
 ## L-19 — Send confirmation/reset mail from a `no-reply@` alias instead of `agent@sparstrow.com`
 

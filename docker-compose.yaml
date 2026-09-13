@@ -54,6 +54,23 @@ services:
       # The exact origin the browser loads the app from. Anything else is
       # refused CORS and refused a websocket.
       - WEB_ORIGIN=${WEB_ORIGIN:?}
+      # The account this deployment belongs to. It registers at /register like
+      # anyone else, is told about access requests, and the machine presenting
+      # DAEMON_TOKEN works for it (docs/Decisions.md D-031, D-032).
+      - OWNER_EMAIL=${OWNER_EMAIL:?}
+      # Everyone else allowed to create an account, comma-separated. May be
+      # empty: then only the owner can register, and others become requests.
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
+      # Confirmation and reset links are emailed. `log` is refused here because
+      # SESSION_SECURE is true; it exists only for development machines.
+      - MAIL_TRANSPORT=smtp
+      - SMTP_HOST=${SMTP_HOST:?}
+      - SMTP_PORT=${SMTP_PORT:?}
+      - SMTP_USERNAME=${SMTP_USERNAME:?}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:?}
+      # The sender people see, e.g. sparstrowgen <agent@sparstrow.com> — the
+      # same mailbox as OWNER_EMAIL; no separate sending mailbox is needed.
+      - MAIL_FROM=${MAIL_FROM:?}
       # Not "false", so the session cookie is Secure and wears the __Host-
       # prefix. Never set this to false on a deployed instance.
       - SESSION_SECURE=true

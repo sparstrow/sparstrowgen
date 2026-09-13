@@ -4,10 +4,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
+	"github.com/sparstrow/sparstrowgen/server/internal/mail"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
@@ -23,15 +26,26 @@ import (
 // value of any of them that means "no authentication", because the one mistake
 // this app cannot afford is being reachable without it.
 type Config struct {
-	// DaemonToken is the shared secret the owner's machine presents.
+	// DaemonToken is the shared secret the owner's machine presents, until
+	// computers are paired individually (US2).
 	DaemonToken string
 	// Origin is the exact browser origin allowed to call this API, e.g.
-	// "https://sparstrowgen.example.ts.net". Cross-origin requests from
-	// anywhere else are refused, and so are websocket upgrades.
+	// "https://app.sparstrow.com". Cross-origin requests from anywhere else are
+	// refused, and so are websocket upgrades. Links in emails point here.
 	Origin string
 	// SecureCookie marks the session cookie Secure, which makes it unusable
 	// over plain HTTP. On in production, off for http://localhost.
 	SecureCookie bool
+	// OwnerEmail is the account this deployment belongs to. It is always
+	// invited, it is told about access requests, and the machine presenting
+	// DaemonToken works for it.
+	OwnerEmail string
+	// Invited are the other addresses allowed to create an account. Approving
+	// an access request means adding its address here (docs/Later.md L-18 is
+	// the place in the product that replaces this).
+	Invited []string
+	// Mailer sends confirmation and reset links.
+	Mailer mail.Sender
 }
 
 type API struct {
@@ -40,14 +54,21 @@ type API struct {
 	log      *slog.Logger
 	cfg      Config
 	throttle *auth.Throttle
+	// requests slows down access requests from one client, separately from
+	// sign-in attempts: a stranger flooding requests must not be able to put
+	// the owner's own sign-in into back-off.
+	requests *auth.Throttle
 	// hashing bounds how many argon2 hashes run at once. Buffered to hashSlots;
 	// a send that would block means the server is already at its limit.
 	hashing chan struct{}
-	// setupCode claims the first account. Generated per process and held only
-	// in memory: a restart prints a new one and kills the old, which is the
-	// safe direction to be wrong in — the owner reads the newest startup log,
-	// and a code that leaked into an old log is already dead.
-	setupCode string
+
+	// invited is OwnerEmail and Invited, normalised, for lookup.
+	invited map[string]bool
+	// mailGate spaces out emails to one address. See sendGap.
+	mailGate *sendGate
+	// sendGap is the least time between two emails of one kind to one address.
+	// A field rather than a constant so a test can take it to zero.
+	sendGap time.Duration
 
 	// turns maps an in-flight turn to the conversation and entry it is writing
 	// into, so a daemon message carrying only a turn id can be routed.
@@ -56,6 +77,9 @@ type API struct {
 }
 
 type turn struct {
+	// UserID is whose turn this is. It decides which browsers hear about it,
+	// which machine may report on it, and who may stop it.
+	UserID         string
 	ConversationID string
 	EntryID        string
 	Provider       string
@@ -66,25 +90,30 @@ type turn struct {
 }
 
 func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
-	a := &API{
-		store: s, hub: h, log: log, cfg: cfg,
-		throttle:  auth.NewThrottle(),
-		hashing:   make(chan struct{}, hashSlots),
-		setupCode: auth.NewSetupCode(),
-		turns:     map[string]*turn{},
+	invited := map[string]bool{store.NormaliseEmail(cfg.OwnerEmail): true}
+	for _, address := range cfg.Invited {
+		if address = store.NormaliseEmail(address); address != "" {
+			invited[address] = true
+		}
 	}
-	h.OnDaemonMessage = a.handleDaemonMessage
-	return a
+	return &API{
+		store: s, hub: h, log: log, cfg: cfg,
+		throttle: auth.NewThrottle(),
+		requests: auth.NewThrottle(),
+		hashing:  make(chan struct{}, hashSlots),
+		invited:  invited,
+		mailGate: newSendGate(),
+		sendGap:  defaultSendGap,
+		turns:    map[string]*turn{},
+	}
 }
 
 // upgrader refuses a websocket from anywhere but the configured origin.
 //
-// This used to accept any origin, with a comment saying to revisit it the day
-// there was a session cookie. That day is this one. A cookie is sent on a
-// websocket handshake exactly as on any other request, and the same-origin
-// policy does NOT apply to websockets — so without this check any page the
-// owner happened to visit could open a socket to this server, be authenticated
-// by his own cookie, and read every conversation in it.
+// A cookie is sent on a websocket handshake exactly as on any other request,
+// and the same-origin policy does NOT apply to websockets — so without this
+// check any page a person happened to visit could open a socket to this
+// server, be authenticated by their own cookie, and read every conversation.
 //
 // A handshake with no Origin header at all is allowed: that is a non-browser
 // client, which has no cookie to abuse and must still present the daemon token
@@ -104,22 +133,31 @@ func (a *API) Routes() http.Handler {
 	r.Use(a.cors)
 
 	// --- open to anyone -----------------------------------------------------
-	// Liveness only. It deliberately does NOT report whether the daemon is
-	// connected: that is a fact about the owner's machine, and an unauthenticated
-	// endpoint should not answer "is he at his desk right now".
+	// Liveness only. It deliberately does NOT report whether any machine is
+	// connected: an unauthenticated endpoint should not answer "is somebody at
+	// their desk right now".
 	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	r.Post("/api/auth/signup", a.signUp)
 	r.Post("/api/auth/login", a.login)
 	r.Post("/api/auth/logout", a.logout)
 	r.Get("/api/auth/session", a.session)
+
+	// Account access (accounts.go). Each is reachable without a session because
+	// each is how somebody without one gets one; each answers only about the
+	// address or link it was given.
+	r.Post("/api/auth/register", a.register)
+	r.Post("/api/auth/register/resend", a.resendConfirmation)
+	r.Post("/api/auth/register/complete", a.completeRegistration)
+	r.Post("/api/auth/links/check", a.checkLink)
+	r.Post("/api/auth/password/forgot", a.forgotPassword)
+	r.Post("/api/auth/password/reset", a.resetPassword)
 
 	// The daemon presents its own token on the handshake rather than a session
 	// cookie, so it is not behind requireSession.
 	r.Get("/daemon", a.daemonSocket)
 
-	// --- everything else needs the owner ------------------------------------
+	// --- everything else needs an account -----------------------------------
 	r.Group(func(r chi.Router) {
 		r.Use(a.requireSession)
 
@@ -147,11 +185,9 @@ func (a *API) Routes() http.Handler {
 
 // cors answers exactly one origin, and only with credentials allowed.
 //
-// It used to answer "*", which was survivable while there was nothing to steal.
-// With a session cookie there is: "*" cannot legally be combined with
-// credentials, and a browser enforces that — but the deeper point is that the
-// list of origins allowed to act as the owner should be one, named in the
-// deployment, rather than everything.
+// "*" cannot legally be combined with credentials, and a browser enforces that
+// — but the deeper point is that the list of origins allowed to act as a signed
+// in person should be one, named in the deployment, rather than everything.
 //
 // Vary: Origin because the answer differs per request, and a cache that misses
 // that would hand one origin's permission to another.
@@ -183,16 +219,28 @@ func (a *API) fail(w http.ResponseWriter, err error, code int) {
 	writeJSON(w, map[string]string{"error": err.Error()})
 }
 
+// failConversation answers a store error about a conversation: somebody else's
+// conversation and one that never existed are both a plain 404.
+func (a *API) failConversation(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		a.fail(w, store.ErrNotFound, http.StatusNotFound)
+		return
+	}
+	a.fail(w, err, http.StatusInternalServerError)
+}
+
 // ---------------------------------------------------------------------------
 // conversations
 // ---------------------------------------------------------------------------
 
 func (a *API) getProviders(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.hub.Providers())
+	user, _ := userFrom(r.Context())
+	writeJSON(w, a.hub.Providers(user.ID))
 }
 
 func (a *API) listConversations(w http.ResponseWriter, r *http.Request) {
-	list, err := a.store.List(r.Context(), r.URL.Query().Get("q"))
+	user, _ := userFrom(r.Context())
+	list, err := a.store.List(r.Context(), user.ID, r.URL.Query().Get("q"))
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
@@ -201,15 +249,17 @@ func (a *API) listConversations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getConversation(w http.ResponseWriter, r *http.Request) {
-	c, err := a.store.Get(r.Context(), chi.URLParam(r, "id"))
+	user, _ := userFrom(r.Context())
+	c, err := a.store.Get(r.Context(), user.ID, chi.URLParam(r, "id"))
 	if err != nil {
-		a.fail(w, err, http.StatusNotFound)
+		a.failConversation(w, err)
 		return
 	}
 	writeJSON(w, c)
 }
 
 func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
 	var body struct {
 		Folder   string         `json:"folder"`
 		Provider string         `json:"provider"`
@@ -223,30 +273,30 @@ func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Folder == "" {
-		// The folder last worked in beats the directory the server process
-		// happens to have been started in, which is what every conversation
-		// used to inherit (docs/Bugs.md B-3).
-		if recent, err := a.store.RecentFolders(r.Context(), 1); err == nil && len(recent) > 0 {
+		// The folder this account last worked in beats the directory the server
+		// process happens to have been started in (docs/Bugs.md B-3).
+		if recent, err := a.store.RecentFolders(r.Context(), user.ID, 1); err == nil && len(recent) > 0 {
 			body.Folder = recent[0]
 		} else {
 			body.Folder = defaultFolder()
 		}
 	}
 	if body.Provider == "" {
-		if ps := a.hub.Providers(); len(ps) > 0 && ps[0].Model != nil {
+		if ps := a.hub.Providers(user.ID); len(ps) > 0 && ps[0].Model != nil {
 			body.Provider, body.Model = ps[0].ID, *ps[0].Model
 		}
 	}
-	c, err := a.store.Create(r.Context(), body.Folder, body.Provider, body.Model)
+	c, err := a.store.Create(r.Context(), user.ID, body.Folder, body.Provider, body.Model)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{Type: protocol.EventConversation, Conversation: &c})
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{Type: protocol.EventConversation, Conversation: &c})
 	writeJSON(w, c)
 }
 
 func (a *API) patchConversation(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
 		Title    *string `json:"title"`
@@ -257,41 +307,49 @@ func (a *API) patchConversation(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, http.StatusBadRequest)
 		return
 	}
-	var (
-		c   protocol.Conversation
-		err error
-	)
-	if body.Title != nil {
-		c, err = a.store.Rename(r.Context(), id, *body.Title)
+	// Fetched first, for its owner, so a patch naming no field still answers
+	// 404 for a conversation that is not this account's — rather than 200 with
+	// an empty conversation.
+	c, err := a.store.Get(r.Context(), user.ID, id)
+	if err == nil && body.Title != nil {
+		c, err = a.store.Rename(r.Context(), user.ID, id, *body.Title)
 	}
 	if err == nil && body.Archived != nil {
-		c, err = a.store.SetArchived(r.Context(), id, *body.Archived)
+		c, err = a.store.SetArchived(r.Context(), user.ID, id, *body.Archived)
 	}
 	if err == nil && body.Folder != nil {
-		c, err = a.store.SetFolder(r.Context(), id, *body.Folder)
+		c, err = a.store.SetFolder(r.Context(), user.ID, id, *body.Folder)
 	}
 	if err != nil {
-		a.fail(w, err, http.StatusInternalServerError)
+		a.failConversation(w, err)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{Type: protocol.EventConversation, Conversation: &c})
+	c.Entries = []protocol.Entry{}
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{Type: protocol.EventConversation, Conversation: &c})
 	writeJSON(w, c)
 }
 
 func (a *API) deleteConversation(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
-		a.fail(w, err, http.StatusInternalServerError)
+	user, _ := userFrom(r.Context())
+	if err := a.store.Delete(r.Context(), user.ID, chi.URLParam(r, "id")); err != nil {
+		a.failConversation(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // switchCost quotes what moving to a provider would cost, without spending
-// anything. Selecting a provider is free; this is the number the owner decides
+// anything. Selecting a provider is free; this is the number the person decides
 // on, so it is computed from the real text that would be replayed.
 func (a *API) switchCost(w http.ResponseWriter, r *http.Request) {
-	provider := r.URL.Query().Get("provider")
-	unseen, err := a.store.Unseen(r.Context(), chi.URLParam(r, "id"), provider)
+	user, _ := userFrom(r.Context())
+	id := chi.URLParam(r, "id")
+	// Ownership first: the replay query itself knows nothing about accounts.
+	if _, err := a.store.Get(r.Context(), user.ID, id); err != nil {
+		a.failConversation(w, err)
+		return
+	}
+	unseen, err := a.store.Unseen(r.Context(), id, r.URL.Query().Get("provider"))
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
@@ -319,6 +377,7 @@ func estimateTokens(entries []protocol.Entry) int64 {
 
 func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	user, _ := userFrom(ctx)
 	id := chi.URLParam(r, "id")
 
 	var body struct {
@@ -331,16 +390,20 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv, err := a.store.Get(ctx, id)
+	// The ownership check for everything below. The entry and provider-session
+	// queries this handler goes on to use take a conversation id alone.
+	conv, err := a.store.Get(ctx, user.ID, id)
 	if err != nil {
-		a.fail(w, err, http.StatusNotFound)
+		a.failConversation(w, err)
 		return
 	}
 	if body.Provider == "" {
 		body.Provider, body.Model = conv.Provider, conv.Model
 	}
 
-	if !a.hub.DaemonOnline() {
+	// This account's machine. Another account's machine being connected is no
+	// help, and must not be used.
+	if !a.hub.DaemonOnline(user.ID) {
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
 		return
 	}
@@ -349,12 +412,10 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	// for — never when the provider was selected. Selecting is free, and the
 	// transcript should say what happened, not what was contemplated.
 	//
-	// The condition is what this provider has not seen, and nothing else. It
-	// used to also require a provider CHANGE, which quietly assumed a switch is
-	// the only way a session goes missing. Moving a conversation to another
-	// folder drops the sessions too (they are keyed to the old directory), and
-	// under the old condition the next turn ran with no history at all — the
-	// agent starting blind, with nothing on screen saying so (docs/Bugs.md B-7).
+	// The condition is what this provider has not seen, and nothing else.
+	// Moving a conversation to another folder drops the sessions too (they are
+	// keyed to the old directory), so gating on a provider CHANGE left the next
+	// turn with no history at all (docs/Bugs.md B-7).
 	unseen, err := a.store.Unseen(ctx, id, body.Provider)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
@@ -368,7 +429,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 			a.fail(w, err, http.StatusInternalServerError)
 			return
 		}
-		a.hub.Broadcast(protocol.ClientEvent{
+		a.hub.BroadcastTo(user.ID, protocol.ClientEvent{
 			Type: protocol.EventEntryAdded, ConversationID: id, Entry: &marker,
 		})
 		for _, e := range unseen {
@@ -382,11 +443,11 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	// below — so the name travels with the same event rather than needing a
 	// second one. Only ever fills a blank (docs/Decisions.md D-024).
 	//
-	// A failure here is logged and not returned: the message is what the owner
-	// asked for, and refusing to send it because its conversation could not be
-	// named would trade the thing that matters for the thing that doesn't.
+	// A failure here is logged and not returned: the message is what was asked
+	// for, and refusing to send it because its conversation could not be named
+	// would trade the thing that matters for the thing that doesn't.
 	if conv.Title == "" {
-		if _, _, err := a.store.NameFrom(ctx, id, body.Text); err != nil {
+		if _, _, err := a.store.NameFrom(ctx, user.ID, id, body.Text); err != nil {
 			a.log.Warn("could not name the conversation", "conversation", id, "err", err)
 		}
 	}
@@ -394,12 +455,12 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	// Broadcast it. The conversation really is on the new provider after this,
 	// but without saying so the browser keeps the copy it fetched before the
 	// send and the composer snaps back to the old provider (docs/Bugs.md B-9).
-	switched, err := a.store.SetProvider(ctx, id, body.Provider, body.Model)
+	switched, err := a.store.SetProvider(ctx, user.ID, id, body.Provider, body.Model)
 	if err != nil {
-		a.fail(w, err, http.StatusInternalServerError)
+		a.failConversation(w, err)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{
 		Type: protocol.EventConversation, Conversation: &switched,
 	})
 
@@ -408,7 +469,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{
 		Type: protocol.EventEntryAdded, ConversationID: id, Entry: &userEntry,
 	})
 
@@ -417,19 +478,19 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{
 		Type: protocol.EventEntryAdded, ConversationID: id, Entry: &agentEntry,
 	})
 
 	turnID := agentEntry.ID
 	a.mu.Lock()
 	a.turns[turnID] = &turn{
-		ConversationID: id, EntryID: agentEntry.ID,
+		UserID: user.ID, ConversationID: id, EntryID: agentEntry.ID,
 		Provider: body.Provider, Model: body.Model,
 	}
 	a.mu.Unlock()
 
-	sent := a.hub.SendToDaemon(protocol.ServerMessage{
+	sent := a.hub.SendToDaemon(user.ID, protocol.ServerMessage{
 		Type: protocol.ServerRunTurn,
 		Turn: &protocol.RunTurn{
 			TurnID:          turnID,
@@ -459,20 +520,22 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 // one path for "this turn is over" rather than a second one that has to be kept
 // in step with the first.
 func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
 	turnID := chi.URLParam(r, "turnId")
 
 	a.mu.Lock()
-	_, running := a.turns[turnID]
+	t := a.turns[turnID]
 	a.mu.Unlock()
-	if !running {
+	// Another account's turn is answered exactly like one that has finished.
+	// Saying "not yours" would confirm that a turn id is live.
+	if t == nil || t.UserID != user.ID {
 		// The click and the turn ending race by nature, so this is an ordinary
 		// outcome rather than something to alarm anyone about — but it is not a
-		// success either, because nothing was stopped. The client treats it as
-		// "already finished" and says nothing.
+		// success either, because nothing was stopped.
 		a.fail(w, errTurnNotRunning, http.StatusConflict)
 		return
 	}
-	if !a.hub.SendToDaemon(protocol.ServerMessage{
+	if !a.hub.SendToDaemon(user.ID, protocol.ServerMessage{
 		Type: protocol.ServerStopTurn, TurnID: turnID,
 	}) {
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
@@ -486,24 +549,27 @@ func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
 // daemon messages
 // ---------------------------------------------------------------------------
 
-func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
+// handleDaemonMessage acts on what an account's machine reports. A machine can
+// only report on its own account's turns: a turn id belonging to anyone else is
+// ignored exactly like one that does not exist.
+func (a *API) handleDaemonMessage(userID string, msg protocol.DaemonMessage) {
 	ctx := context.Background()
 
 	switch msg.Type {
 	case protocol.DaemonHello:
-		a.hub.SetProviders(msg.Providers)
+		a.hub.SetProviders(userID, msg.Providers)
 		return
 	case protocol.DaemonLimit:
 		// Not tied to a turn's lifecycle: the window belongs to the provider,
 		// and it stays true after the turn that happened to report it ends.
-		a.hub.SetHeadroom(msg.Provider, msg.Headroom)
+		a.hub.SetHeadroom(userID, msg.Provider, msg.Headroom)
 		return
 	}
 
 	a.mu.Lock()
 	t := a.turns[msg.TurnID]
 	a.mu.Unlock()
-	if t == nil {
+	if t == nil || t.UserID != userID {
 		return
 	}
 
@@ -521,7 +587,7 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 		if err := a.store.AppendDelta(ctx, t.EntryID, msg.Text); err != nil {
 			a.log.Error("append delta", "err", err)
 		}
-		a.hub.Broadcast(protocol.ClientEvent{
+		a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 			Type: protocol.EventEntryDelta, ConversationID: t.ConversationID,
 			EntryID: t.EntryID, Text: msg.Text,
 		})
@@ -535,8 +601,8 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 		//
 		// The daemon's text wins over the deltas we accumulated. A provider that
 		// does not stream sends no deltas at all, so t.Streamed is empty and the
-		// parser's recovered messages are the only copy there is — preferring
-		// the wrong one silently threw away real output (docs/Bugs.md B-10).
+		// parser's recovered messages are the only copy there is (docs/Bugs.md
+		// B-10).
 		text := msg.Full
 		if text == "" {
 			text = t.Streamed
@@ -545,8 +611,7 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 
 	case protocol.DaemonStopped:
 		// No failure text. The turn ended because it was asked to, and any error
-		// the CLI produced while being killed is a consequence of that rather
-		// than something the owner needs to read.
+		// the CLI produced while being killed is a consequence of that.
 		text := msg.Full
 		if text == "" {
 			text = t.Streamed
@@ -555,23 +620,24 @@ func (a *API) handleDaemonMessage(msg protocol.DaemonMessage) {
 	}
 }
 
-// abandonTurns closes out every turn still in flight, because the machine
-// running them has gone.
+// abandonTurns closes out every turn one account's machine was running,
+// because that machine has gone.
 //
 // Only a message carrying a turn id ever finished a turn, and the process that
 // would have sent one no longer exists — so without this the agent entry stays
-// an empty placeholder, the composer stays locked and the working indicator
-// ticks forever, including after a refresh, since the placeholder is a real row
-// (docs/Bugs.md B-8).
+// an empty placeholder and the composer stays locked, including after a
+// refresh (docs/Bugs.md B-8). Other accounts' turns run on other machines and
+// are untouched.
 //
-// Called only when the disconnecting socket was still the current daemon. A
-// daemon that reconnected has already replaced it, and its turns are somebody
-// else's.
-func (a *API) abandonTurns(reason string) {
+// Called only when the disconnecting socket was still the current one. A
+// daemon that reconnected has already replaced it.
+func (a *API) abandonTurns(userID, reason string) {
 	a.mu.Lock()
-	ids := make([]string, 0, len(a.turns))
-	for id := range a.turns {
-		ids = append(ids, id)
+	var ids []string
+	for id, t := range a.turns {
+		if t.UserID == userID {
+			ids = append(ids, id)
+		}
 	}
 	a.mu.Unlock()
 	if len(ids) == 0 {
@@ -580,11 +646,8 @@ func (a *API) abandonTurns(reason string) {
 
 	a.log.Warn("machine went away mid-turn", "turns", len(ids))
 	for _, id := range ids {
-		// Text that arrived before the machine went is kept, for the same
-		// reason a failed turn keeps its partial answer: it is still worth
-		// reading, and deleting it would hide how far the turn got. finishTurn
-		// re-reads the turn under the lock and does nothing if it has since
-		// finished on its own.
+		// Text that arrived before the machine went is kept. finishTurn re-reads
+		// the turn under the lock and does nothing if it has since finished.
 		a.mu.Lock()
 		t := a.turns[id]
 		a.mu.Unlock()
@@ -621,20 +684,15 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		a.log.Error("finish entry", "err", err)
 		return
 	}
-	a.hub.Broadcast(protocol.ClientEvent{
+	a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 		Type: protocol.EventEntryDone, ConversationID: t.ConversationID, Entry: &entry,
 	})
 
 	if tokens > 0 || spendTicks > 0 {
 		if conv, err := a.store.AddUsage(ctx, t.ConversationID, tokens, spendTicks); err == nil {
-			a.hub.Broadcast(protocol.ClientEvent{
+			a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 				Type: protocol.EventConversation, Conversation: &conv,
 			})
 		}
 	}
-
 }
-
-// SetupCode is what claims the first account, for main.go to print at startup.
-// Only meaningful while nobody has signed up.
-func (a *API) SetupCode() string { return a.setupCode }

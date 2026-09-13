@@ -11,7 +11,7 @@ owner's and an installed user's side. The agent rules that enforce it live in
 
 ```mermaid
 flowchart LR
-    P1["Phase 1 on the current main workflow<br/>Accounts · workspaces · pairing · auto-start · safe updates"]
+    P1["Phase 1 on the current main workflow<br/>Invited accounts · pairing · auto-start · safe updates"]
     V1{"Owner verifies the installed<br/>daemon end to end"}
     P2["Activate phase 2<br/>development → staging → production"]
     W["Isolated agent worktree<br/>feature branch + local stack"]
@@ -37,8 +37,9 @@ branches still reach `main` through pull requests, and `main` remains the
 production deployment.
 
 The owner approved the deliberately narrow
-[`first usable release`](../specs/2026-09-12-first-usable-release.md): normal accounts, initial
-computer pairing, auto-start and safe update controls. The broader account/workspace,
+[`first usable release`](../specs/2026-09-12-first-usable-release.md): invitation-only accounts
+isolated from one another, password reset, computer pairing and disconnecting, auto-start and safe
+update controls. The broader account/workspace,
 runtime-management, navigation and appearance documents remain later drafts. They do not expand
 this phase merely because they are already written down.
 
@@ -68,7 +69,7 @@ From an installed user's point of view, the finished experience is:
    it rolls back.
 6. Successful updates are quiet. The app surfaces only action that a person
    needs to take: pairing approval, an incompatible version, a failed update,
-   missing provider authentication, or a revoked machine.
+   missing provider authentication, or a disconnected computer.
 
 This phase does not establish a permanent product navigation or a general
 Settings area. Design covers only the first-use journey and the approved update
@@ -94,8 +95,12 @@ server.
 
 Phase 2 may begin only after the owner can verify all of these as a normal user:
 
-- a new person can create, verify and later sign in to an account without a
-  server-log setup code;
+- an invited person can create, verify and later sign in to an account without a
+  server-log setup code, and an address that was not invited cannot, but its request for
+  access reaches the owner;
+- a person who forgot their password can reset it through their email;
+- a second account cannot see the first account's conversations or send work to
+  its computer;
 - a clean Windows machine can install without cloning the repository;
 - first setup can discover the local component, offer installation when absent,
   finish pairing when present, or be skipped and resumed later;
@@ -111,7 +116,9 @@ Phase 2 may begin only after the owner can verify all of these as a normal user:
   activation, and waits until every active agent on that computer has finished;
 - an intentionally broken test update rolls back;
 - an older daemon gets a useful compatibility message rather than failing
-  mysteriously.
+  mysteriously;
+- a disconnected computer is refused on its next attempt and needs approval to
+  reconnect, while another connected computer keeps working.
 
 ## Phase 2 — activate development, staging and production promotion
 
@@ -157,7 +164,7 @@ come from environment configuration, never branch-specific source changes.
 - A failed web/API production release rolls back to the previous verified image
   digest. Database migrations must be compatible with that rollback.
 - A failed daemon update rolls back locally to the previous signed version and
-  reports the failure in Runtimes.
+  reports the failure where the person checks update status.
 - A production hotfix starts from `main`, is proved locally, and reaches
   production through an owner-approved pull request. It is then merged forward
   into `develop` so the lanes do not diverge.

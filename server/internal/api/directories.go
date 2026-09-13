@@ -10,20 +10,21 @@ import (
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
 
-// listDirectories asks the daemon what is inside a path.
+// listDirectories asks this account's machine what is inside a path.
 //
-// The server never touches the filesystem itself. Today it happens to run on
-// the same machine, so os.ReadDir would appear to work — and would quietly
-// start listing the SERVER's disk the day this is deployed to Coolify, showing
-// a container's directories as if they were the owner's. Going through the
-// daemon is the same amount of work and cannot drift into that.
+// The server never touches the filesystem itself. os.ReadDir would list the
+// SERVER's disk the day this is deployed, showing a container's directories as
+// if they were the person's. Going through the daemon is the same amount of
+// work and cannot drift into that — and only ever reaches the machine of the
+// account asking.
 func (a *API) listDirectories(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
 	// Long enough for a spun-down drive, short enough that a wedged daemon does
 	// not hold the request open.
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	reply, err := a.hub.Ask(ctx, protocol.ServerMessage{
+	reply, err := a.hub.Ask(ctx, user.ID, protocol.ServerMessage{
 		Type: protocol.ServerListDir,
 		Path: r.URL.Query().Get("path"),
 	})
@@ -46,9 +47,10 @@ func (a *API) listDirectories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, reply.Listing)
 }
 
-// recentFolders backs the picker's shortcut list.
+// recentFolders backs the picker's shortcut list: this account's folders only.
 func (a *API) recentFolders(w http.ResponseWriter, r *http.Request) {
-	folders, err := a.store.RecentFolders(r.Context(), 8)
+	user, _ := userFrom(r.Context())
+	folders, err := a.store.RecentFolders(r.Context(), user.ID, 8)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return

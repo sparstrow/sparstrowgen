@@ -8,6 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccessRequest struct {
+	Email            string             `json:"email"`
+	FirstRequestedAt pgtype.Timestamptz `json:"first_requested_at"`
+	LastRequestedAt  pgtype.Timestamptz `json:"last_requested_at"`
+	TimesRequested   int32              `json:"times_requested"`
+}
+
 type Conversation struct {
 	ID         pgtype.UUID        `json:"id"`
 	Title      *string            `json:"title"`
@@ -20,6 +27,17 @@ type Conversation struct {
 	Tokens     int64              `json:"tokens"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	UserID     pgtype.UUID        `json:"user_id"`
+}
+
+type EmailLink struct {
+	TokenHash    []byte             `json:"token_hash"`
+	Kind         string             `json:"kind"`
+	Email        string             `json:"email"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	UsedAt       pgtype.Timestamptz `json:"used_at"`
+	SupersededAt pgtype.Timestamptz `json:"superseded_at"`
 }
 
 type Entry struct {

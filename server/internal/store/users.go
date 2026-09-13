@@ -21,11 +21,7 @@ type User struct {
 }
 
 // ErrEmailTaken is the unique constraint on users.email, named.
-var ErrEmailTaken = errors.New("that email already has an account")
-
-// ErrAlreadyClaimed is the users_only_one index, named. It is the loser of a
-// race between two sign-ups, which the database decided.
-var ErrAlreadyClaimed = errors.New("this app already has an account")
+var ErrEmailTaken = errors.New("that address already has an account — sign in instead")
 
 // ErrNoAccount covers both "no such email" and "wrong password", deliberately
 // as one error. Telling them apart tells a stranger which emails exist.
@@ -33,58 +29,48 @@ var ErrNoAccount = errors.New("that email and password do not match an account")
 
 const uniqueViolation = "23505"
 
-// singletonIndex is the unique index that permits exactly one row in users.
-// Named here because the two constraints on that table mean different things to
-// a caller: one is "pick another email", the other is "you are not the owner".
-const singletonIndex = "users_only_one"
-
-// Claimed reports whether the app has an owner yet.
-//
-// Sign-up is reachable only while this is false. It is the whole gate: what is
-// behind this login runs coding agents on the owner's machine, so a sign-up
-// form that stays open is a form that hands a stranger a shell.
-func (s *Store) Claimed(ctx context.Context) (bool, error) {
-	n, err := s.q.CountUsers(ctx)
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
-// UserCount is how many accounts exist. Claimed answers the question the app
-// asks; this answers the one a test asks, which is whether the "exactly one"
-// rule actually held.
+// UserCount is how many accounts exist. Tests use it to assert that a flow
+// created exactly the accounts it should have.
 func (s *Store) UserCount(ctx context.Context) (int64, error) {
 	return s.q.CountUsers(ctx)
 }
 
-// CreateUser makes the account.
-//
-// Two simultaneous sign-ups can both pass the Claimed check — there is no lock
-// between counting rows and inserting one, and they may be on different
-// connections seeing different snapshots. So the check is not what enforces
-// "one account": the users_only_one index is, and this reads which constraint
-// refused in order to say the true thing to the loser.
+// UserByEmail finds an account by address, and reports whether there is one.
+func (s *Store) UserByEmail(ctx context.Context, email string) (User, bool, error) {
+	row, err := s.q.GetUserByEmail(ctx, NormaliseEmail(email))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, false, nil
+	}
+	if err != nil {
+		return User{}, false, err
+	}
+	return User{ID: uuidToString(row.ID), Email: row.Email}, true, nil
+}
+
+// CreateUser makes an account directly. People create accounts through a
+// confirmation link (CompleteRegistration); this is for tests, which need an
+// account without an inbox.
 func (s *Store) CreateUser(ctx context.Context, email, password string) (User, error) {
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return User{}, err
 	}
 	row, err := s.q.CreateUser(ctx, db.CreateUserParams{
-		Email:        normaliseEmail(email),
+		Email:        NormaliseEmail(email),
 		PasswordHash: hash,
 	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
-		if pgErr.ConstraintName == singletonIndex {
-			return User{}, ErrAlreadyClaimed
-		}
+	if isUniqueViolation(err) {
 		return User{}, ErrEmailTaken
 	}
 	if err != nil {
 		return User{}, err
 	}
 	return User{ID: uuidToString(row.ID), Email: row.Email}, nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
 }
 
 // SignIn checks an email and password and, if they match, starts the session —
@@ -110,7 +96,7 @@ func (s *Store) SignIn(ctx context.Context, email, password, userAgent, ip strin
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
-	row, err := q.GetUserByEmailForSignIn(ctx, normaliseEmail(email))
+	row, err := q.GetUserByEmailForSignIn(ctx, NormaliseEmail(email))
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Deliberately wasted work. The cost of the hash is the point.
 		_, _ = auth.VerifyPassword(decoyHash, password)
@@ -127,18 +113,8 @@ func (s *Store) SignIn(ctx context.Context, email, password, userAgent, ip strin
 		return User{}, "", time.Time{}, ErrNoAccount
 	}
 
-	token, hash, err := auth.NewToken()
+	token, expires, err := newSession(ctx, q, row.ID, userAgent, ip)
 	if err != nil {
-		return User{}, "", time.Time{}, err
-	}
-	expires := time.Now().Add(auth.Lifetime)
-	if _, err := q.CreateSession(ctx, db.CreateSessionParams{
-		TokenHash: hash,
-		UserID:    row.ID,
-		ExpiresAt: stamp(expires),
-		UserAgent: userAgent,
-		Ip:        ip,
-	}); err != nil {
 		return User{}, "", time.Time{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -218,22 +194,51 @@ func (s *Store) ChangePassword(ctx context.Context, userID, current, next string
 	return ended, nil
 }
 
-// normaliseEmail trims and lowercases.
+// NormaliseEmail trims and lowercases.
 //
 // The column is citext so the database already compares case-insensitively;
 // this stops a leading space from creating an address that looks identical to
-// the one the owner thinks he typed. Nothing clever beyond that — "normalising"
-// an email any further (stripping dots, cutting +tags) is a decision about
-// somebody else's mail server that is not ours to make.
-func normaliseEmail(email string) string {
+// the one the owner thinks he typed, and lets the invitation list be compared
+// in Go the same way. Nothing clever beyond that — "normalising" an email any
+// further (stripping dots, cutting +tags) is a decision about somebody else's
+// mail server that is not ours to make.
+func NormaliseEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
 // DeleteEveryUser exists for tests, and only for tests.
 //
-// The app can be claimed once, so a suite that runs more than one test needs a
-// way back to unclaimed. Deleting a user cascades to their sessions, so this
-// leaves nothing behind.
+// A suite needs a way back to "nobody has an account". Conversations reference
+// their account without a cascade (D-009), so they and their children go first;
+// sessions go with their users by ON DELETE CASCADE; links and access requests
+// are keyed by address and are emptied too, or one run's request would be the
+// next run's repeat. One transaction, so a failure halfway leaves the database
+// as it was.
 func (s *Store) DeleteEveryUser(ctx context.Context) (int64, error) {
-	return s.q.DeleteEveryUser(ctx)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	if err := q.DeleteEveryEntry(ctx); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteEveryProviderSession(ctx); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteEveryConversation(ctx); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteEveryEmailLink(ctx); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteEveryAccessRequest(ctx); err != nil {
+		return 0, err
+	}
+	n, err := q.DeleteEveryUser(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return n, tx.Commit(ctx)
 }

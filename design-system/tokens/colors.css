@@ -1,0 +1,60 @@
+/* MIRRORED from apps/web/app/globals.css — do not change values here.
+ *
+ * There is no DESIGN.md or design-system manifest yet, so prototypes build on
+ * the tokens the live app already ships rather than inventing a palette. When
+ * the design-system skill runs, it takes ownership of this file and records a
+ * fingerprint of the source so drift can be checked.
+ */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --provider-claude: oklch(0.7 0.128 45);
+  --provider-codex: oklch(0.82 0.012 250);
+  --provider-agy: oklch(0.7 0.115 255);
+}
+
+.dark {
+  --background: oklch(0.155 0.006 260);
+  --foreground: oklch(0.95 0.003 260);
+  --card: oklch(0.195 0.007 260);
+  --card-foreground: oklch(0.95 0.003 260);
+  --popover: oklch(0.215 0.008 260);
+  --popover-foreground: oklch(0.95 0.003 260);
+  --primary: oklch(0.92 0.003 260);
+  --primary-foreground: oklch(0.205 0.007 260);
+  --secondary: oklch(0.25 0.008 260);
+  --secondary-foreground: oklch(0.95 0.003 260);
+  --muted: oklch(0.25 0.008 260);
+  --muted-foreground: oklch(0.68 0.01 260);
+  --accent: oklch(0.3 0.01 260);
+  --accent-foreground: oklch(0.95 0.003 260);
+  --destructive: oklch(0.68 0.19 22);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.55 0.01 260);
+
+  --provider-claude: oklch(0.74 0.13 45);
+  --provider-codex: oklch(0.86 0.01 250);
+  --provider-agy: oklch(0.74 0.12 255);
+}

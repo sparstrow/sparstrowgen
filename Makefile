@@ -37,18 +37,24 @@ migrate:
 # repository and only ever unlocks a server on localhost. Production sets these
 # in Coolify (docs/runbooks/deploy.md).
 #
-# There is no password here any more. Accounts live in Postgres, so signing in
-# locally means creating an account once with the setup code the server prints
-# when it starts, exactly as in production.
+# There is no password here. Accounts live in Postgres: register the owner
+# address below at http://localhost:3000/register, exactly as in production.
+# With MAIL_TRANSPORT=log the confirmation link is printed in the server's
+# output instead of being emailed.
 #
 # These live here rather than as defaults in the program on purpose. The server
 # refuses to start without them, so there is exactly one code path and no
-# "authentication off" mode that could reach production by accident.
+# "authentication off" or "mail off" mode that could reach production by
+# accident.
 DEV_DAEMON_TOKEN  ?= dev-daemon-token-not-a-secret-0123456789
 DEV_WEB_ORIGIN    ?= http://localhost:3000
+DEV_OWNER_EMAIL   ?= owner@localhost.test
 
 export DAEMON_TOKEN        = $(DEV_DAEMON_TOKEN)
 export WEB_ORIGIN          = $(DEV_WEB_ORIGIN)
+export OWNER_EMAIL         = $(DEV_OWNER_EMAIL)
+# Development only; the server refuses it when SESSION_SECURE is on.
+export MAIL_TRANSPORT      = log
 # http://localhost is not https, so a Secure cookie would never be stored.
 export SESSION_SECURE      = false
 

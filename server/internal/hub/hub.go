@@ -1,8 +1,9 @@
-// Package hub owns every live connection: the browsers watching, and the one
-// daemon doing the work.
+// Package hub owns every live connection: the browsers watching, and the
+// machines doing the work — each belonging to one account.
 //
-// The daemon dials out to us and nothing ever dials in to the owner's machine
-// (AGENTS.md §3), so from here a daemon is just a websocket that appeared.
+// The daemon dials out to us and nothing ever dials in to anyone's machine
+// (AGENTS.md §3), so from here a daemon is just a websocket that appeared and
+// proved which account it works for.
 package hub
 
 import (
@@ -20,10 +21,18 @@ import (
 )
 
 // ErrDaemonOffline is returned by Ask when there is no machine to ask. It is a
-// normal outcome and not a fault — the owner's machine is allowed to be asleep —
-// so callers answer it differently from a real error: a picker says "machine
+// normal outcome and not a fault — a machine is allowed to be asleep — so
+// callers answer it differently from a real error: a picker says "machine
 // unreachable", not "something went wrong".
 var ErrDaemonOffline = errors.New("the machine is not connected")
+
+/* Every method that sends, reads or changes machine state takes an ACCOUNT.
+
+There is no broadcast to everyone, and that is the point. Before accounts could
+be more than one, "every browser" and "the owner's browsers" were the same set,
+and a conversation event went to all of them. With a second account that is a
+stream of somebody else's transcript. So the only way to send an event is to
+name whose it is (docs/KnownGaps.md G-27). */
 
 type Hub struct {
 	mu sync.RWMutex
@@ -31,42 +40,55 @@ type Hub struct {
 	// Browsers, and WHOSE they are. The session is carried here so that ending
 	// a session can close the socket it opened: a websocket is authenticated
 	// once, at the handshake, and then stays open for as long as the tab does.
-	// Without this, "sign out everywhere" deletes rows while the tab it was
-	// pressed about keeps receiving every conversation event.
 	clients map[*websocket.Conn]client
 
-	// One daemon, because one machine. A second connection replaces the first
-	// rather than being rejected: a daemon that restarted after a network drop
-	// should not be locked out by its own stale socket.
-	daemon    *websocket.Conn
-	providers []protocol.Provider
+	// One machine per account. A second connection for the same account
+	// replaces the first rather than being rejected: a daemon that restarted
+	// after a network drop should not be locked out by its own stale socket.
+	// Several machines per account arrive with pairing (US2), where each gets
+	// its own credential and identity.
+	machines map[string]*machine
 
 	// Waiters for daemon replies, by request id. See Ask.
-	pending map[string]chan protocol.DaemonMessage
+	pending map[string]waiter
 	// Request ids only have to be unique among the requests in flight in this
-	// process, so a counter does the job and saves a uuid dependency the module
-	// does not otherwise have — every other id here comes from Postgres.
+	// process, so a counter does the job.
 	nextRequest atomic.Uint64
 
 	log *slog.Logger
-
-	// OnDaemonMessage is set by the server so the hub stays free of database
-	// and turn-handling concerns.
-	OnDaemonMessage func(protocol.DaemonMessage)
 }
 
 // client is who is on the other end of a browser socket.
 type client struct {
 	// UserID is the account. Used by DisconnectUser, which is what a password
-	// change and "sign out everywhere" need.
+	// change and "sign out everywhere" need, and by every event to decide who
+	// receives it.
 	UserID string
 	// SessionHash identifies the one session, so an ordinary sign-out closes
-	// only the tab that pressed it and not the owner's other devices.
+	// only the tab that pressed it and not the account's other devices.
 	SessionHash string
 }
 
+type machine struct {
+	conn      *websocket.Conn
+	providers []protocol.Provider
+}
+
+// waiter is a request waiting for a machine's answer, and the account whose
+// machine may give it. A reply from any other account's machine is ignored,
+// however it came by the request id.
+type waiter struct {
+	userID string
+	reply  chan protocol.DaemonMessage
+}
+
 func New(log *slog.Logger) *Hub {
-	return &Hub{clients: map[*websocket.Conn]client{}, log: log, providers: []protocol.Provider{}}
+	return &Hub{
+		clients:  map[*websocket.Conn]client{},
+		machines: map[string]*machine{},
+		pending:  map[string]waiter{},
+		log:      log,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -80,8 +102,8 @@ func (h *Hub) AddClient(c *websocket.Conn, userID, sessionHash string) {
 
 	// Tell it what it needs to render immediately, rather than leaving the
 	// surface guessing until the next event happens to arrive.
-	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventDaemon, Online: h.DaemonOnline()})
-	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers()})
+	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventDaemon, Online: h.DaemonOnline(userID)})
+	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 }
 
 func (h *Hub) RemoveClient(c *websocket.Conn) {
@@ -130,11 +152,15 @@ func (h *Hub) disconnect(match func(client) bool) int {
 	return len(closing)
 }
 
-func (h *Hub) Broadcast(ev protocol.ClientEvent) {
+// BroadcastTo sends an event to every browser signed in to one account, and to
+// nobody else.
+func (h *Hub) BroadcastTo(userID string, ev protocol.ClientEvent) {
 	h.mu.RLock()
 	conns := make([]*websocket.Conn, 0, len(h.clients))
-	for c := range h.clients {
-		conns = append(conns, c)
+	for conn, c := range h.clients {
+		if c.UserID == userID {
+			conns = append(conns, conn)
+		}
 	}
 	h.mu.RUnlock()
 
@@ -163,98 +189,119 @@ func (h *Hub) sendTo(c *websocket.Conn, ev protocol.ClientEvent) {
 }
 
 // ---------------------------------------------------------------------------
-// daemon
+// machines
 // ---------------------------------------------------------------------------
 
-func (h *Hub) SetDaemon(c *websocket.Conn) {
+// SetDaemon records the machine now connected for an account, closing any
+// socket it replaces.
+func (h *Hub) SetDaemon(userID string, c *websocket.Conn) {
 	h.mu.Lock()
-	old := h.daemon
-	h.daemon = c
+	var old *websocket.Conn
+	if m := h.machines[userID]; m != nil {
+		old = m.conn
+	}
+	h.machines[userID] = &machine{conn: c, providers: []protocol.Provider{}}
 	h.mu.Unlock()
 	if old != nil {
 		_ = old.Close()
 	}
-	h.Broadcast(protocol.ClientEvent{Type: protocol.EventDaemon, Online: true})
+	h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventDaemon, Online: true})
 }
 
-// ClearDaemon drops a daemon connection, and reports whether it was still the
-// current one.
+// ClearDaemon drops a machine's connection, and reports whether it was still
+// that account's current one.
 //
 // The answer matters. A daemon that reconnects has already replaced this socket
 // through SetDaemon, and the old socket's read loop only notices afterwards —
 // so a late teardown from a superseded connection must not announce that the
 // machine has gone, and must not let its caller abandon the new daemon's work
-// (docs/Bugs.md B-8). This used to broadcast offline either way, which told
-// every browser the machine was unreachable moments after it reconnected.
-func (h *Hub) ClearDaemon(c *websocket.Conn) bool {
+// (docs/Bugs.md B-8).
+func (h *Hub) ClearDaemon(userID string, c *websocket.Conn) bool {
 	h.mu.Lock()
-	current := h.daemon == c
+	m := h.machines[userID]
+	current := m != nil && m.conn == c
 	if current {
-		h.daemon = nil
 		// Availability is not knowledge we still have. Reporting the last
 		// providers we saw would claim the machine is answering when it is not.
-		h.providers = []protocol.Provider{}
+		delete(h.machines, userID)
 	}
 	h.mu.Unlock()
 	_ = c.Close()
 	if !current {
 		return false
 	}
-	h.Broadcast(protocol.ClientEvent{Type: protocol.EventDaemon, Online: false})
-	h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers()})
+	h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventDaemon, Online: false})
+	h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 	return true
 }
 
-func (h *Hub) DaemonOnline() bool {
+func (h *Hub) DaemonOnline(userID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.daemon != nil
+	return h.machines[userID] != nil
 }
 
-func (h *Hub) SetProviders(p []protocol.Provider) {
+// SetProviders records what an account's machine can run. Ignored when that
+// account has no machine connected: a hello from a socket that has since been
+// replaced must not resurrect it.
+func (h *Hub) SetProviders(userID string, p []protocol.Provider) {
 	h.mu.Lock()
-	h.providers = p
+	m := h.machines[userID]
+	if m != nil {
+		m.providers = p
+	}
 	h.mu.Unlock()
-	h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: p})
+	if m == nil {
+		return
+	}
+	h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 }
 
-// SetHeadroom records a usage window for one provider and tells every browser.
+// SetHeadroom records a usage window for one provider on one account's machine.
 //
 // It arrives mid-turn because that is the only time a provider mentions one, so
 // this is the one piece of provider state that is learned by doing work rather
 // than by probing.
-func (h *Hub) SetHeadroom(provider string, head *protocol.Headroom) {
+func (h *Hub) SetHeadroom(userID, provider string, head *protocol.Headroom) {
 	h.mu.Lock()
 	changed := false
-	for i := range h.providers {
-		if h.providers[i].ID == provider {
-			h.providers[i].Headroom = head
-			changed = true
-			break
+	if m := h.machines[userID]; m != nil {
+		for i := range m.providers {
+			if m.providers[i].ID == provider {
+				m.providers[i].Headroom = head
+				changed = true
+				break
+			}
 		}
 	}
 	h.mu.Unlock()
 	if changed {
-		h.Broadcast(protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers()})
+		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 	}
 }
 
-func (h *Hub) Providers() []protocol.Provider {
+// Providers is what an account's machine can run. Never nil: an account with no
+// machine has an empty list, and the surface renders that as its own state.
+func (h *Hub) Providers(userID string) []protocol.Provider {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	out := make([]protocol.Provider, len(h.providers))
-	copy(out, h.providers)
+	m := h.machines[userID]
+	if m == nil {
+		return []protocol.Provider{}
+	}
+	out := make([]protocol.Provider, len(m.providers))
+	copy(out, m.providers)
 	return out
 }
 
-// SendToDaemon returns false when the machine is unreachable. The caller must
-// treat that as a real outcome and say so, not queue silently: a message that
-// looks sent and never runs is worse than one that was refused.
-func (h *Hub) SendToDaemon(msg protocol.ServerMessage) bool {
+// SendToDaemon returns false when the account's machine is unreachable. The
+// caller must treat that as a real outcome and say so, not queue silently: a
+// message that looks sent and never runs is worse than one that was refused.
+func (h *Hub) SendToDaemon(userID string, msg protocol.ServerMessage) bool {
 	h.mu.RLock()
-	d := h.daemon
+	m := h.machines[userID]
 	h.mu.RUnlock()
-	if d == nil {
+	if m == nil {
 		return false
 	}
 	payload, err := json.Marshal(msg)
@@ -263,27 +310,26 @@ func (h *Hub) SendToDaemon(msg protocol.ServerMessage) bool {
 		return false
 	}
 	h.mu.Lock()
-	err = d.WriteMessage(websocket.TextMessage, payload)
+	err = m.conn.WriteMessage(websocket.TextMessage, payload)
 	h.mu.Unlock()
 	return err == nil
 }
 
 // ---------------------------------------------------------------------------
-// asking the daemon something
+// asking a machine something
 // ---------------------------------------------------------------------------
 
-// Ask sends a message and waits for the daemon's reply to it.
+// Ask sends a message to an account's machine and waits for its reply.
 //
 // Every other exchange here is one-way: the server tells the daemon to run a
 // turn, the daemon streams back what happens. Directory browsing is the first
-// thing that needs an answer, because only the daemon can see the filesystem —
-// the server is meant to run somewhere else entirely.
+// thing that needs an answer, because only the daemon can see the filesystem.
 //
 // Replies are matched by request id rather than by order, since a browser can
 // have several pickers open and the daemon may answer them in any sequence.
 // The waiter is always removed, on every path, or a client that gave up would
 // leak a channel per keystroke.
-func (h *Hub) Ask(ctx context.Context, msg protocol.ServerMessage) (protocol.DaemonMessage, error) {
+func (h *Hub) Ask(ctx context.Context, userID string, msg protocol.ServerMessage) (protocol.DaemonMessage, error) {
 	id := strconv.FormatUint(h.nextRequest.Add(1), 10)
 	msg.RequestID = id
 
@@ -291,10 +337,7 @@ func (h *Hub) Ask(ctx context.Context, msg protocol.ServerMessage) (protocol.Dae
 	// dropped by the garbage collector rather than blocking the read loop.
 	reply := make(chan protocol.DaemonMessage, 1)
 	h.mu.Lock()
-	if h.pending == nil {
-		h.pending = map[string]chan protocol.DaemonMessage{}
-	}
-	h.pending[id] = reply
+	h.pending[id] = waiter{userID: userID, reply: reply}
 	h.mu.Unlock()
 
 	defer func() {
@@ -303,7 +346,7 @@ func (h *Hub) Ask(ctx context.Context, msg protocol.ServerMessage) (protocol.Dae
 		h.mu.Unlock()
 	}()
 
-	if !h.SendToDaemon(msg) {
+	if !h.SendToDaemon(userID, msg) {
 		return protocol.DaemonMessage{}, ErrDaemonOffline
 	}
 
@@ -315,22 +358,29 @@ func (h *Hub) Ask(ctx context.Context, msg protocol.ServerMessage) (protocol.Dae
 	}
 }
 
-// Deliver hands a daemon reply to whoever is waiting for it, and reports
+// Deliver hands a machine's reply to whoever is waiting for it, and reports
 // whether anyone was. A false means the message is an ordinary event and the
 // caller should handle it normally — including a late reply to a request that
 // has already been abandoned.
-func (h *Hub) Deliver(m protocol.DaemonMessage) bool {
+//
+// Only a machine of the account that asked may answer. Request ids are a
+// counter and easy to guess; the account is what makes a reply belong.
+func (h *Hub) Deliver(userID string, m protocol.DaemonMessage) bool {
 	if m.RequestID == "" {
 		return false
 	}
 	h.mu.RLock()
-	ch, ok := h.pending[m.RequestID]
+	w, ok := h.pending[m.RequestID]
 	h.mu.RUnlock()
 	if !ok {
 		return false
 	}
+	if w.userID != userID {
+		h.log.Warn("ignored a reply from another account's machine", "request", m.RequestID)
+		return true
+	}
 	select {
-	case ch <- m:
+	case w.reply <- m:
 	default:
 		// Already answered. Only reachable if the daemon replied twice.
 	}

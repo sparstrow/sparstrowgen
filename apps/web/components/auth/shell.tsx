@@ -1,20 +1,76 @@
 "use client";
 
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-/* The furniture shared by the two doors into the app.
+/* The furniture shared by every door into the app: sign in, create an account,
+ * the pages an email link opens, and password reset.
  *
- * It is one module rather than two similar screens because they are the same
- * screen to look at, and the failure mode of copying it is that one of them
- * quietly stops matching the other — a different field height, an error in a
- * different place. Nobody sees both in the same session, so nobody notices.
+ * It is one module rather than several similar screens because they are the
+ * same screen to look at, and the failure mode of copying it is that one of
+ * them quietly stops matching the others — a different field height, an error
+ * in a different place. Nobody sees them all in the same session, so nobody
+ * notices.
  *
- * Nothing here decides anything. What the door asks for, and what happens when
- * it opens, belongs to sign-in.tsx and sign-up.tsx.
+ * Nothing here decides anything. What each door asks for, and what happens when
+ * it opens, belongs to the screen that uses it.
  */
+
+/** The row of ways onward under a form — sign in instead, forgot password,
+ *  try again. Spread to both edges so two of them never read as one sentence. */
+export function AuthLinks({ children }: { children: React.ReactNode }) {
+  return <div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{children}</div>;
+}
+
+const quiet =
+  "text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline disabled:pointer-events-none disabled:opacity-60";
+
+/** A way onward that goes to another page. Muted, because it is never the
+ *  thing the screen is for. */
+export function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className={quiet}>
+      {children}
+    </Link>
+  );
+}
+
+/** The same, for a way onward that stays on this page. */
+export function TextButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={quiet}>
+      {children}
+    </button>
+  );
+}
+
+/** A sentence the screen needs you to read before doing anything. */
+export function Lede({ children }: { children: React.ReactNode }) {
+  return <p className="mb-4 text-sm leading-relaxed">{children}</p>;
+}
+
+/** A value the person cannot change here, labelled like a field so it lines
+ *  up with the fields around it — but not a disabled input, which reads as
+ *  something temporarily unavailable. */
+export function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="text-sm break-all">{value}</p>
+    </div>
+  );
+}
 
 export function AuthShell({
   title,
