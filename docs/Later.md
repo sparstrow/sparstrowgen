@@ -216,9 +216,10 @@ last seen, which agent CLIs it found, and a button to revoke one — plus `spars
 new machine instead of copying a secret into a service file.
 
 **Trigger:** a second machine, or the first time a machine needs to be revoked without disturbing
-the other. The owner has now selected browser pairing and per-machine revocation as part of the
-managed-daemon phase before the staging/development workflow is activated. See
-[`runbooks/release-workflow.md`](runbooks/release-workflow.md), phase 1.
+the other. Browser pairing and disconnecting one computer are now in the approved
+[`first usable release`](specs/2026-09-12-first-usable-release.md). What stays parked here is the
+rest of the screen: listing every computer with last-seen, found agent CLIs, renaming and model
+inventory.
 
 ## L-17 — Isolated pull-request preview deployments
 

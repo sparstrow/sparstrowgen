@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — later scope; account creation and initial pairing moved to the approved first usable release** |
+| **Status** | **Draft — later scope; account creation, password reset and initial pairing moved to the approved first usable release** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "I want account to be created and then lets have multiple workspace creation and manage as well. Then the setup should take to computer setup." |
 | **Design** | not designed yet |
