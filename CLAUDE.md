@@ -30,6 +30,17 @@ himself, from options. Backend decisions he wants decided well on his behalf.
 applies to schema, protocol, and boundaries. It does *not* mean more documents: two attempts at
 this app now, and the first died of planning. Spend care on engineering, not paperwork.
 
+### The agent's testing account
+
+`agent@sparstrow.com` is a real Hostinger mailbox the owner gave the agent full API access to, and
+now also a real sparstrowgen account on production, invited on purpose so account, registration and
+email flows can be tested end-to-end without asking him for anything (closed
+[`docs/KnownGaps.md`](docs/KnownGaps.md) G-29). Use it freely for that.
+
+Its password is never written to the repo, chat, or a commit — the same rule as any other secret
+(§5, and the deploy runbook's daemon-token step). To sign in, use **Forgot your password?** and read
+the reset link straight from the mailbox; there is no need to remember or store a password at all.
+
 ---
 
 ## 2. How features get built
