@@ -237,3 +237,18 @@ Normal pushes to `main` can still deploy automatically without that permission.
 
 **Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
 matching origins, and automatic cleanup when its pull request closes.
+
+## L-19 — Send confirmation/reset mail from a `no-reply@` alias instead of `agent@sparstrow.com`
+
+**Status:** parked **Raised:** 2026-09-13, deploy runbook for US1's SMTP settings
+
+`agent@sparstrow.com` currently sends its own confirmation and reset mail — `SMTP_USERNAME` and
+`MAIL_FROM` are the same mailbox, so recipients see mail "from" the address the owner also signs in
+and receives access-request emails on. Hostinger email aliases are free (included in the mailbox's
+existing plan, not a separate mailbox) and can be set as the visible sender, so a `no-reply@`
+alias on `agent@sparstrow.com` would only change `MAIL_FROM`; `SMTP_USERNAME`/`SMTP_PASSWORD` would
+stay the real mailbox's, since an alias has no login of its own.
+
+**Unblocks when:** the owner creates the `no-reply@sparstrow.com` alias in hPanel — then flip
+`MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) and the design-system mock/handoff
+back to `no-reply@sparstrow.com`.
