@@ -9,12 +9,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -32,15 +35,22 @@ func main() {
 	// default logger rather than by threading one through three backends.
 	slog.SetDefault(log)
 	serverURL := env("SERVER_WS", "ws://localhost:8080/daemon")
+	if len(os.Args) > 1 && os.Args[1] == "pair" {
+		pairMain(log)
+		return
+	}
 
 	// The shared secret proving this is the machine that was installed, not
 	// something else that found the socket. Required, for the same reason the
 	// server requires it: a daemon that silently connects without one would be
 	// refused by the server anyway, and failing here says why in one line
 	// instead of as an endless reconnect loop.
-	token := os.Getenv("DAEMON_TOKEN")
+	token := pairedCredential()
 	if token == "" {
-		log.Error("DAEMON_TOKEN is not set — it must match the server's")
+		token = os.Getenv("DAEMON_TOKEN")
+	}
+	if token == "" {
+		log.Error("no machine credential is available — pair this computer or set DAEMON_TOKEN for the legacy local route")
 		os.Exit(1)
 	}
 
@@ -153,7 +163,7 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 		// so say what it actually is rather than letting it look like the
 		// network being down.
 		if res != nil && res.StatusCode == http.StatusUnauthorized {
-			return errors.New("the server rejected this machine: DAEMON_TOKEN does not match the server's")
+			return errors.New("the server rejected this machine: its credential was revoked or it is still waiting for approval")
 		}
 		return err
 	}
@@ -218,6 +228,73 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 			go d.listDir(msg)
 		}
 	}
+}
+
+func credentialPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "sparstrowgen", "machine-credential")
+}
+func pairedCredential() string {
+	if raw := os.Getenv("SPARSTROWGEN_MACHINE_CREDENTIAL"); raw != "" {
+		return raw
+	}
+	p := credentialPath()
+	if p == "" {
+		return ""
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+func pairMain(log *slog.Logger) {
+	fs := flag.NewFlagSet("pair", flag.ExitOnError)
+	request := fs.String("request", "", "one-time pairing request")
+	name := fs.String("name", env("COMPUTERNAME", "This computer"), "computer name")
+	fs.Parse(os.Args[2:])
+	if *request == "" {
+		log.Error("pair requires -request from the sparstrowgen launch link")
+		return
+	}
+	base := env("SERVER_API", strings.Replace(strings.Replace(env("SERVER_WS", "ws://localhost:8080/daemon"), "ws://", "http://", 1), "wss://", "https://", 1))
+	base = strings.TrimSuffix(base, "/daemon")
+	body := strings.NewReader(fmt.Sprintf(`{"request":%q,"name":%q}`, *request, *name))
+	res, err := http.Post(base+"/daemon/pair", "application/json", body)
+	if err != nil {
+		log.Error("could not claim pairing request", "err", err)
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		log.Error("pairing was refused", "detail", strings.TrimSpace(string(raw)))
+		return
+	}
+	var reply struct {
+		Credential string `json:"credential"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil || reply.Credential == "" {
+		log.Error("pairing response had no credential", "err", err)
+		return
+	}
+	p := credentialPath()
+	if p == "" {
+		log.Error("could not choose a secure credential location")
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		log.Error("could not prepare credential location", "err", err)
+		return
+	}
+	if err := os.WriteFile(p, []byte(reply.Credential+"\n"), 0600); err != nil {
+		log.Error("could not save machine credential", "err", err)
+		return
+	}
+	log.Info("pairing request claimed; approve it in sparstrowgen, then start the daemon")
 }
 
 func (d *daemon) send(msg protocol.DaemonMessage) error {

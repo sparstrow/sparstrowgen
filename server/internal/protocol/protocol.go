@@ -324,7 +324,8 @@ const (
 	EventConversation = "conversation"
 	// EventDaemon reports whether the machine is reachable at all. Everything
 	// already said stays readable when it is not; only sending is impossible.
-	EventDaemon = "daemon"
+	EventDaemon   = "daemon"
+	EventMachines = "machines"
 )
 
 type ClientEvent struct {

@@ -362,6 +362,10 @@ export function useRealtime(onDaemon: (online: boolean) => void) {
           onDaemon(ev.online);
           break;
 
+        case "machines":
+          void qc.invalidateQueries({ queryKey: ["machines"] });
+          break;
+
         case "conversation":
           qc.setQueryData<Conversation>(
             keys.conversation(ev.conversation.id),

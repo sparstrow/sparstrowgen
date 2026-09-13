@@ -29,6 +29,8 @@ import { Composer } from "./composer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { ProductSidebar } from "@/components/product-sidebar";
 import { formatTokens, formatUsd } from "./provider-meta";
 
 /* Server state is TanStack Query's; view state is Zustand's; websocket events
@@ -314,6 +316,9 @@ export function ChatSurface() {
 
   return (
     <TooltipProvider>
+      <SidebarProvider className="h-full" defaultOpen>
+        <ProductSidebar current="chat" />
+        <SidebarInset className="min-w-0 rounded-none">
       <div className="flex h-full">
         <ConversationList
           conversations={conversations.data ?? []}
@@ -461,6 +466,8 @@ export function ChatSurface() {
           )}
         </main>
       </div>
+        </SidebarInset>
+      </SidebarProvider>
     </TooltipProvider>
   );
 }

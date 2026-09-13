@@ -73,6 +73,23 @@ export type Usage = {
   usd?: number;
 };
 
+export type Machine = {
+  id: string;
+  name: string;
+  approved: boolean;
+  createdAt: string;
+  lastSeenAt?: string;
+  online: boolean;
+  providers: Provider[];
+};
+
+export type Pairing = {
+  id: string;
+  status: "pending" | "claimed" | "approved" | "rejected";
+  machineId?: string;
+  expiresAt: string;
+};
+
 export type UserMessage = {
   id: string;
   role: "user";

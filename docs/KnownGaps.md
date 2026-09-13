@@ -177,6 +177,16 @@ wrong rather than the outcome.
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
 
+## G-32 — The production Windows URI handler has not been installed or proved on a clean computer
+
+**Found:** 2026-09-13, US2 implementation
+
+The daemon accepts `pair -request <opaque request>` and stores its paired credential, while the
+browser opens the approved `sparstrowgen://pair` URI. The installer that registers that URI with
+Windows is not part of this repository yet, so a browser cannot distinguish no handler from a slow
+or blocked launch. The setup UI therefore waits honestly; a clean-machine installer proof remains
+required before a production pairing launch is claimed complete.
+
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 
 **Noticed:** 2026-09-11, codex reviewing the deployment artifacts before the first deploy

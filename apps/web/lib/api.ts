@@ -6,6 +6,8 @@ import type {
   Model,
   Provider,
   ProviderId,
+  Machine,
+  Pairing,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -191,6 +193,35 @@ export const api = {
     return json(await request(`${BASE}/api/providers`, { cache: "no-store" }));
   },
 
+  async machines(): Promise<Machine[]> {
+    return json(await request(`${BASE}/api/machines`, { cache: "no-store" }));
+  },
+
+  async machine(id: string): Promise<Machine> {
+    return json(await request(`${BASE}/api/machines/${id}`, { cache: "no-store" }));
+  },
+
+  async startPairing(): Promise<{ pairing: Pairing; launchUri: string }> {
+    return post(`${BASE}/api/machines/pairings`, {});
+  },
+
+  async pairing(id: string): Promise<Pairing> {
+    return json(await request(`${BASE}/api/machines/pairings/${id}`, { cache: "no-store" }));
+  },
+
+  async approvePairing(id: string): Promise<Machine> {
+    return post(`${BASE}/api/machines/pairings/${id}/approve`, {});
+  },
+
+  async disconnectMachine(id: string): Promise<void> {
+    const res = await request(`${BASE}/api/machines/${id}`, { method: "DELETE" });
+    if (res.status === 401) throw new NotSignedIn();
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+    }
+  },
+
   /** Every conversation, archived included — the archive is a filter, not a
    *  separate store. A query searches titles, folders and message bodies in
    *  Postgres and returns an excerpt for a body match. */
@@ -304,6 +335,7 @@ export const api = {
 export type ServerEvent =
   | { type: "providers"; providers: Provider[] }
   | { type: "daemon"; online: boolean }
+  | { type: "machines" }
   | { type: "conversation"; conversation: Conversation }
   | { type: "entry_added"; conversationId: string; entry: Entry }
   | { type: "entry_delta"; conversationId: string; entryId: string; text: string }

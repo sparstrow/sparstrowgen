@@ -57,6 +57,29 @@ type Entry struct {
 	Stopped          bool               `json:"stopped"`
 }
 
+type Machine struct {
+	ID             pgtype.UUID        `json:"id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	DisplayName    string             `json:"display_name"`
+	CredentialHash []byte             `json:"credential_hash"`
+	ApprovedAt     pgtype.Timestamptz `json:"approved_at"`
+	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+type MachinePairing struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	TokenHash []byte             `json:"token_hash"`
+	Status    string             `json:"status"`
+	MachineID pgtype.UUID        `json:"machine_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	DecidedAt pgtype.Timestamptz `json:"decided_at"`
+}
+
 type ProviderSession struct {
 	ConversationID pgtype.UUID        `json:"conversation_id"`
 	Provider       string             `json:"provider"`

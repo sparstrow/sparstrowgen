@@ -156,12 +156,19 @@ func (a *API) Routes() http.Handler {
 	// The daemon presents its own token on the handshake rather than a session
 	// cookie, so it is not behind requireSession.
 	r.Get("/daemon", a.daemonSocket)
+	r.Post("/daemon/pair", a.daemonPair)
 
 	// --- everything else needs an account -----------------------------------
 	r.Group(func(r chi.Router) {
 		r.Use(a.requireSession)
 
 		r.Get("/api/providers", a.getProviders)
+		r.Get("/api/machines", a.listMachines)
+		r.Post("/api/machines/pairings", a.createPairing)
+		r.Get("/api/machines/pairings/{id}", a.getPairing)
+		r.Post("/api/machines/pairings/{id}/approve", a.approvePairing)
+		r.Get("/api/machines/{id}", a.getMachine)
+		r.Delete("/api/machines/{id}", a.revokeMachine)
 		r.Get("/api/conversations", a.listConversations)
 		r.Post("/api/conversations", a.createConversation)
 		r.Get("/api/conversations/{id}", a.getConversation)
