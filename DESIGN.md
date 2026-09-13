@@ -138,7 +138,7 @@ the shadcn registry before being hand-built.
 | Single-column account access | Expected | Account routes | One clear action per screen |
 | Machines navigation | Expected | Persistent product sidebar | A dedicated destination because computer capabilities will expand |
 | Machines list | Expected | Machines route | Shows only the signed-in person's computers and opens a focused profile |
-| Machine profile | Expected | Separate machine route | Durable home for connection, providers, folders, disconnect and later approved capabilities |
+| Machine profile | Expected | Separate machine route | Current profile shows status, providers and disconnect; other details wait for a proven need |
 | Progressive computer setup | Expected | Machines and first use | Setup begins from the dedicated destination and can be resumed later |
 | Inline persistent machine attention state | Expected | Where Chat needs the machine | Must contain a next action |
 | Disconnect confirmation | Expected | US2 computer action | Names the effect on active work and reconnection |

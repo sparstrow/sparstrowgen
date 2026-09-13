@@ -69,7 +69,6 @@ window.SPARSTROW_SEED = {
         { id: "codex", name: "Codex", status: "Available" },
         { id: "agy", name: "agy", status: "Available" },
       ],
-      folders: ["D:\\sparstrowgen", "D:\\nav-edi"],
     },
     {
       id: "finance-laptop",
@@ -82,7 +81,6 @@ window.SPARSTROW_SEED = {
         { id: "claude", name: "Claude", status: "Waiting for computer" },
         { id: "codex", name: "Codex", status: "Waiting for computer" },
       ],
-      folders: ["C:\\Users\\Priya\\Documents\\NAV exports"],
     },
   ],
 };

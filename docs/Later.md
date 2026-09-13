@@ -252,3 +252,15 @@ requests, emails the owner, and approval means allowing the address in hosting c
 **Unblocks when:** the owner has invited or approved people by editing the hosting configuration
 more than twice, or before sparstrowgen is offered to anyone he does not know personally —
 whichever comes first. Build it on the phase 2 workflow, not before activation.
+
+## L-19 — Machine profile folder and connection details
+
+**Status:** parked **Raised:** 2026-09-13, owner, reviewing the US2 machine profile
+
+Registered folders and a separate Connection section (account, activity and last-seen facts) were
+rendered in the first machine-profile prototype. The owner said they are not required in the
+frontend right now, so the current profile stops after provider availability. Last seen remains in
+the profile header and Machines list where it directly explains online/offline freshness.
+
+**Unblocks when:** a workflow needs someone to inspect or choose a registered folder from the
+machine profile, or a connection fact becomes necessary to diagnose or manage that computer.

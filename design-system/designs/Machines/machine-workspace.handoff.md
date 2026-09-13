@@ -11,8 +11,8 @@
 ## What this is
 
 A dedicated Machines destination for the computers connected to the signed-in account. The list
-opens a focused profile showing connection, providers and registered folders. The same destination
-owns first-time pairing and disconnecting; Chat remains a separate daily work surface.
+opens a focused profile showing connection status and agent providers. The same destination owns
+first-time pairing and disconnecting; Chat remains a separate daily work surface.
 
 ## Component mapping
 
@@ -21,7 +21,7 @@ owns first-time pairing and disconnecting; Chat remains a separate daily work su
 | Persistent Chat / Machines navigation | shadcn `Sidebar`, `SidebarMenu`, `SidebarMenuButton`, `SidebarInset` | **registry component; not installed** — add through `pnpm exec shadcn add sidebar` |
 | Primary, outline, ghost and destructive actions | existing shadcn `Button` | installed |
 | “This computer” label | existing shadcn `Badge` | installed |
-| Machine, provider and folder rows | shadcn `Table` | **registry component; not installed** |
+| Machine and provider rows | shadcn `Table` | **registry component; not installed** |
 | Machines / computer path | shadcn `Breadcrumb` | **registry component; not installed** |
 | No machines | shadcn `Empty` | **registry component; not installed** |
 | Loading rows | existing shadcn `Skeleton` | installed |
@@ -58,13 +58,12 @@ part of the product.
 | Online/offline and last seen | daemon connection presence plus persisted last-seen time |
 | Active work summary | account-scoped active work for that machine |
 | Provider name and availability reason | daemon-reported provider capability |
-| Registered folder paths | daemon-reported registered folders |
 | Pairing request identity and expiry | one-time pairing request/claim |
 | Approval and mismatch outcome | server-issued credential bound to the approved account and machine |
 | Disconnect | credential revocation; future attempts refused until approved again |
 
-Realtime presence changes should patch or invalidate the TanStack Query cache. Provider and folder
-snapshots arrive as whole machine capability updates. Setup waits on a bounded request status;
+Realtime presence changes should patch or invalidate the TanStack Query cache. Provider snapshots
+arrive as whole machine capability updates. Setup waits on a bounded request status;
 successful pairing persists across browser, server and computer restarts. Runtime versions, logs,
 restart controls and cost data are deliberately absent because US2 cannot serve them.
 
@@ -99,8 +98,9 @@ These details need owner or implementation confirmation:
 
 ## Not included
 
-US3 update/version work; rename; logs; restart/stop; costs; provider/model configuration; editing
-registered folders; mobile navigation; Chat redesign; backend implementation.
+US3 update/version work; rename; logs; restart/stop; costs; provider/model configuration; registered
+folders; the separate Connection facts section; mobile navigation; Chat redesign; backend
+implementation.
 
 ## Verification
 
@@ -114,7 +114,7 @@ no further issues and no console warnings or errors.
 - [x] Empty, loading and error states; error explains safety and retry returns to the list
 - [x] Route-based list → online profile → breadcrumb return
 - [x] Offline profile changes provider availability to “Waiting for computer”
-- [x] Provider marks, registered folders and connection facts render at the intended scale
+- [x] Provider marks and availability render at the intended scale; the profile ends after providers
 - [x] Disconnect confirmation names the selected computer, takes initial focus, closes with Escape,
   restores focus on cancel, and shows the disconnected state after confirmation
 - [x] Pairing introduction → unanswered recovery → retry → approval → mismatch safety
@@ -130,9 +130,6 @@ no further issues and no console warnings or errors.
   tightens secondary metadata columns.
 - Disconnecting `FINANCE-LAPTOP` named `DESKTOP-RIVER` in the confirmation and toast — root cause:
   prototype copy was hard-coded instead of resolving the selected machine. Both now use selection.
-- Folder icons rendered at the browser's default SVG size and stretched the profile rows — root
-  cause: only provider marks and control icons had an explicit size. Inline row icons now use the
-  16px control size; browser-computed dimensions were confirmed at 16px × 16px.
 
 ### Found & not fixed
 
@@ -146,3 +143,10 @@ no further issues and no console warnings or errors.
   path was inspected in the prototype source.
 - Pairing, installer download and disconnect are deliberately local simulations; no backend or
   network request exists at this stage.
+
+### Feedback verification — 2026-09-13
+
+After feedback item 1, both online and offline profiles were rechecked in the browser. Registered
+folders and the separate Connection section are absent; provider availability, breadcrumb,
+disconnect, post-disconnect recovery and list navigation remain intact. The full list and pairing
+state pass remained green, and the console remained free of warnings and errors.

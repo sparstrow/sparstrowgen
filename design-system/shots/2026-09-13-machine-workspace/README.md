@@ -8,3 +8,7 @@ The owner selected **A + B** on 2026-09-13.
 
 This settles the navigation shape as a route-based Machines list followed by a separate machine
 profile. The profile is the durable home for later approved computer capabilities.
+
+**Profile content follow-up, 2026-09-13:** the owner removed Registered folders and the Connection
+facts from the current frontend. The profile stays limited to status, providers and disconnect;
+future capability does not justify showing details before they are needed.

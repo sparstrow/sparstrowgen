@@ -56,7 +56,6 @@
     .machine-icon, .setup-icon { display: grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); }
     .machine-icon svg, .setup-icon svg { width: 20px; height: 20px; }
     .muted { color: var(--muted-foreground); }
-    .literal { font-family: var(--font-mono); }
     .chevron { width: 1rem; height: 1rem; color: var(--muted-foreground); }
     .crumbs { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-6); color: var(--muted-foreground); font-size: var(--text-meta); }
     .crumbs svg { width: .75rem; height: .75rem; }
@@ -74,17 +73,10 @@
     .data-table th { height: 36px; color: var(--muted-foreground); font-size: var(--text-meta); font-weight: 400; text-align: left; }
     .data-table td { height: 54px; border-top: 1px solid var(--border); }
     .provider { display: inline-flex; align-items: center; gap: var(--space-3); font-weight: 500; }
-    .provider > svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
     .provider-mark { width: 18px; height: 18px; }
     .provider-claude { color: var(--provider-claude); }
     .provider-codex { color: var(--provider-codex); }
     .provider-agy { color: var(--provider-agy); }
-    .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .fact { padding-right: var(--space-6); }
-    .fact + .fact { padding-left: var(--space-6); border-left: 1px solid var(--border); }
-    .fact span, .fact strong { display: block; }
-    .fact span { color: var(--muted-foreground); font-size: var(--text-meta); }
-    .fact strong { margin-top: var(--space-1); font-weight: 500; }
     .empty { display: grid; place-items: center; min-height: 430px; text-align: center; }
     .empty-inner { display: flex; flex-direction: column; align-items: center; max-width: 28rem; }
     .empty-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); }
@@ -141,7 +133,6 @@
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-offline" viewBox="0 0 24 24"><path d="M2 2l20 20M8.5 8.5A5 5 0 0 1 17 12m-13.5-.5A10 10 0 0 1 7 7m10-2a10 10 0 0 1 3.5 6.5M8.5 16.5A5 5 0 0 1 12 15c1.2 0 2.3.4 3.2 1.1M12 20h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
-    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M18.5 9a7 7 0 0 0-12-2M5.5 15a7 7 0 0 0 12 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-unplug" viewBox="0 0 24 24"><path d="m19 5-3 3m-8 8-3 3M8 3l13 13M3 8l4-4m10 16 3-3M8 12l-2 2a3 3 0 0 0 4 4l2-2m4-4 2-2a3 3 0 0 0-4-4l-2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -217,7 +208,7 @@
     function renderProfile() {
       const machine = seed.machines.find((item) => item.id === state.selectedId) || seed.machines[0];
       const connected = !state.disconnected;
-      main.innerHTML = `<div class="page"><nav class="crumbs" aria-label="Breadcrumb" data-component="Breadcrumb"><button class="crumb" data-action="machines">Machines</button>${icon("chevron")}<span aria-current="page">${machine.name}</span></nav><header class="profile-header"><div class="machine-icon">${icon("monitor")}</div><div class="profile-heading"><h1>${machine.name}</h1>${connected ? machineStatus(machine) : `<span class="status offline">${icon("offline")}Disconnected</span>`}${machine.thisDevice ? `<span class="badge">This computer</span>` : ""}<div class="profile-meta">${connected ? `Last seen ${machine.lastSeen}` : "This computer no longer has access to your account."}</div></div><div class="profile-action">${connected ? `<button class="button destructive" data-action="open-disconnect">${icon("unplug")}Disconnect</button>` : `<button class="button outline" data-action="pair-again">${icon("refresh")}Pair again</button>`}</div></header>${!connected ? `<section class="alert"><div class="machine-icon">${icon("check")}</div><div><h2>Computer disconnected</h2><p>Its credential was revoked. Conversations remain available and the computer can be paired again with your approval.</p></div></section>` : ""}<section class="section"><h2 class="section-title">Agent providers</h2><p class="section-description">Providers this computer can make available to new work.</p><table class="data-table"><thead><tr><th>Provider</th><th>Availability</th></tr></thead><tbody>${machine.providers.map((provider) => `<tr><td><span class="provider">${providerMark(provider.id)}${provider.name}</span></td><td>${connected ? setupStatus(machine.status === "online" ? provider.status : "Waiting for computer") : `<span class="status offline">${icon("offline")}Disconnected</span>`}</td></tr>`).join("")}</tbody></table></section><section class="section"><h2 class="section-title">Registered folders</h2><p class="section-description">Folders this computer has made available for work.</p><table class="data-table"><thead><tr><th>Folder</th></tr></thead><tbody>${machine.folders.map((folder) => `<tr><td><span class="provider">${icon("folder")}<span class="literal">${folder}</span></span></td></tr>`).join("")}</tbody></table></section><section class="section"><h2 class="section-title">Connection</h2><p class="section-description">Account and activity details for this computer.</p><div class="facts"><div class="fact"><span>Account</span><strong>srihari@sparstrow.com</strong></div><div class="fact"><span>Activity</span><strong>${connected ? machine.activeWork : "None"}</strong></div><div class="fact"><span>Last seen</span><strong>${machine.lastSeen}</strong></div></div></section></div>`;
+      main.innerHTML = `<div class="page"><nav class="crumbs" aria-label="Breadcrumb" data-component="Breadcrumb"><button class="crumb" data-action="machines">Machines</button>${icon("chevron")}<span aria-current="page">${machine.name}</span></nav><header class="profile-header"><div class="machine-icon">${icon("monitor")}</div><div class="profile-heading"><h1>${machine.name}</h1>${connected ? machineStatus(machine) : `<span class="status offline">${icon("offline")}Disconnected</span>`}${machine.thisDevice ? `<span class="badge">This computer</span>` : ""}<div class="profile-meta">${connected ? `Last seen ${machine.lastSeen}` : "This computer no longer has access to your account."}</div></div><div class="profile-action">${connected ? `<button class="button destructive" data-action="open-disconnect">${icon("unplug")}Disconnect</button>` : `<button class="button outline" data-action="pair-again">${icon("refresh")}Pair again</button>`}</div></header>${!connected ? `<section class="alert"><div class="machine-icon">${icon("check")}</div><div><h2>Computer disconnected</h2><p>Its credential was revoked. Conversations remain available and the computer can be paired again with your approval.</p></div></section>` : ""}<section class="section"><h2 class="section-title">Agent providers</h2><p class="section-description">Providers this computer can make available to new work.</p><table class="data-table"><thead><tr><th>Provider</th><th>Availability</th></tr></thead><tbody>${machine.providers.map((provider) => `<tr><td><span class="provider">${providerMark(provider.id)}${provider.name}</span></td><td>${connected ? setupStatus(machine.status === "online" ? provider.status : "Waiting for computer") : `<span class="status offline">${icon("offline")}Disconnected</span>`}</td></tr>`).join("")}</tbody></table></section></div>`;
     }
 
     function setupChrome(content) {

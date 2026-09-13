@@ -112,8 +112,8 @@ command.
 - *(added)* **Given** my computer is connected to my account, **when** another account is signed in,
   **then** it cannot send work to my computer or learn anything about it.
 - *(added)* **Given** I have one or more connected computers, **when** I manage them, **then** I can
-  see only my computers, open one to inspect its connection state, available providers and
-  registered folders, and return later as more computer capabilities are added.
+  see only my computers, open one to inspect its connection state and available providers, and
+  return later as more computer capabilities are added.
 - *(added)* **Given** a computer should no longer act for me, **when** I disconnect it, **then** it is
   refused from its next attempt, what it still holds can never restore access, reconnecting it
   needs my approval again, and any other computer I have connected keeps working.
