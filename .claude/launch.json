@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "web", "dev"],
       "port": 3000
+    },
+    {
+      "name": "design-system",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve-design-system.mjs", "4173"],
+      "port": 4173
     }
   ]
 }

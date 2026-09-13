@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Approved 2026-09-12 · revised 2026-09-12, revision awaiting the owner's read** |
+| **Status** | **Approved 2026-09-12 · revision approved 2026-09-12** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
 | **Design** | not designed yet |

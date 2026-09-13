@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account access — prototype</title>
+<meta name="description" content="US1: invitation-only registration, email confirmation, sign in, password reset, and landing in your own account">
+<link rel="stylesheet" href="../../styles.css">
+<script src="../../lib/sparstrowgen-data.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; border-color: var(--border); }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset: 1px; }
+  svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .spin { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ── review controls: deliberately NOT product styling ─────────────────── */
+  .review {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    padding: 8px 16px;
+    border-bottom: 1px dashed var(--muted-foreground);
+    background: var(--muted);
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .review strong { color: var(--foreground); font-weight: 500; }
+  .review .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .review .chip {
+    border: 1px dashed var(--muted-foreground); background: transparent; border-radius: 6px;
+    padding: 2px 8px; font-size: 12px; cursor: pointer; color: var(--foreground);
+  }
+  .review .chip[aria-pressed="true"] { background: var(--accent); border-style: solid; }
+  .review label.tog { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+  .review .oq { color: var(--foreground); }
+
+  .stage { flex: 1; min-height: 0; display: flex; }
+  #app { flex: 1; min-width: 0; overflow: auto; position: relative; }
+
+  /* ── simulated inbox: also not product ─────────────────────────────────── */
+  .inbox {
+    width: 360px; flex-shrink: 0; overflow: auto;
+    border-left: 1px dashed var(--muted-foreground);
+    background: var(--card);
+    font-size: 13px;
+  }
+  .inbox header { padding: 12px 16px; border-bottom: 1px dashed var(--muted-foreground); }
+  .inbox header p { margin: 2px 0 0; font-size: 12px; color: var(--muted-foreground); }
+  .inbox .empty { padding: 24px 16px; color: var(--muted-foreground); font-size: 12px; }
+  .mail-row {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    border-bottom: 1px solid var(--border); padding: 10px 16px; cursor: pointer;
+  }
+  .mail-row:hover { background: var(--muted); }
+  .mail-row .to { font-size: 12px; color: var(--muted-foreground); }
+  .mail-row .subj { display: block; margin-top: 2px; }
+  .mail-row.unread .subj { font-weight: 600; }
+  .mail-open { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .mail-open .meta { font-size: 12px; color: var(--muted-foreground); margin-bottom: 10px; }
+  .mail-open .meta div { overflow-wrap: anywhere; }
+  .mail-open h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+  .mail-open p { margin: 0 0 10px; }
+  .mail-open a { color: var(--primary); }
+  .mail-open .code { font-family: ui-monospace, "Geist Mono", monospace; font-size: 18px; letter-spacing: 0.15em; }
+  .mail-open .rev { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted-foreground); }
+  .accounts { padding: 12px 16px; border-top: 1px dashed var(--muted-foreground); font-size: 12px; color: var(--muted-foreground); }
+  .accounts table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .accounts td { padding: 3px 0; vertical-align: top; overflow-wrap: anywhere; }
+  .accounts td.act { text-align: right; white-space: nowrap; }
+  .accounts .chip { border: 1px dashed var(--muted-foreground); background: none; border-radius: 6px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+
+  @media (max-width: 900px) {
+    .stage { flex-direction: column; overflow: auto; }
+    #app { overflow: visible; min-height: 70vh; }
+    .inbox { width: auto; border-left: 0; border-top: 1px dashed var(--muted-foreground); overflow: visible; }
+  }
+
+  /* ── product: mirrors components/auth/shell.tsx and components/ui ──────── */
+  .auth { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+  .auth .col { width: 100%; max-width: 24rem; }
+  .auth h1 { font-size: 1.125rem; font-weight: 500; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .auth .title { font-size: 0.875rem; color: var(--muted-foreground); margin: 0 0 32px; }
+  .auth .lede { font-size: 0.875rem; margin: 0 0 16px; }
+  .auth .lede b { font-weight: 500; }
+  .auth .footer { margin-top: 32px; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); }
+  .stack > * + * { margin-top: 16px; }
+  .field label { display: block; font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 8px; }
+  .field .hint { font-size: 12px; line-height: 1.6; color: var(--muted-foreground); margin: 8px 0 0; }
+  .input {
+    height: 2rem; width: 100%; border-radius: var(--radius); border: 1px solid var(--input);
+    background: color-mix(in oklch, var(--input) 30%, transparent);
+    padding: 4px 10px; font-size: 16px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .input:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); outline: none; }
+  .input[aria-invalid="true"] { border-color: color-mix(in oklch, var(--destructive) 50%, transparent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 40%, transparent); }
+  .input:disabled { opacity: .5; cursor: not-allowed; }
+  .input.mono { font-family: ui-monospace, "Geist Mono", monospace; letter-spacing: 0.12em; }
+  .readonly { font-size: 0.875rem; padding: 6px 0; overflow-wrap: anywhere; }
+  .error { font-size: 0.875rem; color: var(--destructive); margin: 0; }
+  .ok { font-size: 0.875rem; color: var(--muted-foreground); margin: 0; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 2rem; padding: 0 10px; border-radius: var(--radius); border: 1px solid transparent;
+    font-size: 0.875rem; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .15s;
+  }
+  .btn:disabled { opacity: .5; pointer-events: none; }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn.primary:hover { background: color-mix(in oklch, var(--primary) 80%, transparent); }
+  .btn.secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn.secondary:hover { background: color-mix(in oklch, var(--secondary), var(--foreground) 5%); }
+  .btn.ghost { background: transparent; }
+  .btn.ghost:hover { background: color-mix(in oklch, var(--muted) 50%, transparent); }
+  .btn.block { width: 100%; }
+  .links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 20px; font-size: 0.875rem; }
+  .link { background: none; border: 0; padding: 0; color: var(--muted-foreground); cursor: pointer; text-underline-offset: 4px; }
+  .link:hover { color: var(--foreground); text-decoration: underline; }
+  .errbox { border-radius: 6px; border: 1px solid var(--border); background: color-mix(in oklch, var(--muted) 40%, transparent); padding: 8px 12px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted-foreground); }
+
+  /* chat stand-in: only enough of the real shell to show whose work you land in */
+  .shell { height: 100%; display: flex; }
+  .side { width: 288px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .side .top { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 10px 16px; position: relative; }
+  .side .top span { font-weight: 500; }
+  .side ul { list-style: none; margin: 0; padding: 4px 8px; overflow: auto; }
+  .side li { display: flex; gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 6px; }
+  .side li:hover { background: var(--muted); }
+  .side li .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side li .w { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; transform: translateY(-2px); }
+  .side .none { padding: 16px; color: var(--muted-foreground); font-size: 0.875rem; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .standin { margin: 12px 16px 0; align-self: flex-start; border: 1px dashed var(--muted-foreground); border-radius: 6px; padding: 2px 8px; font-size: 12px; color: var(--muted-foreground); }
+  .notice { margin: 12px 16px 0; display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); background: var(--card); border-radius: var(--radius); padding: 10px 12px; font-size: 0.875rem; }
+  .notice p { margin: 0; flex: 1; }
+  .center { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+  .center h2 { font-size: 1rem; font-weight: 500; margin: 0 0 4px; }
+  .center p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; }
+  .menu { position: absolute; top: 44px; right: 8px; width: 240px; z-index: 5; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; box-shadow: 0 8px 24px -8px oklch(0 0 0 / 50%); }
+  .menu .who { display: flex; gap: 8px; align-items: center; padding: 6px 8px; font-size: 0.875rem; }
+  .menu .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px -4px; }
+  .menu button { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 0.875rem; }
+  .menu button:hover { background: var(--accent); }
+  .menu small { display: block; font-size: 12px; color: var(--muted-foreground); }
+  @media (max-width: 640px) { .side { width: 100%; } .main { display: none; } .shell.has-notice .main { display: flex; } }
+</style>
+</head>
+<body>
+
+<div class="review" role="region" aria-label="Prototype controls">
+  <span><strong>Prototype controls</strong> — not part of the product</span>
+  <div class="group">
+    <button class="chip" data-preset="start">Start over</button>
+    <button class="chip" data-preset="populated">Owner signed in</button>
+    <button class="chip" data-preset="empty">New account</button>
+    <button class="chip" data-preset="loading">Checking session</button>
+    <button class="chip" data-preset="error">Server unreachable</button>
+  </div>
+  <div class="group">
+    <label class="tog"><input type="checkbox" data-fault="unreachable"> server down</label>
+    <label class="tog"><input type="checkbox" data-fault="mailDown"> email can’t send</label>
+    <label class="tog"><input type="checkbox" data-fault="throttle"> too many attempts</label>
+  </div>
+  <div class="group"><span class="oq">Open question 1 — address not invited:</span>
+    <button class="chip" data-variant="notInvited" data-value="say">Say so</button>
+    <button class="chip" data-variant="notInvited" data-value="same">Same reply as everyone</button>
+  </div>
+  <div class="group"><span class="oq">2 — password chosen:</span>
+    <button class="chip" data-variant="passwordAt" data-value="after">After confirming email</button>
+    <button class="chip" data-variant="passwordAt" data-value="first">On the first form</button>
+  </div>
+  <div class="group"><span class="oq">3 — email confirms with:</span>
+    <button class="chip" data-variant="verifyBy" data-value="link">Link</button>
+    <button class="chip" data-variant="verifyBy" data-value="code">Link or code</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div id="app" aria-live="polite"></div>
+  <aside class="inbox" aria-label="Simulated inbox">
+    <header>
+      <strong>Simulated inbox</strong>
+      <p>Stands in for each person’s email. Every message the product sends appears here, whoever it is addressed to.</p>
+    </header>
+    <div id="mail"></div>
+    <div class="accounts" id="accounts"></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const D = window.SPARSTROW_SEED;
+  const MIN = 12;
+  const DELAY = 700;
+  const norm = (e) => (e || "").trim().toLowerCase();
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const looksLikeEmail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+
+  const icon = {
+    loader: '<svg class="i spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+    user: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>',
+    logout: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>',
+    devices: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></svg>',
+    x: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  };
+
+  let S = null;
+  let cooldownTimer = null;
+
+  function fresh(keep) {
+    S = {
+      screen: "checking",
+      ctx: {},
+      values: {},
+      error: null,
+      notice: null,
+      menu: false,
+      session: null,
+      accounts: D.accounts.map((a) => ({ ...a, conversations: [...a.conversations] })),
+      invites: D.invitations.map(norm),
+      tokens: {},
+      mail: [],
+      openMail: null,
+      seq: 0,
+      variants: keep?.variants ?? { notInvited: "say", passwordAt: "after", verifyBy: "link" },
+      faults: keep?.faults ?? { unreachable: false, mailDown: false, throttle: false },
+      cooldownUntil: 0,
+    };
+  }
+
+  const account = (email) => S.accounts.find((a) => a.email === norm(email));
+  const go = (screen, ctx = {}, extra = {}) => {
+    Object.assign(S, { screen, ctx, error: null, menu: false, values: extra.values ?? {}, notice: extra.notice ?? null });
+    render();
+  };
+
+  // ── tokens and mail ──────────────────────────────────────────────────────
+  function issue(kind, email) {
+    for (const t of Object.values(S.tokens)) {
+      if (t.kind === kind && t.email === email && !t.used) t.superseded = true;
+    }
+    const id = "t" + ++S.seq;
+    const code = String(100000 + Math.floor(Math.random() * 900000));
+    S.tokens[id] = { id, kind, email, code, used: false, expired: false, superseded: false };
+    return S.tokens[id];
+  }
+  const tokenProblem = (t) => (!t ? "expired" : t.used ? "used" : t.superseded ? "superseded" : t.expired ? "expired" : null);
+
+  function send(to, subject, body, tokenId) {
+    const id = "m" + ++S.seq;
+    const now = new Date();
+    S.mail.unshift({ id, to, subject, body, tokenId, read: false, at: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+  }
+
+  function sendVerify(email) {
+    const t = issue("verify", email);
+    const code = S.variants.verifyBy === "code"
+      ? `<p>Or enter this code where you started:</p><p class="code">${t.code.slice(0, 3)} ${t.code.slice(3)}</p>` : "";
+    send(email, "Finish creating your sparstrowgen account",
+      `<p>Someone, hopefully you, started creating a sparstrowgen account for ${esc(email)}.</p>
+       <p><a href="#" data-link="verify" data-token="${t.id}">Finish creating your account</a></p>${code}
+       <p>This works once, for the next 30 minutes. If this wasn’t you, ignore this email and nothing will be created.</p>`, t.id);
+  }
+  function sendAlreadyHave(email) {
+    send(email, "You already have a sparstrowgen account",
+      `<p>Someone tried to create an account for ${esc(email)}, but that address already has one.</p>
+       <p><a href="#" data-link="signin" data-email="${esc(email)}">Sign in</a></p>
+       <p>Forgotten your password? <a href="#" data-link="forgot" data-email="${esc(email)}">Reset it</a>.</p>
+       <p>If this wasn’t you, you don’t need to do anything.</p>`);
+  }
+  function sendReset(email) {
+    const t = issue("reset", email);
+    send(email, "Reset your sparstrowgen password",
+      `<p>Someone asked to reset the password for ${esc(email)}.</p>
+       <p><a href="#" data-link="reset" data-token="${t.id}">Choose a new password</a></p>
+       <p>This works once, for the next 30 minutes. Changing your password signs out every other browser signed in to this account.</p>
+       <p>If this wasn’t you, ignore this email and your password stays as it is.</p>`, t.id);
+  }
+  function sendChanged(email) {
+    send(email, "Your sparstrowgen password was changed",
+      `<p>The password for ${esc(email)} was just changed, and every other browser signed in to this account was signed out.</p>
+       <p>If this wasn’t you, <a href="#" data-link="forgot" data-email="${esc(email)}">reset your password now</a>.</p>`);
+  }
+
+  // ── product markup ───────────────────────────────────────────────────────
+  const shell = (title, body, footer) => `
+    <main class="auth"><div class="col">
+      <h1>sparstrowgen</h1>
+      <p class="title">${esc(title)}</p>
+      ${body}
+      ${footer ? `<div class="footer">${footer}</div>` : ""}
+    </div></main>`;
+
+  function field({ id, label, type = "text", hint, auto, mono, focus, name }) {
+    const invalid = S.error && (S.error.fields || []).includes(id);
+    const hintId = hint ? `${id}-hint` : "";
+    const desc = [invalid ? "form-error" : "", hintId].filter(Boolean).join(" ");
+    return `<div class="field">
+      <label for="${id}">${esc(label)}</label>
+      <input class="input${mono ? " mono" : ""}" id="${id}" name="${name || id}" type="${type}"
+        value="${esc(S.values[id] ?? "")}" ${auto ? `autocomplete="${auto}"` : ""} ${focus ? "data-autofocus" : ""}
+        ${invalid ? 'aria-invalid="true"' : ""} ${desc ? `aria-describedby="${desc}"` : ""} spellcheck="false">
+      ${hint ? `<p class="hint" id="${hintId}">${hint}</p>` : ""}
+    </div>`;
+  }
+  const errorLine = () => (S.error
+    ? `<p class="error" id="form-error" role="alert">${esc(S.error.message)}</p>${S.error.extra ? `<div id="form-error-extra">${S.error.extra}</div>` : ""}`
+    : "");
+  const submit = (label, busy) => `<button class="btn primary block" type="submit" data-busy="${esc(busy)}">${esc(label)}</button>`;
+  const passwordHint = `At least ${MIN} characters. Length is what resists guessing, so a phrase you will remember beats a short one with symbols in it.`;
+
+  const screens = {
+    checking: () => `<main class="auth">${icon.loader}<span class="sr">Checking whether you are signed in</span></main>`,
+
+    unreachable: () => shell("Can’t reach the server", `
+      <div class="stack">
+        <p class="lede">The app is running, but the API did not answer. It may be starting up, or stopped.</p>
+        <p class="errbox">Failed to fetch</p>
+        <button class="btn secondary block" data-action="retry" data-busy="Trying again">Try again</button>
+      </div>`),
+
+    signin: () => shell("Sign in", `
+      <form class="stack" data-form="signin" novalidate>
+        ${field({ id: "email", label: "Email", type: "email", auto: "username", focus: true })}
+        ${field({ id: "password", label: "Password", type: "password", auto: "current-password" })}
+        ${errorLine()}
+        ${submit("Sign in", "Signing in")}
+      </form>
+      <div class="links">
+        <button class="link" data-go="forgot">Forgot your password?</button>
+        <button class="link" data-go="register">Invited? Create your account</button>
+      </div>`,
+      "Sessions last a week. Signing out everywhere ends them on every device."),
+
+    register: () => {
+      const first = S.variants.passwordAt === "first";
+      return shell("Create your account", `
+        <form class="stack" data-form="register" novalidate>
+          ${field({ id: "email", label: "Email", type: "email", auto: "username", focus: true,
+            hint: "sparstrowgen is by invitation. Use the address your invitation was sent to." })}
+          ${first ? field({ id: "new-password", label: "Password", type: "password", auto: "new-password", hint: passwordHint }) : ""}
+          ${errorLine()}
+          ${submit(first ? "Create account" : "Continue", first ? "Creating your account" : "Sending")}
+        </form>
+        <div class="links"><button class="link" data-go="signin">Already have an account? Sign in</button></div>`,
+        first ? "We’ll email you a link to confirm the address before the account can be used."
+              : "We’ll email you a link to confirm the address. You choose your password after that.");
+    },
+
+    "check-email": () => {
+      const { email, neutral } = S.ctx;
+      // Shown to everyone, invited or not: hiding it for an address that got no
+      // email would tell the reader which addresses are invited.
+      const code = S.variants.verifyBy === "code";
+      const lede = neutral
+        ? `<p class="lede">If <b>${esc(email)}</b> has an invitation, a link is on its way. It works for 30 minutes.</p>
+           <p class="lede">Nothing after a few minutes? Check spam. If it still hasn’t come, the address may not be invited; ask the person who invited you which address they used.</p>`
+        : `<p class="lede">We sent a link to <b>${esc(email)}</b>. It works for 30 minutes.</p>`;
+      return shell("Check your email", `
+        ${lede}
+        ${code ? `<form class="stack" data-form="code" novalidate>
+            ${field({ id: "code", label: "Or enter the code from the email", auto: "one-time-code", mono: true, focus: true })}
+            ${errorLine()}
+            ${submit("Confirm", "Checking")}
+          </form>` : errorLine()}
+        <div class="links">
+          <button class="link" data-go="register" data-keep-email>Use a different address</button>
+          <button class="link" data-action="resend" id="resend">Send it again</button>
+        </div>
+        <p class="ok" id="resent" style="margin-top:12px"></p>`,
+        "You can close this tab. The link in the email finishes the job from wherever you open it.");
+    },
+
+    "set-password": () => {
+      const t = S.tokens[S.ctx.token];
+      return shell("Choose a password", `
+        <form class="stack" data-form="set-password" novalidate>
+          <div class="field"><label>Email</label><div class="readonly">${esc(t.email)}</div></div>
+          ${field({ id: "new-password", label: "Password", type: "password", auto: "new-password", focus: true, hint: passwordHint })}
+          ${errorLine()}
+          ${submit("Create account", "Creating your account")}
+        </form>`);
+    },
+
+    "link-problem": () => {
+      const { kind, reason, email } = S.ctx;
+      let title, body, action;
+      if (reason === "used" && kind === "verify" && account(email)?.verified) {
+        title = "Your account is already set up";
+        body = "This link has already been used, so there is nothing left to do with it.";
+        action = `<button class="btn primary block" data-go="signin" data-email="${esc(email)}">Sign in</button>`;
+      } else if (reason === "superseded") {
+        title = "A newer link was sent";
+        body = "Only the most recent email works. Open the newest one, or ask for another.";
+      } else if (reason === "used") {
+        title = "This link has already been used";
+        body = kind === "reset" ? "Each reset link works once. If you still need to change your password, ask for a new link." : "Each link works once.";
+      } else {
+        title = "This link has expired";
+        body = "Links work once, for 30 minutes.";
+      }
+      if (!action) {
+        action = kind === "reset"
+          ? `<button class="btn primary block" data-go="forgot" data-email="${esc(email)}">Send a new reset link</button>`
+          : `<button class="btn primary block" data-go="register" data-email="${esc(email)}">Send a new link</button>`;
+      }
+      return shell(title, `<div class="stack"><p class="lede">${esc(body)}</p>${action}</div>
+        <div class="links"><button class="link" data-go="signin">Back to sign in</button></div>`);
+    },
+
+    forgot: () => shell("Reset your password", `
+      <form class="stack" data-form="forgot" novalidate>
+        ${field({ id: "email", label: "Email", type: "email", auto: "username", focus: true })}
+        ${errorLine()}
+        ${submit("Send reset link", "Sending")}
+      </form>
+      <div class="links"><button class="link" data-go="signin">Back to sign in</button></div>`),
+
+    "reset-sent": () => shell("Check your email", `
+      <p class="lede">If <b>${esc(S.ctx.email)}</b> has a sparstrowgen account, a reset link is on its way. It works for 30 minutes.</p>
+      <p class="lede">Nothing after a few minutes? Check spam, and check it’s the address you registered with.</p>
+      <div class="links"><button class="link" data-go="signin">Back to sign in</button></div>`),
+
+    "reset-password": () => {
+      const t = S.tokens[S.ctx.token];
+      return shell("Choose a new password", `
+        <form class="stack" data-form="reset-password" novalidate>
+          <div class="field"><label>Email</label><div class="readonly">${esc(t.email)}</div></div>
+          ${field({ id: "new-password", label: "New password", type: "password", auto: "new-password", focus: true, hint: passwordHint })}
+          ${errorLine()}
+          ${submit("Change password", "Changing password")}
+        </form>`,
+        "Changing it signs out every other browser signed in to this account.");
+    },
+
+    app: () => {
+      const a = account(S.session);
+      const list = a.conversations.length
+        ? `<ul>${a.conversations.map((c) => `<li><span class="dot" style="background:var(--provider-${c.provider})"></span><span class="t" title="${esc(c.title)}">${esc(c.title)}</span><span class="w">${esc(c.when)}</span></li>`).join("")}</ul>`
+        : `<p class="none">No conversations yet.</p>`;
+      const menu = S.menu ? `<div class="menu" role="menu">
+          <div class="who">${icon.user}<span title="${esc(a.email)}">${esc(a.email)}</span></div><hr>
+          <button role="menuitem" data-action="signout">${icon.logout}Sign out</button>
+          <button role="menuitem" data-action="signout">${icon.devices}<span>Sign out everywhere<small>Ends every other device too</small></span></button>
+        </div>` : "";
+      const notice = S.notice ? `<div class="notice" role="status"><p>${esc(S.notice)}</p><button class="btn ghost" style="height:1.5rem;padding:0 4px" data-action="dismiss" aria-label="Dismiss">${icon.x}</button></div>` : "";
+      return `<div class="shell${S.notice ? " has-notice" : ""}">
+        <nav class="side" aria-label="Conversations">
+          <div class="top"><span>sparstrowgen</span>
+            <button class="btn ghost" style="width:1.75rem;height:1.75rem;padding:0" aria-label="Account" aria-expanded="${S.menu}" data-action="menu">${icon.user}</button>
+            ${menu}
+          </div>
+          ${list}
+        </nav>
+        <section class="main">
+          <span class="standin">Chat stand-in: only here to show whose work you land in</span>
+          ${notice}
+          <div class="center"><div>${a.conversations.length
+            ? `<h2>Pick a conversation</h2><p>${a.conversations.length} conversations in this account.</p>`
+            : `<h2>No conversations yet</h2><p>Conversations you start will appear here.</p>`}</div></div>
+        </section>
+      </div>`;
+    },
+  };
+
+  // ── inbox and review panel ───────────────────────────────────────────────
+  function renderInbox() {
+    const el = document.getElementById("mail");
+    if (!S.mail.length) {
+      el.innerHTML = `<p class="empty">No email sent yet. Create an account or ask for a password reset.</p>`;
+    } else {
+      el.innerHTML = S.mail.map((m) => {
+        if (m.id !== S.openMail) {
+          return `<button class="mail-row${m.read ? "" : " unread"}" data-open-mail="${m.id}">
+            <span class="to">To ${esc(m.to)} · ${m.at}</span><span class="subj">${esc(m.subject)}</span></button>`;
+        }
+        const t = m.tokenId && S.tokens[m.tokenId];
+        const rev = t ? `<div class="rev">Link state: ${tokenProblem(t) ?? "valid"}
+            ${!tokenProblem(t) ? `<button class="chip" data-expire="${t.id}" style="border:1px dashed var(--muted-foreground);background:none;border-radius:6px;padding:1px 6px;font-size:11px;cursor:pointer">Make it expire</button>` : ""}</div>` : "";
+        return `<article class="mail-open">
+          <div class="meta"><div>From ${esc(D.sender)}</div><div>To ${esc(m.to)} · ${m.at}</div></div>
+          <h3>${esc(m.subject)}</h3>${m.body}${rev}
+          <div class="rev"><button class="link" data-open-mail="">Close</button></div>
+        </article>`;
+      }).join("");
+    }
+    const accts = S.accounts.map((a) => `<tr><td>${esc(a.email)}${a.verified ? "" : " (unconfirmed)"}<br>${esc(a.password)}</td>
+      <td class="act"><button class="chip" data-fill="${esc(a.email)}">Fill sign-in</button></td></tr>`).join("");
+    const pending = S.invites.filter((i) => !account(i)).map((i) => `<tr><td colspan="2">${esc(i)}</td></tr>`).join("");
+    document.getElementById("accounts").innerHTML = `<strong>Accounts in this deployment</strong><table>${accts}</table>
+      <div style="margin-top:10px"><strong>Invited, no account yet</strong></div><table>${pending || '<tr><td colspan="2">none</td></tr>'}</table>
+      <div style="margin-top:10px">Not invited, to try: ${esc(D.notInvitedExample)}</div>`;
+  }
+
+  function syncReview() {
+    document.querySelectorAll("[data-variant]").forEach((b) => b.setAttribute("aria-pressed", String(S.variants[b.dataset.variant] === b.dataset.value)));
+    document.querySelectorAll("[data-fault]").forEach((c) => { c.checked = S.faults[c.dataset.fault]; });
+  }
+
+  function render() {
+    document.getElementById("app").innerHTML = screens[S.screen]();
+    renderInbox();
+    syncReview();
+    const f = document.querySelector("#app [data-autofocus]");
+    if (f) f.focus({ preventScroll: true });
+    if (S.screen === "check-email") tickCooldown();
+  }
+
+  function tickCooldown() {
+    clearInterval(cooldownTimer);
+    const update = () => {
+      const btn = document.getElementById("resend");
+      if (!btn) return clearInterval(cooldownTimer);
+      const left = Math.ceil((S.cooldownUntil - Date.now()) / 1000);
+      btn.disabled = left > 0;
+      btn.textContent = left > 0 ? `Send it again in ${left}s` : "Send it again";
+      if (left <= 0) clearInterval(cooldownTimer);
+    };
+    update();
+    cooldownTimer = setInterval(update, 1000);
+  }
+
+  // ── behaviour ────────────────────────────────────────────────────────────
+  function fail(message, fields = [], extra = "") {
+    S.error = { message, fields, extra };
+    render();
+  }
+
+  async function busy(form, fn) {
+    const btn = form.querySelector("[data-busy]") || form;
+    S.values = Object.fromEntries(new FormData(form.tagName === "FORM" ? form : undefined || document.createElement("form")));
+    form.querySelectorAll?.("input").forEach((i) => { S.values[i.id] = i.value; i.disabled = true; });
+    if (btn) { btn.disabled = true; btn.innerHTML = `${icon.loader}${esc(btn.dataset.busy)}`; }
+    await wait(DELAY);
+    fn();
+  }
+
+  const handlers = {
+    signin() {
+      const email = norm(S.values.email), pw = S.values.password ?? "";
+      if (S.faults.unreachable) return go("unreachable");
+      if (!email || !pw) return fail("enter your email and password", [!email ? "email" : "password"]);
+      if (S.faults.throttle) return fail("too many attempts — try again in 8s");
+      const a = account(email);
+      if (!a || a.password !== pw) return fail("that email and password do not match an account", ["email", "password"]);
+      if (!a.verified) {
+        return fail("confirm your email before signing in — the link is in the email we sent", [],
+          `<button class="btn secondary block" type="button" data-action="resend-unconfirmed" data-email="${esc(email)}">Send the link again</button>`);
+      }
+      S.session = a.email;
+      go("app");
+    },
+
+    register() {
+      const email = norm(S.values.email), pw = S.values["new-password"] ?? "";
+      const first = S.variants.passwordAt === "first";
+      if (S.faults.unreachable) return go("unreachable");
+      if (!looksLikeEmail(email)) return fail("that does not look like an email address", ["email"]);
+      if (first && pw.length < MIN) return fail(`a password needs to be at least ${MIN} characters`, ["new-password"]);
+      if (S.faults.throttle) return fail("too many attempts — try again in 8s");
+      if (S.faults.mailDown) return fail("the email could not be sent just now, so nothing was created — try again in a few minutes");
+      const neutral = S.variants.notInvited === "same";
+      if (!S.invites.includes(email)) {
+        if (!neutral) return fail("that address has not been invited. sparstrowgen is by invitation — ask the person who invited you which address they used", ["email"]);
+        S.cooldownUntil = Date.now() + 30000;
+        return go("check-email", { email, neutral });
+      }
+      const a = account(email);
+      if (a?.verified) sendAlreadyHave(email);
+      else {
+        if (first) {
+          if (a) a.password = pw;
+          else S.accounts.push({ email, password: pw, verified: false, conversations: [] });
+        }
+        sendVerify(email);
+      }
+      S.cooldownUntil = Date.now() + 30000;
+      go("check-email", { email, neutral });
+    },
+
+    code() {
+      const entered = (S.values.code || "").replace(/\s/g, "");
+      if (S.faults.unreachable) return go("unreachable");
+      if (S.faults.throttle) return fail("too many attempts — try again in 8s", ["code"]);
+      const t = Object.values(S.tokens).find((x) => x.kind === "verify" && x.email === S.ctx.email && !tokenProblem(x));
+      if (!t || t.code !== entered) return fail("that code is not right — use the one in the newest email", ["code"]);
+      confirmEmail(t);
+    },
+
+    "set-password"() {
+      const pw = S.values["new-password"] ?? "";
+      const t = S.tokens[S.ctx.token];
+      if (S.faults.unreachable) return go("unreachable");
+      if (pw.length < MIN) return fail(`a password needs to be at least ${MIN} characters`, ["new-password"]);
+      const problem = tokenProblem(t);
+      if (problem) return go("link-problem", { kind: "verify", reason: problem, email: t.email });
+      t.used = true;
+      S.accounts.push({ email: t.email, password: pw, verified: true, conversations: [] });
+      S.session = t.email;
+      go("app", {}, { notice: "Your account is ready." });
+    },
+
+    forgot() {
+      const email = norm(S.values.email);
+      if (S.faults.unreachable) return go("unreachable");
+      if (!looksLikeEmail(email)) return fail("that does not look like an email address", ["email"]);
+      if (S.faults.throttle) return fail("too many attempts — try again in 8s");
+      if (S.faults.mailDown) return fail("the email could not be sent just now — try again in a few minutes");
+      if (account(email)?.verified) sendReset(email);
+      go("reset-sent", { email });
+    },
+
+    "reset-password"() {
+      const pw = S.values["new-password"] ?? "";
+      const t = S.tokens[S.ctx.token];
+      if (S.faults.unreachable) return go("unreachable");
+      if (pw.length < MIN) return fail(`a password needs to be at least ${MIN} characters`, ["new-password"]);
+      const problem = tokenProblem(t);
+      if (problem) return go("link-problem", { kind: "reset", reason: problem, email: t.email });
+      t.used = true;
+      account(t.email).password = pw;
+      sendChanged(t.email);
+      S.session = t.email;
+      go("app", {}, { notice: "Password changed. Every other browser signed in to this account has been signed out." });
+    },
+  };
+
+  function confirmEmail(t) {
+    if (S.variants.passwordAt === "after") return go("set-password", { token: t.id });
+    t.used = true;
+    const a = account(t.email);
+    a.verified = true;
+    S.session = a.email;
+    go("app", {}, { notice: "Your email is confirmed and your account is ready." });
+  }
+
+  function openLink(el) {
+    const kind = el.dataset.link;
+    if (kind === "signin" || kind === "forgot") {
+      S.session = null;
+      return go(kind, {}, { values: { email: el.dataset.email } });
+    }
+    const t = S.tokens[el.dataset.token];
+    const problem = tokenProblem(t);
+    if (problem) return go("link-problem", { kind, reason: problem, email: t.email });
+    if (kind === "reset") return go("reset-password", { token: t.id });
+    confirmEmail(t);
+  }
+
+  function preset(name) {
+    fresh(S);
+    if (name === "loading") { S.screen = "checking"; return render(); }
+    if (name === "error") { S.faults.unreachable = true; S.screen = "unreachable"; return render(); }
+    if (name === "populated") { S.session = D.accounts[0].email; S.screen = "app"; return render(); }
+    if (name === "empty") {
+      S.accounts.push({ email: "agent@sparstrow.com", password: "agent-mailbox-test", verified: true, conversations: [] });
+      S.session = "agent@sparstrow.com"; S.screen = "app"; S.notice = "Your account is ready.";
+      return render();
+    }
+    render();
+    setTimeout(() => { if (S.screen === "checking") go("signin"); }, 600);
+  }
+
+  document.addEventListener("submit", (e) => {
+    const form = e.target.closest("[data-form]");
+    if (!form) return;
+    e.preventDefault();
+    busy(form, () => handlers[form.dataset.form]());
+  });
+
+  document.addEventListener("input", (e) => {
+    if (!S.error || !e.target.closest("#app")) return;
+    S.error = null;
+    document.querySelectorAll("#form-error, #form-error-extra").forEach((n) => n.remove());
+    document.querySelectorAll('#app [aria-invalid="true"]').forEach((n) => n.removeAttribute("aria-invalid"));
+  });
+
+  document.addEventListener("click", async (e) => {
+    const el = e.target.closest("button, a");
+    if (!el) {
+      if (S.menu && !e.target.closest(".menu")) { S.menu = false; render(); }
+      return;
+    }
+    if (el.tagName === "A" || el.dataset.link) e.preventDefault();
+
+    if (el.dataset.preset) return preset(el.dataset.preset);
+    if (el.dataset.variant) { S.variants[el.dataset.variant] = el.dataset.value; return preset("start"); }
+    if (el.dataset.link) return openLink(el);
+    if (el.dataset.openMail !== undefined) {
+      S.openMail = el.dataset.openMail || null;
+      const m = S.mail.find((x) => x.id === S.openMail);
+      if (m) m.read = true;
+      return renderInbox();
+    }
+    if (el.dataset.expire) { S.tokens[el.dataset.expire].expired = true; return renderInbox(); }
+    if (el.dataset.fill) {
+      const a = account(el.dataset.fill);
+      S.session = null;
+      return go("signin", {}, { values: { email: a.email, password: a.password } });
+    }
+    if (el.dataset.go) {
+      const email = el.dataset.email ?? (el.hasAttribute("data-keep-email") ? S.ctx.email : undefined);
+      return go(el.dataset.go, {}, { values: email ? { email } : {} });
+    }
+
+    switch (el.dataset.action) {
+      case "menu": S.menu = !S.menu; return render();
+      case "dismiss": S.notice = null; return render();
+      case "signout": S.session = null; return go("signin");
+      case "retry":
+        el.disabled = true; el.innerHTML = `${icon.loader}Trying again`;
+        await wait(DELAY);
+        return S.faults.unreachable ? render() : go("signin");
+      case "resend": {
+        if (Date.now() < S.cooldownUntil) return;
+        const email = S.ctx.email;
+        if (S.faults.mailDown) { document.getElementById("resent").textContent = "The email could not be sent just now. Try again in a few minutes."; return; }
+        if (S.invites.includes(email)) account(email)?.verified ? sendAlreadyHave(email) : sendVerify(email);
+        S.cooldownUntil = Date.now() + 30000;
+        renderInbox();
+        tickCooldown();
+        document.getElementById("resent").textContent = S.ctx.neutral ? "If the address is invited, another link is on its way." : "Sent again. Only the newest link will work.";
+        return;
+      }
+      case "resend-unconfirmed": {
+        sendVerify(el.dataset.email);
+        S.cooldownUntil = Date.now() + 30000;
+        return go("check-email", { email: el.dataset.email, neutral: false });
+      }
+    }
+  });
+
+  document.addEventListener("change", (e) => {
+    const f = e.target.dataset?.fault;
+    if (f) S.faults[f] = e.target.checked;
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && S.menu) { S.menu = false; render(); }
+  });
+
+  // ?state=populated|empty|loading|error for direct review links
+  const state = new URLSearchParams(location.search).get("state");
+  fresh();
+  preset({ populated: "populated", empty: "empty", loading: "loading", error: "error" }[state] ?? "start");
+})();
+</script>
+</body>
+</html>
