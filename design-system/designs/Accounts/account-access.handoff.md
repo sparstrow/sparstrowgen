@@ -187,3 +187,37 @@ error text, mail count, request list or conversation count. Full pass: **55 chec
 - Screenshots time out while the Browser pane is hidden; every item was asserted structurally and
   two states were checked visually.
 - Geist is not bundled; the prototype falls back to the system sans unless Geist is installed.
+
+## Wired into apps/web — 2026-09-12
+
+On mock data (`apps/web/lib/auth.mock.ts`, KnownGaps G-28). Routes: `/register`, `/forgot`,
+`/verify?token=`, `/reset?token=`; sign in gained its two links and new footer. Mock seed and
+magic addresses are documented at the top of the mock file.
+
+**Tested:** `pnpm typecheck` and `pnpm lint` clean; `next dev` via the `web` launch config
+(auto-assigned port), walked in the browser with scripted clicks on the real components.
+
+- [x] Register: empty disables Continue; browser's own email validation blocks "not-an-email" (same as sign in); typing clears a server error
+- [x] Uninvited → "Request sent" + one owner toast; Try again keeps the address; asking again counts 2, no second toast
+- [x] `+maildown` and `+throttle` addresses show the server errors
+- [x] Invited address normalised → "Check your email" + confirmation toast with Open link; resend counts down 30 s, enables, sends, shows "Sent again", restarts
+- [x] "Use a different address" keeps the address; registering again supersedes the first link → "A newer link was sent"
+- [x] Confirmation link → "Choose a password" with read-only email; short disables and marks invalid; valid shows busy label, lands on `/` with the mock-note toast
+- [x] Reused confirmation link → "Your account is already set up" with only Sign in
+- [x] Unknown token and missing token → "This link has expired"; `token=offline` → "Can’t reach the server", retry spins and stays
+- [x] Already-registered address → same "Check your email", "you already have an account" toast
+- [x] Forgot: unknown and real addresses get identical copy, only the real one gets a reset toast; throttle error clears on typing
+- [x] Reset link → "Choose a new password", label and footer, busy label, lands on `/` with changed and signed-out toasts plus the "was changed" email toast
+- [x] Reused reset link → "already been used"; a 31-minute-old link → "expired"; both offer "Send a new reset link"
+- [x] Link superseded while its form is open → submit turns the page into "A newer link was sent"
+- [x] Sign in (session response stubbed as signed out, see caveat): both links with correct hrefs, new footer, client navigation to `/forgot`, back, and to `/register`
+- [x] Phone width 375 px: no horizontal overflow on `/register` or sign in; column 327 px
+- [x] Screenshot checked: sign in with its links and a mock email toast
+
+**Caveats.**
+- The only console errors were CORS failures from `/` calling the API on :8080, which belongs to
+  another checkout, serves a different build (its session reply omits `claimed`) and does not allow
+  this dev port's origin. The new pages never call the API.
+- Sign in was exercised with the browser's session request stubbed to "claimed, signed out". The
+  local database has no accounts, and creating one would write to a database another session's
+  server uses.
