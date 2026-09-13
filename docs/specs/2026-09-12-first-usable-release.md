@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Approved 2026-09-12 · revision approved 2026-09-12** |
+| **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
 | **Design** | not designed yet |
@@ -21,6 +21,14 @@
 > owner takes on the hosting side (a place in the product to invite people belongs with workspace
 > invitations later), and what happens to agent work running on a computer at the moment it is
 > disconnected (see Edge cases). Correct either if that is not what you mean.
+>
+> **Revision 2, 2026-09-12, from your review of the prototype.** Someone who is not invited is not
+> turned away: their attempt becomes a request for access that reaches you, and they are told it
+> was sent for approval. A separate place to invite people and approve requests is later work
+> ([`2026-09-12-admin-invitations-and-approvals.md`](2026-09-12-admin-invitations-and-approvals.md)).
+> Until it exists, I inferred that you learn of a request by email and approve it by allowing the
+> address the same way you invite someone. You also chose: the password is set after the email is
+> confirmed, and the email confirms with a link only.
 
 ## What's wrong today
 
@@ -34,7 +42,8 @@ way to check whether that installed part is current or to decide whether it upda
 
 ## What I want instead
 
-The people I allow create their own accounts and sign in normally without a server code. Each
+The people I allow create their own accounts and sign in normally without a server code. Anyone
+else can ask me for access, and I decide. Each
 person's work and computers are theirs alone. The product helps them connect the computer they are
 using without copying a shared machine secret, and they can disconnect it again. Once connected,
 they can leave safe automatic updates on or turn them off and check deliberately. This is the
@@ -52,9 +61,13 @@ that** I can use the product without asking the host for a secret from the serve
 - **Given** I have been allowed to use sparstrowgen, **when** I register with my email address and
   password, **then** I can prove the email belongs to me and complete my account without a setup
   code, machine secret or access to the hosting.
-- *(added)* **Given** my email address has not been allowed, **when** I try to register, **then** no
-  account is created and I am told that registration is by invitation, without learning whether any
-  particular address already has an account.
+- *(revision 2)* **Given** my email address has not been allowed, **when** I try to register,
+  **then** no account is created, my request for access is sent to the owner, and I am told the
+  request was sent for approval and that I can create my account with this address once it is
+  approved, without learning whether any particular address already has an account.
+- *(revision 2)* **Given** someone has asked for access, **when** their request is sent, **then**
+  the owner learns of it without looking at the server, and once the owner approves it that address
+  can create an account like any invited one.
 - **Given** my account is ready, **when** I return, **then** I sign in with my own email address and
   password and no setup or pairing step becomes part of ordinary sign-in.
 - **Given** the address is already registered, verification has expired or credentials are wrong,
@@ -133,6 +146,10 @@ updates **so that** the hosted app remains compatible without interrupting agent
 - An invited address is typed with different capitalisation or surrounding spaces when registering.
 - A password-reset request is made for an address that has no account; it looks identical to one
   that does.
+- *(revision 2)* The same uninvited address asks again, or many times: the owner sees one request,
+  not a flood, and repeated asking is slowed down like repeated sign-in attempts.
+- *(revision 2)* An address is approved while its person still has the "request sent" message
+  open; trying again then continues into account creation.
 - The local component is installed while setup is already looking for it.
 - The computer sleeps or loses its network during pairing or an update.
 - Several conversations or browser tabs have agent work running on the same computer.
@@ -148,7 +165,9 @@ updates **so that** the hosted app remains compatible without interrupting agent
 ## Out of scope
 
 - Multiple workspaces, workspace invitations and workspace management.
-- A place in the product for the owner to invite or remove people.
+- A separate administration place for inviting people, and approving or declining requests. Drafted
+  in [`2026-09-12-admin-invitations-and-approvals.md`](2026-09-12-admin-invitations-and-approvals.md).
+- Telling a person that their request was approved or declined.
 - A complete computer-management area, including renaming and provider/model inventory.
   Disconnecting a computer is in scope; everything else about managing computers is later.
 - Appearance themes and other account-wide customization.

@@ -11,6 +11,10 @@
 window.SPARSTROW_SEED = {
   sender: "sparstrowgen <no-reply@sparstrow.com>",
 
+  // Where access requests from uninvited addresses are sent until the
+  // administration place exists (docs/Later.md L-18).
+  ownerEmail: "srihari@sparstrow.com",
+
   accounts: [
     {
       email: "srihari@sparstrow.com",

@@ -238,3 +238,17 @@ Normal pushes to `main` can still deploy automatically without that permission.
 
 **Trigger:** a preview can be provisioned with an isolated database, unique web and API domains,
 matching origins, and automatic cleanup when its pull request closes.
+
+## L-18 — Administration: invite people, approve or decline access requests
+
+**Status:** parked **Raised:** 2026-09-12, owner, reviewing the account-access prototype
+
+A separate, protected administration place where the owner invites people by email and approves
+or declines requests from people he did not invite. Drafted as
+[`specs/2026-09-12-admin-invitations-and-approvals.md`](specs/2026-09-12-admin-invitations-and-approvals.md).
+Not needed to reach the phase 2 gate: the first usable release records uninvited sign-ups as
+requests, emails the owner, and approval means allowing the address in hosting configuration.
+
+**Unblocks when:** the owner has invited or approved people by editing the hosting configuration
+more than twice, or before sparstrowgen is offered to anyone he does not know personally —
+whichever comes first. Build it on the phase 2 workflow, not before activation.

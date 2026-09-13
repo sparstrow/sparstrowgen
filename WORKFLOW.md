@@ -21,7 +21,8 @@ Phase 2 only after the managed daemon exit gate in
 
 1. Implement the approved
    [`first usable release`](docs/specs/2026-09-12-first-usable-release.md): invitation-only account
-   creation, password reset and sign-in without the server-log setup code, with each account's work
+   creation (an uninvited sign-up becomes an access request emailed to the owner), password reset
+   and sign-in without the server-log setup code, with each account's work
    and computers isolated from every other account; guided installation, pairing and disconnecting
    without a shared machine secret; per-user auto-start; and safe updating with check-now,
    automatic-update and too-old-version handling. Account isolation ships before or with

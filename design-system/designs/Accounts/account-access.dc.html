@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Account access — prototype</title>
-<meta name="description" content="US1: invitation-only registration, email confirmation, sign in, password reset, and landing in your own account">
+<meta name="description" content="US1: invitation-only registration with access requests, email confirmation, sign in, password reset, and landing in your own account">
 <link rel="stylesheet" href="../../styles.css">
 <script src="../../lib/sparstrowgen-data.js"></script>
 <style>
@@ -38,13 +38,11 @@
   }
   .review strong { color: var(--foreground); font-weight: 500; }
   .review .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .review .chip {
+  .chip {
     border: 1px dashed var(--muted-foreground); background: transparent; border-radius: 6px;
     padding: 2px 8px; font-size: 12px; cursor: pointer; color: var(--foreground);
   }
-  .review .chip[aria-pressed="true"] { background: var(--accent); border-style: solid; }
   .review label.tog { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
-  .review .oq { color: var(--foreground); }
 
   .stage { flex: 1; min-height: 0; display: flex; }
   #app { flex: 1; min-width: 0; overflow: auto; position: relative; }
@@ -73,13 +71,12 @@
   .mail-open h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
   .mail-open p { margin: 0 0 10px; }
   .mail-open a { color: var(--primary); }
-  .mail-open .code { font-family: ui-monospace, "Geist Mono", monospace; font-size: 18px; letter-spacing: 0.15em; }
   .mail-open .rev { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted-foreground); }
   .accounts { padding: 12px 16px; border-top: 1px dashed var(--muted-foreground); font-size: 12px; color: var(--muted-foreground); }
   .accounts table { width: 100%; border-collapse: collapse; margin-top: 6px; }
   .accounts td { padding: 3px 0; vertical-align: top; overflow-wrap: anywhere; }
   .accounts td.act { text-align: right; white-space: nowrap; }
-  .accounts .chip { border: 1px dashed var(--muted-foreground); background: none; border-radius: 6px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+  .accounts .chip { padding: 1px 6px; font-size: 11px; }
 
   @media (max-width: 900px) {
     .stage { flex-direction: column; overflow: auto; }
@@ -106,7 +103,6 @@
   .input:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); outline: none; }
   .input[aria-invalid="true"] { border-color: color-mix(in oklch, var(--destructive) 50%, transparent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 40%, transparent); }
   .input:disabled { opacity: .5; cursor: not-allowed; }
-  .input.mono { font-family: ui-monospace, "Geist Mono", monospace; letter-spacing: 0.12em; }
   .readonly { font-size: 0.875rem; padding: 6px 0; overflow-wrap: anywhere; }
   .error { font-size: 0.875rem; color: var(--destructive); margin: 0; }
   .ok { font-size: 0.875rem; color: var(--muted-foreground); margin: 0; }
@@ -173,18 +169,7 @@
     <label class="tog"><input type="checkbox" data-fault="mailDown"> email can’t send</label>
     <label class="tog"><input type="checkbox" data-fault="throttle"> too many attempts</label>
   </div>
-  <div class="group"><span class="oq">Open question 1 — address not invited:</span>
-    <button class="chip" data-variant="notInvited" data-value="say">Say so</button>
-    <button class="chip" data-variant="notInvited" data-value="same">Same reply as everyone</button>
-  </div>
-  <div class="group"><span class="oq">2 — password chosen:</span>
-    <button class="chip" data-variant="passwordAt" data-value="after">After confirming email</button>
-    <button class="chip" data-variant="passwordAt" data-value="first">On the first form</button>
-  </div>
-  <div class="group"><span class="oq">3 — email confirms with:</span>
-    <button class="chip" data-variant="verifyBy" data-value="link">Link</button>
-    <button class="chip" data-variant="verifyBy" data-value="code">Link or code</button>
-  </div>
+  <span>Decided: uninvited sign-up becomes a request · password after confirming · link only (DD-001–003)</span>
 </div>
 
 <div class="stage">
@@ -204,6 +189,7 @@
   const D = window.SPARSTROW_SEED;
   const MIN = 12;
   const DELAY = 700;
+  const COOLDOWN = 30000;
   const norm = (e) => (e || "").trim().toLowerCase();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -220,7 +206,9 @@
   let S = null;
   let cooldownTimer = null;
 
-  function fresh(keep) {
+  // Every preset, "Start over" included, clears the fault toggles: a fault left on from
+  // "Server unreachable" would otherwise silently break the next walkthrough.
+  function fresh() {
     S = {
       screen: "checking",
       ctx: {},
@@ -231,12 +219,13 @@
       session: null,
       accounts: D.accounts.map((a) => ({ ...a, conversations: [...a.conversations] })),
       invites: D.invitations.map(norm),
+      // address → { count, approved }. One entry per address however often it asks.
+      requests: {},
       tokens: {},
       mail: [],
       openMail: null,
       seq: 0,
-      variants: keep?.variants ?? { notInvited: "say", passwordAt: "after", verifyBy: "link" },
-      faults: keep?.faults ?? { unreachable: false, mailDown: false, throttle: false },
+      faults: { unreachable: false, mailDown: false, throttle: false },
       cooldownUntil: 0,
     };
   }
@@ -253,26 +242,22 @@
       if (t.kind === kind && t.email === email && !t.used) t.superseded = true;
     }
     const id = "t" + ++S.seq;
-    const code = String(100000 + Math.floor(Math.random() * 900000));
-    S.tokens[id] = { id, kind, email, code, used: false, expired: false, superseded: false };
+    S.tokens[id] = { id, kind, email, used: false, expired: false, superseded: false };
     return S.tokens[id];
   }
   const tokenProblem = (t) => (!t ? "expired" : t.used ? "used" : t.superseded ? "superseded" : t.expired ? "expired" : null);
 
-  function send(to, subject, body, tokenId) {
+  function send(to, subject, body, extra = {}) {
     const id = "m" + ++S.seq;
-    const now = new Date();
-    S.mail.unshift({ id, to, subject, body, tokenId, read: false, at: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+    S.mail.unshift({ id, to, subject, body, read: false, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), ...extra });
   }
 
   function sendVerify(email) {
     const t = issue("verify", email);
-    const code = S.variants.verifyBy === "code"
-      ? `<p>Or enter this code where you started:</p><p class="code">${t.code.slice(0, 3)} ${t.code.slice(3)}</p>` : "";
     send(email, "Finish creating your sparstrowgen account",
       `<p>Someone, hopefully you, started creating a sparstrowgen account for ${esc(email)}.</p>
-       <p><a href="#" data-link="verify" data-token="${t.id}">Finish creating your account</a></p>${code}
-       <p>This works once, for the next 30 minutes. If this wasn’t you, ignore this email and nothing will be created.</p>`, t.id);
+       <p><a href="#" data-link="verify" data-token="${t.id}">Finish creating your account</a></p>
+       <p>This works once, for the next 30 minutes. If this wasn’t you, ignore this email and nothing will be created.</p>`, { tokenId: t.id });
   }
   function sendAlreadyHave(email) {
     send(email, "You already have a sparstrowgen account",
@@ -281,13 +266,19 @@
        <p>Forgotten your password? <a href="#" data-link="forgot" data-email="${esc(email)}">Reset it</a>.</p>
        <p>If this wasn’t you, you don’t need to do anything.</p>`);
   }
+  function sendRequest(email) {
+    send(D.ownerEmail, `Access request from ${email}`,
+      `<p>${esc(email)} asked to use sparstrowgen. That address has not been invited, so no account was created.</p>
+       <p>To approve, allow the address the same way you invite someone. They can then create their account with it.</p>
+       <p>Further requests from the same address will not be emailed again.</p>`, { requestFor: email });
+  }
   function sendReset(email) {
     const t = issue("reset", email);
     send(email, "Reset your sparstrowgen password",
       `<p>Someone asked to reset the password for ${esc(email)}.</p>
        <p><a href="#" data-link="reset" data-token="${t.id}">Choose a new password</a></p>
        <p>This works once, for the next 30 minutes. Changing your password signs out every other browser signed in to this account.</p>
-       <p>If this wasn’t you, ignore this email and your password stays as it is.</p>`, t.id);
+       <p>If this wasn’t you, ignore this email and your password stays as it is.</p>`, { tokenId: t.id });
   }
   function sendChanged(email) {
     send(email, "Your sparstrowgen password was changed",
@@ -304,21 +295,19 @@
       ${footer ? `<div class="footer">${footer}</div>` : ""}
     </div></main>`;
 
-  function field({ id, label, type = "text", hint, auto, mono, focus, name }) {
+  function field({ id, label, type = "text", hint, auto, focus }) {
     const invalid = S.error && (S.error.fields || []).includes(id);
     const hintId = hint ? `${id}-hint` : "";
     const desc = [invalid ? "form-error" : "", hintId].filter(Boolean).join(" ");
     return `<div class="field">
       <label for="${id}">${esc(label)}</label>
-      <input class="input${mono ? " mono" : ""}" id="${id}" name="${name || id}" type="${type}"
+      <input class="input" id="${id}" name="${id}" type="${type}"
         value="${esc(S.values[id] ?? "")}" ${auto ? `autocomplete="${auto}"` : ""} ${focus ? "data-autofocus" : ""}
         ${invalid ? 'aria-invalid="true"' : ""} ${desc ? `aria-describedby="${desc}"` : ""} spellcheck="false">
       ${hint ? `<p class="hint" id="${hintId}">${hint}</p>` : ""}
     </div>`;
   }
-  const errorLine = () => (S.error
-    ? `<p class="error" id="form-error" role="alert">${esc(S.error.message)}</p>${S.error.extra ? `<div id="form-error-extra">${S.error.extra}</div>` : ""}`
-    : "");
+  const errorLine = () => (S.error ? `<p class="error" id="form-error" role="alert">${esc(S.error.message)}</p>` : "");
   const submit = (label, busy) => `<button class="btn primary block" type="submit" data-busy="${esc(busy)}">${esc(label)}</button>`;
   const passwordHint = `At least ${MIN} characters. Length is what resists guessing, so a phrase you will remember beats a short one with symbols in it.`;
 
@@ -329,7 +318,7 @@
       <div class="stack">
         <p class="lede">The app is running, but the API did not answer. It may be starting up, or stopped.</p>
         <p class="errbox">Failed to fetch</p>
-        <button class="btn secondary block" data-action="retry" data-busy="Trying again">Try again</button>
+        <button class="btn secondary block" data-action="retry">Try again</button>
       </div>`),
 
     signin: () => shell("Sign in", `
@@ -341,48 +330,36 @@
       </form>
       <div class="links">
         <button class="link" data-go="forgot">Forgot your password?</button>
-        <button class="link" data-go="register">Invited? Create your account</button>
+        <button class="link" data-go="register">Create an account</button>
       </div>`,
       "Sessions last a week. Signing out everywhere ends them on every device."),
 
-    register: () => {
-      const first = S.variants.passwordAt === "first";
-      return shell("Create your account", `
-        <form class="stack" data-form="register" novalidate>
-          ${field({ id: "email", label: "Email", type: "email", auto: "username", focus: true,
-            hint: "sparstrowgen is by invitation. Use the address your invitation was sent to." })}
-          ${first ? field({ id: "new-password", label: "Password", type: "password", auto: "new-password", hint: passwordHint }) : ""}
-          ${errorLine()}
-          ${submit(first ? "Create account" : "Continue", first ? "Creating your account" : "Sending")}
-        </form>
-        <div class="links"><button class="link" data-go="signin">Already have an account? Sign in</button></div>`,
-        first ? "We’ll email you a link to confirm the address before the account can be used."
-              : "We’ll email you a link to confirm the address. You choose your password after that.");
-    },
+    register: () => shell("Create your account", `
+      <form class="stack" data-form="register" novalidate>
+        ${field({ id: "email", label: "Email", type: "email", auto: "username", focus: true,
+          hint: "If you were invited, use the address your invitation was sent to. Otherwise we’ll ask for approval." })}
+        ${errorLine()}
+        ${submit("Continue", "Sending")}
+      </form>
+      <div class="links"><button class="link" data-go="signin">Already have an account? Sign in</button></div>`,
+      "We’ll email you a link to confirm the address. You choose your password after that."),
 
-    "check-email": () => {
-      const { email, neutral } = S.ctx;
-      // Shown to everyone, invited or not: hiding it for an address that got no
-      // email would tell the reader which addresses are invited.
-      const code = S.variants.verifyBy === "code";
-      const lede = neutral
-        ? `<p class="lede">If <b>${esc(email)}</b> has an invitation, a link is on its way. It works for 30 minutes.</p>
-           <p class="lede">Nothing after a few minutes? Check spam. If it still hasn’t come, the address may not be invited; ask the person who invited you which address they used.</p>`
-        : `<p class="lede">We sent a link to <b>${esc(email)}</b>. It works for 30 minutes.</p>`;
-      return shell("Check your email", `
-        ${lede}
-        ${code ? `<form class="stack" data-form="code" novalidate>
-            ${field({ id: "code", label: "Or enter the code from the email", auto: "one-time-code", mono: true, focus: true })}
-            ${errorLine()}
-            ${submit("Confirm", "Checking")}
-          </form>` : errorLine()}
-        <div class="links">
-          <button class="link" data-go="register" data-keep-email>Use a different address</button>
-          <button class="link" data-action="resend" id="resend">Send it again</button>
-        </div>
-        <p class="ok" id="resent" style="margin-top:12px"></p>`,
-        "You can close this tab. The link in the email finishes the job from wherever you open it.");
-    },
+    "check-email": () => shell("Check your email", `
+      <p class="lede">We sent a link to <b>${esc(S.ctx.email)}</b>. It works for 30 minutes.</p>
+      <div class="links">
+        <button class="link" data-go="register" data-keep-email>Use a different address</button>
+        <button class="link" data-action="resend" id="resend">Send it again</button>
+      </div>
+      <p class="ok" id="resent" style="margin-top:12px"></p>`,
+      "You can close this tab. The link in the email finishes the job from wherever you open it."),
+
+    "request-sent": () => shell("Request sent", `
+      <p class="lede">Your request to use sparstrowgen with <b>${esc(S.ctx.email)}</b> has been sent for approval.</p>
+      <p class="lede">Once it’s approved, come back and create your account with the same address.</p>
+      <div class="links">
+        <button class="link" data-go="signin">Back to sign in</button>
+        <button class="link" data-go="register" data-keep-email>Try again</button>
+      </div>`),
 
     "set-password": () => {
       const t = S.tokens[S.ctx.token];
@@ -398,7 +375,7 @@
     "link-problem": () => {
       const { kind, reason, email } = S.ctx;
       let title, body, action;
-      if (reason === "used" && kind === "verify" && account(email)?.verified) {
+      if (reason === "used" && kind === "verify" && account(email)) {
         title = "Your account is already set up";
         body = "This link has already been used, so there is nothing left to do with it.";
         action = `<button class="btn primary block" data-go="signin" data-email="${esc(email)}">Sign in</button>`;
@@ -407,7 +384,7 @@
         body = "Only the most recent email works. Open the newest one, or ask for another.";
       } else if (reason === "used") {
         title = "This link has already been used";
-        body = kind === "reset" ? "Each reset link works once. If you still need to change your password, ask for a new link." : "Each link works once.";
+        body = "Each reset link works once. If you still need to change your password, ask for a new link.";
       } else {
         title = "This link has expired";
         body = "Links work once, for 30 minutes.";
@@ -488,8 +465,15 @@
             <span class="to">To ${esc(m.to)} · ${m.at}</span><span class="subj">${esc(m.subject)}</span></button>`;
         }
         const t = m.tokenId && S.tokens[m.tokenId];
-        const rev = t ? `<div class="rev">Link state: ${tokenProblem(t) ?? "valid"}
-            ${!tokenProblem(t) ? `<button class="chip" data-expire="${t.id}" style="border:1px dashed var(--muted-foreground);background:none;border-radius:6px;padding:1px 6px;font-size:11px;cursor:pointer">Make it expire</button>` : ""}</div>` : "";
+        let rev = "";
+        if (t) {
+          rev = `<div class="rev">Link state: ${tokenProblem(t) ?? "valid"}
+            ${!tokenProblem(t) ? `<button class="chip" data-expire="${t.id}">Make it expire</button>` : ""}</div>`;
+        } else if (m.requestFor) {
+          const approved = S.invites.includes(m.requestFor);
+          rev = `<div class="rev">${approved ? "Approved" : `Pending · asked ${S.requests[m.requestFor]?.count ?? 1}×`}
+            ${approved ? "" : `<button class="chip" data-approve="${esc(m.requestFor)}">Approve (stands in for allowing the address)</button>`}</div>`;
+        }
         return `<article class="mail-open">
           <div class="meta"><div>From ${esc(D.sender)}</div><div>To ${esc(m.to)} · ${m.at}</div></div>
           <h3>${esc(m.subject)}</h3>${m.body}${rev}
@@ -497,16 +481,17 @@
         </article>`;
       }).join("");
     }
-    const accts = S.accounts.map((a) => `<tr><td>${esc(a.email)}${a.verified ? "" : " (unconfirmed)"}<br>${esc(a.password)}</td>
+    const accts = S.accounts.map((a) => `<tr><td>${esc(a.email)}<br>${esc(a.password)}</td>
       <td class="act"><button class="chip" data-fill="${esc(a.email)}">Fill sign-in</button></td></tr>`).join("");
-    const pending = S.invites.filter((i) => !account(i)).map((i) => `<tr><td colspan="2">${esc(i)}</td></tr>`).join("");
+    const pending = S.invites.filter((i) => !account(i)).map((i) => `<tr><td>${esc(i)}</td></tr>`).join("");
+    const waiting = Object.entries(S.requests).filter(([e]) => !S.invites.includes(e)).map(([e, r]) => `<tr><td>${esc(e)} · asked ${r.count}×</td></tr>`).join("");
     document.getElementById("accounts").innerHTML = `<strong>Accounts in this deployment</strong><table>${accts}</table>
-      <div style="margin-top:10px"><strong>Invited, no account yet</strong></div><table>${pending || '<tr><td colspan="2">none</td></tr>'}</table>
+      <div style="margin-top:10px"><strong>Invited, no account yet</strong></div><table>${pending || "<tr><td>none</td></tr>"}</table>
+      <div style="margin-top:10px"><strong>Requests waiting</strong></div><table id="requests">${waiting || "<tr><td>none</td></tr>"}</table>
       <div style="margin-top:10px">Not invited, to try: ${esc(D.notInvitedExample)}</div>`;
   }
 
   function syncReview() {
-    document.querySelectorAll("[data-variant]").forEach((b) => b.setAttribute("aria-pressed", String(S.variants[b.dataset.variant] === b.dataset.value)));
     document.querySelectorAll("[data-fault]").forEach((c) => { c.checked = S.faults[c.dataset.fault]; });
   }
 
@@ -534,16 +519,17 @@
   }
 
   // ── behaviour ────────────────────────────────────────────────────────────
-  function fail(message, fields = [], extra = "") {
-    S.error = { message, fields, extra };
+  function fail(message, fields = []) {
+    S.error = { message, fields };
     render();
   }
 
   async function busy(form, fn) {
-    const btn = form.querySelector("[data-busy]") || form;
-    S.values = Object.fromEntries(new FormData(form.tagName === "FORM" ? form : undefined || document.createElement("form")));
-    form.querySelectorAll?.("input").forEach((i) => { S.values[i.id] = i.value; i.disabled = true; });
-    if (btn) { btn.disabled = true; btn.innerHTML = `${icon.loader}${esc(btn.dataset.busy)}`; }
+    const btn = form.querySelector("[data-busy]");
+    S.values = {};
+    form.querySelectorAll("input").forEach((i) => { S.values[i.id] = i.value; i.disabled = true; });
+    btn.disabled = true;
+    btn.innerHTML = `${icon.loader}${esc(btn.dataset.busy)}`;
     await wait(DELAY);
     fn();
   }
@@ -556,48 +542,26 @@
       if (S.faults.throttle) return fail("too many attempts — try again in 8s");
       const a = account(email);
       if (!a || a.password !== pw) return fail("that email and password do not match an account", ["email", "password"]);
-      if (!a.verified) {
-        return fail("confirm your email before signing in — the link is in the email we sent", [],
-          `<button class="btn secondary block" type="button" data-action="resend-unconfirmed" data-email="${esc(email)}">Send the link again</button>`);
-      }
       S.session = a.email;
       go("app");
     },
 
     register() {
-      const email = norm(S.values.email), pw = S.values["new-password"] ?? "";
-      const first = S.variants.passwordAt === "first";
+      const email = norm(S.values.email);
       if (S.faults.unreachable) return go("unreachable");
       if (!looksLikeEmail(email)) return fail("that does not look like an email address", ["email"]);
-      if (first && pw.length < MIN) return fail(`a password needs to be at least ${MIN} characters`, ["new-password"]);
       if (S.faults.throttle) return fail("too many attempts — try again in 8s");
-      if (S.faults.mailDown) return fail("the email could not be sent just now, so nothing was created — try again in a few minutes");
-      const neutral = S.variants.notInvited === "same";
+      if (S.faults.mailDown) return fail("the email could not be sent just now, so nothing was sent — try again in a few minutes");
       if (!S.invites.includes(email)) {
-        if (!neutral) return fail("that address has not been invited. sparstrowgen is by invitation — ask the person who invited you which address they used", ["email"]);
-        S.cooldownUntil = Date.now() + 30000;
-        return go("check-email", { email, neutral });
+        const r = S.requests[email];
+        if (r) r.count += 1;
+        else { S.requests[email] = { count: 1 }; sendRequest(email); }
+        return go("request-sent", { email });
       }
-      const a = account(email);
-      if (a?.verified) sendAlreadyHave(email);
-      else {
-        if (first) {
-          if (a) a.password = pw;
-          else S.accounts.push({ email, password: pw, verified: false, conversations: [] });
-        }
-        sendVerify(email);
-      }
-      S.cooldownUntil = Date.now() + 30000;
-      go("check-email", { email, neutral });
-    },
-
-    code() {
-      const entered = (S.values.code || "").replace(/\s/g, "");
-      if (S.faults.unreachable) return go("unreachable");
-      if (S.faults.throttle) return fail("too many attempts — try again in 8s", ["code"]);
-      const t = Object.values(S.tokens).find((x) => x.kind === "verify" && x.email === S.ctx.email && !tokenProblem(x));
-      if (!t || t.code !== entered) return fail("that code is not right — use the one in the newest email", ["code"]);
-      confirmEmail(t);
+      if (account(email)) sendAlreadyHave(email);
+      else sendVerify(email);
+      S.cooldownUntil = Date.now() + COOLDOWN;
+      go("check-email", { email });
     },
 
     "set-password"() {
@@ -608,7 +572,7 @@
       const problem = tokenProblem(t);
       if (problem) return go("link-problem", { kind: "verify", reason: problem, email: t.email });
       t.used = true;
-      S.accounts.push({ email: t.email, password: pw, verified: true, conversations: [] });
+      S.accounts.push({ email: t.email, password: pw, conversations: [] });
       S.session = t.email;
       go("app", {}, { notice: "Your account is ready." });
     },
@@ -619,7 +583,7 @@
       if (!looksLikeEmail(email)) return fail("that does not look like an email address", ["email"]);
       if (S.faults.throttle) return fail("too many attempts — try again in 8s");
       if (S.faults.mailDown) return fail("the email could not be sent just now — try again in a few minutes");
-      if (account(email)?.verified) sendReset(email);
+      if (account(email)) sendReset(email);
       go("reset-sent", { email });
     },
 
@@ -638,15 +602,6 @@
     },
   };
 
-  function confirmEmail(t) {
-    if (S.variants.passwordAt === "after") return go("set-password", { token: t.id });
-    t.used = true;
-    const a = account(t.email);
-    a.verified = true;
-    S.session = a.email;
-    go("app", {}, { notice: "Your email is confirmed and your account is ready." });
-  }
-
   function openLink(el) {
     const kind = el.dataset.link;
     if (kind === "signin" || kind === "forgot") {
@@ -656,17 +611,16 @@
     const t = S.tokens[el.dataset.token];
     const problem = tokenProblem(t);
     if (problem) return go("link-problem", { kind, reason: problem, email: t.email });
-    if (kind === "reset") return go("reset-password", { token: t.id });
-    confirmEmail(t);
+    go(kind === "reset" ? "reset-password" : "set-password", { token: t.id });
   }
 
   function preset(name) {
-    fresh(S);
+    fresh();
     if (name === "loading") { S.screen = "checking"; return render(); }
     if (name === "error") { S.faults.unreachable = true; S.screen = "unreachable"; return render(); }
     if (name === "populated") { S.session = D.accounts[0].email; S.screen = "app"; return render(); }
     if (name === "empty") {
-      S.accounts.push({ email: "agent@sparstrow.com", password: "agent-mailbox-test", verified: true, conversations: [] });
+      S.accounts.push({ email: "agent@sparstrow.com", password: "agent-mailbox-test", conversations: [] });
       S.session = "agent@sparstrow.com"; S.screen = "app"; S.notice = "Your account is ready.";
       return render();
     }
@@ -684,7 +638,7 @@
   document.addEventListener("input", (e) => {
     if (!S.error || !e.target.closest("#app")) return;
     S.error = null;
-    document.querySelectorAll("#form-error, #form-error-extra").forEach((n) => n.remove());
+    document.getElementById("form-error")?.remove();
     document.querySelectorAll('#app [aria-invalid="true"]').forEach((n) => n.removeAttribute("aria-invalid"));
   });
 
@@ -694,10 +648,9 @@
       if (S.menu && !e.target.closest(".menu")) { S.menu = false; render(); }
       return;
     }
-    if (el.tagName === "A" || el.dataset.link) e.preventDefault();
+    if (el.tagName === "A") e.preventDefault();
 
     if (el.dataset.preset) return preset(el.dataset.preset);
-    if (el.dataset.variant) { S.variants[el.dataset.variant] = el.dataset.value; return preset("start"); }
     if (el.dataset.link) return openLink(el);
     if (el.dataset.openMail !== undefined) {
       S.openMail = el.dataset.openMail || null;
@@ -706,6 +659,7 @@
       return renderInbox();
     }
     if (el.dataset.expire) { S.tokens[el.dataset.expire].expired = true; return renderInbox(); }
+    if (el.dataset.approve) { S.invites.push(el.dataset.approve); return renderInbox(); }
     if (el.dataset.fill) {
       const a = account(el.dataset.fill);
       S.session = null;
@@ -728,17 +682,12 @@
         if (Date.now() < S.cooldownUntil) return;
         const email = S.ctx.email;
         if (S.faults.mailDown) { document.getElementById("resent").textContent = "The email could not be sent just now. Try again in a few minutes."; return; }
-        if (S.invites.includes(email)) account(email)?.verified ? sendAlreadyHave(email) : sendVerify(email);
-        S.cooldownUntil = Date.now() + 30000;
+        account(email) ? sendAlreadyHave(email) : sendVerify(email);
+        S.cooldownUntil = Date.now() + COOLDOWN;
         renderInbox();
         tickCooldown();
-        document.getElementById("resent").textContent = S.ctx.neutral ? "If the address is invited, another link is on its way." : "Sent again. Only the newest link will work.";
+        document.getElementById("resent").textContent = "Sent again. Only the newest link will work.";
         return;
-      }
-      case "resend-unconfirmed": {
-        sendVerify(el.dataset.email);
-        S.cooldownUntil = Date.now() + 30000;
-        return go("check-email", { email: el.dataset.email, neutral: false });
       }
     }
   });

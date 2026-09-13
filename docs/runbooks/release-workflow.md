@@ -96,7 +96,8 @@ server.
 Phase 2 may begin only after the owner can verify all of these as a normal user:
 
 - an invited person can create, verify and later sign in to an account without a
-  server-log setup code, and an address that was not invited cannot;
+  server-log setup code, and an address that was not invited cannot, but its request for
+  access reaches the owner;
 - a person who forgot their password can reset it through their email;
 - a second account cannot see the first account's conversations or send work to
   its computer;
