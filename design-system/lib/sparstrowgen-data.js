@@ -9,7 +9,7 @@
  * testing, which is why it appears as an invited address with no account.
  */
 window.SPARSTROW_SEED = {
-  sender: "sparstrowgen <no-reply@sparstrow.com>",
+  sender: "sparstrowgen <agent@sparstrow.com>",
 
   // Where access requests from uninvited addresses are sent until the
   // administration place exists (docs/Later.md L-18).

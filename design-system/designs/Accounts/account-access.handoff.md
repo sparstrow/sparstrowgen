@@ -100,7 +100,8 @@ Decided by the prototype, approved by nobody:
 
 - Links last **30 minutes** and work **once**; only the **newest** link works.
 - Resend cooldown of **30 seconds**.
-- Sender shown as `sparstrowgen <no-reply@sparstrow.com>`.
+- Sender shown as `sparstrowgen <agent@sparstrow.com>` — the same mailbox as `OWNER_EMAIL`, sending
+  its own confirmation and reset mail; no separate mailbox was created for this.
 - All email subject lines and body copy.
 - A **"your password was changed"** email after every reset. Not in the spec; a common safety net.
 - After choosing a new password you are **signed in straight away** in that browser, rather than

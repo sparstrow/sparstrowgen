@@ -182,13 +182,14 @@ shown below.
 | `SMTP_PORT` | `465` (TLS) — or `587` if the mailbox only offers STARTTLS | No | Off | On |
 | `SMTP_USERNAME` | the sending mailbox's full address | No | Off | On |
 | `SMTP_PASSWORD` | that mailbox's password | Yes | Off | On |
-| `MAIL_FROM` | `sparstrowgen <no-reply@sparstrow.com>` | No | Off | On |
+| `MAIL_FROM` | `sparstrowgen <agent@sparstrow.com>` | No | Off | On |
 
-The sending mailbox must exist first. In Hostinger, create it under **Emails** on
-the `sparstrow.com` domain, then read its outgoing (SMTP) server and port from
-that mailbox's configuration page rather than copying the example above. Mail
-sent through the domain's own mailbox is what keeps confirmation links out of
-spam folders.
+No dedicated sending mailbox is needed — `agent@sparstrow.com` (the same mailbox
+already used as `OWNER_EMAIL`) sends its own confirmation and reset mail, so
+`SMTP_USERNAME` and the address inside `MAIL_FROM` are that same mailbox. Read
+its outgoing (SMTP) server and port from that mailbox's configuration page in
+Hostinger rather than copying the example above. Mail sent through the
+domain's own mailbox is what keeps confirmation links out of spam folders.
 
 **Upgrading an existing deployment:** set these seven before the release that
 introduced them reaches `main`. Compose refuses to deploy with any required one
