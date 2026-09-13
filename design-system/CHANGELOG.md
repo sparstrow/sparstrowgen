@@ -9,3 +9,4 @@ Newest first. Record token changes, new components, and new prototypes.
 - Added rendered color, typography, spacing, button, and disconnect-confirmation cards.
 - Recorded the live token and shadcn/Base UI primitive sources for drift checks.
 - Promoted Machines to a persistent product destination and added list, profile and master-detail shots.
+- Recorded A + B as the selected route-based Machines flow and added its interactive prototype.

@@ -5,7 +5,7 @@
 | **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12 · revision 3 approved 2026-09-13** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
-| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: machine-workspace shots awaiting direction choice · US3: not designed yet |
+| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: not designed yet |
 | **Open questions** | none |
 
 > **Revision 2026-09-12.** Mapping this release against the phase 2 exit gate found five gaps. You
@@ -33,7 +33,7 @@
 > **Revision 3, 2026-09-13, from your review of US2 design shots.** Computers now have a dedicated
 > product destination and a durable profile rather than living only inside Chat setup. This brings
 > the account-scoped machines list into US2 so later approved computer capabilities have a stable
-> home. The current design choice is whether list and profile use separate routes or master-detail.
+> home. The owner selected the separate Machines list and focused profile directions (A + B).
 
 ## What's wrong today
 

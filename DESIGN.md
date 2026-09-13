@@ -137,8 +137,8 @@ the shadcn registry before being hand-built.
 | Right-aligned compact user prompts | Expected | Chat | Prompts are context, not equal chat bubbles |
 | Single-column account access | Expected | Account routes | One clear action per screen |
 | Machines navigation | Expected | Persistent product sidebar | A dedicated destination because computer capabilities will expand |
-| Machines list | Expected | Machines | Shows only the signed-in person's computers and scales beyond the current machine |
-| Machine profile | Expected | Machines | Durable home for connection, providers, folders, disconnect and later approved capabilities |
+| Machines list | Expected | Machines route | Shows only the signed-in person's computers and opens a focused profile |
+| Machine profile | Expected | Separate machine route | Durable home for connection, providers, folders, disconnect and later approved capabilities |
 | Progressive computer setup | Expected | Machines and first use | Setup begins from the dedicated destination and can be resumed later |
 | Inline persistent machine attention state | Expected | Where Chat needs the machine | Must contain a next action |
 | Disconnect confirmation | Expected | US2 computer action | Names the effect on active work and reconnection |
@@ -148,8 +148,8 @@ the shadcn registry before being hand-built.
 | Appearance preferences | Not yet | — | Separate draft feature after the Phase 1 gate |
 
 The persistent product sidebar contains Chat and Machines. Chat remains the daily work surface;
-Machines owns the computer list, computer profiles, pairing and disconnect. A machine profile may
-gain later approved capabilities without turning Chat into a management screen.
+Machines owns a route-based computer list, focused computer profiles, pairing and disconnect. A
+machine profile may gain later approved capabilities without turning Chat into a management screen.
 
 **Rule:** A new persistent surface or navigation mechanism is added here with owner approval before
 it appears in an individual feature.
@@ -200,6 +200,4 @@ it appears in an individual feature.
 - The final narrow-screen Chat structure, tracked as G-21.
 - Semantic success, warning, and information tokens. US2 may communicate connection states with
   icon, label, foreground, muted, and destructive tokens until an approved palette adds them.
-- Whether Machines uses a separate list and profile route or a master-detail workspace, which must
-  be chosen from the current rendered shots.
 - The later account-wide appearance preferences and their Paper, Slate, Soft, and Mono expressions.

@@ -6,6 +6,16 @@ to the next screen.
 
 ---
 
+## DD-007 — Machines uses a list followed by a focused profile
+
+**2026-09-13 · US2 computer pairing.** The owner selected direction A for the Machines index and
+direction B for the machine profile. Direction C's permanent master-detail workspace was not
+selected.
+
+**Why:** the owner chose A + B from the rendered directions. This makes the approved interaction a
+dedicated Machines list whose rows open a separate, focused machine profile; no further reason was
+given for rejecting C.
+
 ## DD-006 — Machines is a durable product destination
 
 **2026-09-13 · US2 computer pairing.** The first three shots placed pairing inside Chat, on a
@@ -16,7 +26,7 @@ feature later."
 **Why:** a computer is not just a transient prerequisite for sending a message. It is an account-
 scoped entity whose connection, providers, folders, disconnect action and later approved
 capabilities need a stable home. The persistent sidebar therefore contains Chat and Machines.
-Whether Machines uses list-to-profile navigation or master-detail remains a rendered choice.
+Machines uses the separately rendered list-to-profile navigation recorded in DD-007.
 
 ## DD-005 — The current chat choices are the product foundation
 
