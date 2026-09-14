@@ -34,14 +34,16 @@ func main() {
 	case len(args) == 1 && isPairingLink(args[0]):
 		os.Exit(report(activate(args[0]), ""))
 	case len(args) > 0 && args[0] == "install":
-		os.Exit(report(install(), installedNotice))
+		err := install()
+		os.Exit(report(err, installedNotice()))
 	case len(args) > 0 && args[0] == "pair":
 		os.Exit(pairCommand(args[1:]))
 	case len(args) > 0 && args[0] == "run":
 		runBackground()
 	case len(args) == 0 && released():
 		// Double-clicking sparstrowgen-setup.exe.
-		os.Exit(report(install(), installedNotice))
+		err := install()
+		os.Exit(report(err, installedNotice()))
 	case len(args) == 0:
 		runForeground()
 	default:
@@ -50,7 +52,14 @@ func main() {
 	}
 }
 
-const installedNotice = "sparstrowgen is installed on this computer and will start when you sign in to Windows.\n\nGo back to sparstrowgen in your browser, open Machines and choose Add computer."
+// installedNotice is what a finished install says. A computer that is already
+// paired needs nothing more, so it is not sent back to Add computer (B-27).
+func installedNotice() string {
+	if readCredential(credentialName) != "" {
+		return "sparstrowgen is updated on this computer.\n\nThis computer is already paired, so it reconnects by itself. There is nothing else to do."
+	}
+	return "sparstrowgen is installed on this computer and will start when you sign in to Windows.\n\nGo back to sparstrowgen in your browser, open Machines and choose Add computer."
+}
 
 // report shows the outcome to the person who opened the executable and returns
 // its exit code. A successful pairing link says nothing: the browser moves on.
@@ -274,6 +283,10 @@ type daemon struct {
 	// onConnect runs once a dial succeeds. A pending credential becomes this
 	// computer's credential only here, when the server has accepted it.
 	onConnect func()
+
+	// detect reports the installed providers; nil means agent.Detect. Tests
+	// replace it so a connection never runs the real CLIs.
+	detect func(context.Context) []protocol.Provider
 }
 
 func (d *daemon) run(ctx context.Context, url, token string) error {
@@ -298,6 +311,22 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 	}
 	defer conn.Close()
 
+	// Stopping cancels ctx, but the read below does not watch ctx, so a copy
+	// that was connected never noticed it had been asked to exit and the
+	// installer gave up waiting for it (docs/Bugs.md B-26). Closing the socket
+	// ends the read.
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "stopping"), time.Now().Add(time.Second))
+			_ = conn.Close()
+		case <-finished:
+		}
+	}()
+
 	d.mu.Lock()
 	d.conn = conn
 	d.mu.Unlock()
@@ -319,7 +348,11 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 
 	// Report what is installed before anything can be asked of us, so the
 	// surface never offers a provider this machine cannot run.
-	providers := agent.Detect(ctx)
+	detect := d.detect
+	if detect == nil {
+		detect = agent.Detect
+	}
+	providers := detect(ctx)
 	for _, p := range providers {
 		d.log.Info("provider", "id", p.ID, "availability", p.Availability, "models", len(p.Models))
 	}

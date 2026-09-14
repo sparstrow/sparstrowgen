@@ -264,3 +264,18 @@ func TestADisconnectedComputerForgetsItsCredentialAndStops(t *testing.T) {
 		t.Errorf("credential file still exists: %v", err)
 	}
 }
+
+// B-27: reinstalling on a paired computer must not send the person back to
+// Add computer.
+func TestTheInstallNoticeOnlyAsksToPairAnUnpairedComputer(t *testing.T) {
+	isolatedHome(t)
+	if got := installedNotice(); !strings.Contains(got, "Add computer") {
+		t.Errorf("a first install must say how to pair: %q", got)
+	}
+	if err := writeCredential(credentialName, "working-credential"); err != nil {
+		t.Fatal(err)
+	}
+	if got := installedNotice(); strings.Contains(got, "Add computer") || !strings.Contains(got, "already paired") {
+		t.Errorf("a reinstall on a paired computer: %q", got)
+	}
+}

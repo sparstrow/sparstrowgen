@@ -200,8 +200,13 @@ computer** in Chrome opened the link, which claimed the request; the daemon was 
 two-second intervals until approval, connected nine seconds after the claim, reported claude, codex
 and agy as available, and ran one real Chat turn (claude, 4 s). One copy ran, with no visible window.
 
-**Not verified.** Still connected after signing out of Windows and back in; installing over a running
-copy; the journey on a Windows account that has never run sparstrowgen; the download from the
+**Installing over a running copy, proved on his PC, 2026-09-13.** The first attempt (0.1.1 over a
+connected 0.1.0) failed as B-26. With 0.1.2 (SHA-256 `1a943abb…7fdc`), once the old copy was ended by
+hand, it connected and ran a Chat turn (claude, 3 s). He then ran the installer twice more while
+connected: the log shows `daemon stopped` at 22:35:32 and 22:35:57, each followed by `connected`
+about a second later, with one copy left running from the installed path.
+
+**Not verified.** Still connected after signing out of Windows and back in; the journey on a Windows account that has never run sparstrowgen; the download from the
 published release rather than a local build. The executable is unsigned, so Windows SmartScreen
 warns before running it.
 
