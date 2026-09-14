@@ -20,10 +20,11 @@ import (
 	"github.com/sparstrow/sparstrowgen/server/internal/release"
 )
 
-/* Keeping this copy updated (spec US3, docs/Decisions.md D-034).
+/* Keeping this copy updated (spec US3, docs/Decisions.md D-034, D-035).
 
-A check reads a signed manifest, and a newer installer is downloaded and kept
-only if its SHA-256 matches the one the signature covers. Installing never
+A check reads the latest release's manifest from GitHub over HTTPS, and a newer
+installer is downloaded and kept only if its SHA-256 matches the manifest's.
+There is no signing key: trust is our GitHub releases, as Multica's. Installing never
 interrupts agent work: it waits until no turn is running, then closes to new
 turns under the same lock that counted them, so a turn cannot start in between.
 
@@ -37,7 +38,6 @@ one has not reached the server within two minutes. */
 var (
 	version          = "dev"
 	releaseUpdateURL string
-	releaseUpdateKey string
 )
 
 const (
@@ -72,7 +72,6 @@ type updater struct {
 	turns   *runningTurns
 	client  *http.Client
 	source  string
-	key     string
 	current string
 	dir     string
 	// start hands over to the updater process. Once it returns nil this copy
@@ -106,7 +105,7 @@ func newUpdater(log *slog.Logger, turns *runningTurns, send func(protocol.Daemon
 	}
 	u := &updater{
 		log: log, turns: turns, client: &http.Client{Timeout: updateTimeout},
-		source: releaseUpdateURL, key: releaseUpdateKey, current: version, dir: dir,
+		source: releaseUpdateURL, current: version, dir: dir,
 		start: startUpdate, exit: exit, send: send, poll: 2 * time.Second,
 		// On until the server says otherwise, which it does on every connect.
 		automatic: true,
@@ -176,13 +175,9 @@ func (u *updater) check(ctx context.Context) (protocol.UpdateStatus, *readyUpdat
 	if err != nil {
 		return failedStatus(fmt.Sprintf("Could not check for updates (%v).", err)), nil
 	}
-	sig, err := fetch(ctx, u.client, u.source+".sig", 1024)
+	m, err := release.Parse(body, u.source)
 	if err != nil {
-		return failedStatus(fmt.Sprintf("Could not check for updates (%v).", err)), nil
-	}
-	m, err := release.Verify(body, sig, u.key)
-	if err != nil {
-		return failedStatus("The update information could not be verified, so nothing was downloaded." + still), nil
+		return failedStatus("The update information was not valid, so nothing was downloaded." + still), nil
 	}
 	later, err := release.Newer(m.Version, u.current)
 	if err != nil {
@@ -193,7 +188,7 @@ func (u *updater) check(ctx context.Context) (protocol.UpdateStatus, *readyUpdat
 	}
 	path, err := download(ctx, u.client, m, u.dir)
 	if errors.Is(err, release.ErrUntrusted) {
-		return failedStatus(fmt.Sprintf("The download of v%s did not match its signed checksum, so nothing was installed.%s", m.Version, still)), nil
+		return failedStatus(fmt.Sprintf("The download of v%s did not match its published checksum, so nothing was installed.%s", m.Version, still)), nil
 	}
 	if err != nil {
 		return failedStatus(fmt.Sprintf("Could not download v%s (%v).%s", m.Version, err, still)), nil
@@ -369,7 +364,7 @@ func fetch(ctx context.Context, client *http.Client, url string, limit int64) ([
 	return body, nil
 }
 
-// download keeps the installer only if its SHA-256 matches the signed manifest.
+// download keeps the installer only if its SHA-256 matches the manifest.
 // One already downloaded and matching is reused.
 func download(ctx context.Context, client *http.Client, m release.Manifest, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {

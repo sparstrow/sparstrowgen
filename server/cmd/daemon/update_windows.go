@@ -19,7 +19,7 @@ import (
 // A copy opened from Downloads installs itself first, and a development build
 // never updates.
 func updatesSupported() bool {
-	if !released() || releaseUpdateURL == "" || releaseUpdateKey == "" {
+	if !released() || releaseUpdateURL == "" {
 		return false
 	}
 	self, err := os.Executable()

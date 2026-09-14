@@ -20,39 +20,25 @@ import (
 	"github.com/sparstrow/sparstrowgen/server/internal/release"
 )
 
-/* The updater, against a real signed manifest served over TLS the way GitHub
-serves it. Only the handover is faked: it would replace this test binary. */
+/* The updater, against a real manifest served over TLS the way GitHub serves
+it. Only the handover is faked: it would replace this test binary. */
 
 type releaseServer struct {
 	srv       *httptest.Server
-	publicKey string
 	installer []byte
-	// tamper serves different bytes from the ones the manifest signs for.
+	manifest  atomic.Pointer[[]byte]
+	// tamper serves different bytes from the ones the manifest names.
 	tamper atomic.Bool
 }
 
 func newReleaseServer(t *testing.T, version string) *releaseServer {
 	t.Helper()
-	keyPath := filepath.Join(t.TempDir(), "signing.key")
-	pub, err := release.GenerateKey(keyPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := release.LoadKey(keyPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rs := &releaseServer{publicKey: pub, installer: []byte("sparstrowgen " + version)}
+	rs := &releaseServer{installer: []byte("sparstrowgen " + version)}
 	mux := http.NewServeMux()
 	rs.srv = httptest.NewTLSServer(mux)
 	t.Cleanup(rs.srv.Close)
-	sum := sha256.Sum256(rs.installer)
-	body, sig, err := release.Sign(key, release.Manifest{Version: version, URL: rs.srv.URL + "/setup.exe", SHA256: hex.EncodeToString(sum[:])})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mux.HandleFunc("/update.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) })
-	mux.HandleFunc("/update.json.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(sig) })
+	rs.publish(t, version, rs.srv.URL+"/setup.exe")
+	mux.HandleFunc("/update.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(*rs.manifest.Load()) })
 	mux.HandleFunc("/setup.exe", func(w http.ResponseWriter, _ *http.Request) {
 		if rs.tamper.Load() {
 			_, _ = w.Write([]byte("something else entirely"))
@@ -61,6 +47,17 @@ func newReleaseServer(t *testing.T, version string) *releaseServer {
 		_, _ = w.Write(rs.installer)
 	})
 	return rs
+}
+
+// publish serves a manifest naming this server's installer at installerURL.
+func (rs *releaseServer) publish(t *testing.T, version, installerURL string) {
+	t.Helper()
+	sum := sha256.Sum256(rs.installer)
+	body, err := release.Encode(release.Manifest{Version: version, URL: installerURL, SHA256: hex.EncodeToString(sum[:])})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs.manifest.Store(&body)
 }
 
 type statusLog struct {
@@ -91,10 +88,10 @@ func newUpdaterRig(t *testing.T, rs *releaseServer, current string) *updaterRig 
 	r := &updaterRig{sent: &statusLog{}, started: make(chan handover, 4), exited: make(chan struct{}, 4)}
 	r.u = &updater{
 		log: quietLog(), turns: newRunningTurns(), client: rs.srv.Client(),
-		source: rs.srv.URL + "/update.json", key: rs.publicKey, current: current, dir: t.TempDir(),
-		start:  func(newExe, from, to string) error { r.started <- handover{newExe, from, to}; return nil },
-		exit:   func() { r.exited <- struct{}{} },
-		send:   r.sent.send, poll: 10 * time.Millisecond, automatic: true,
+		source: rs.srv.URL + "/update.json", current: current, dir: t.TempDir(),
+		start: func(newExe, from, to string) error { r.started <- handover{newExe, from, to}; return nil },
+		exit:  func() { r.exited <- struct{}{} },
+		send:  r.sent.send, poll: 10 * time.Millisecond, automatic: true,
 		status: protocol.UpdateStatus{Kind: protocol.UpdateUnchecked},
 	}
 	return r
@@ -228,12 +225,12 @@ func TestWithAutomaticUpdatesOffACheckOnlyReportsTheUpdate(t *testing.T) {
 	r.handedOver(t)
 }
 
-func TestADownloadThatDoesNotMatchItsSignedChecksumIsRefused(t *testing.T) {
+func TestADownloadThatDoesNotMatchItsChecksumIsRefused(t *testing.T) {
 	rs := newReleaseServer(t, "0.2.1")
 	rs.tamper.Store(true)
 	r := newUpdaterRig(t, rs, "0.2.0")
 	s := r.u.CheckNow(context.Background())
-	if s.Kind != protocol.UpdateFailed || !strings.Contains(s.Message, "did not match its signed checksum") || !strings.Contains(s.Message, "v0.2.0 is still running") {
+	if s.Kind != protocol.UpdateFailed || !strings.Contains(s.Message, "did not match its published checksum") || !strings.Contains(s.Message, "v0.2.0 is still running") {
 		t.Fatalf("status = %+v", s)
 	}
 	if matches, _ := filepath.Glob(filepath.Join(r.u.dir, "sparstrowgen-*")); len(matches) != 0 {
@@ -242,14 +239,19 @@ func TestADownloadThatDoesNotMatchItsSignedChecksumIsRefused(t *testing.T) {
 	r.neverHandedOver(t, 100*time.Millisecond)
 }
 
-func TestAManifestSignedByAnyoneElseIsRefused(t *testing.T) {
+// A manifest can never send a computer to download from another site, even with
+// that installer's correct checksum.
+func TestAManifestNamingAnInstallerElsewhereIsRefused(t *testing.T) {
 	rs := newReleaseServer(t, "0.2.1")
-	other := newReleaseServer(t, "0.2.1")
+	elsewhere := newReleaseServer(t, "0.2.1")
+	rs.publish(t, "0.2.1", elsewhere.srv.URL+"/setup.exe")
 	r := newUpdaterRig(t, rs, "0.2.0")
-	r.u.key = other.publicKey
 	s := r.u.CheckNow(context.Background())
-	if s.Kind != protocol.UpdateFailed || !strings.Contains(s.Message, "could not be verified") {
+	if s.Kind != protocol.UpdateFailed || !strings.Contains(s.Message, "was not valid") || !strings.Contains(s.Message, "v0.2.0 is still running") {
 		t.Fatalf("status = %+v", s)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(r.u.dir, "sparstrowgen-*")); len(matches) != 0 {
+		t.Errorf("downloaded from elsewhere: %v", matches)
 	}
 	r.neverHandedOver(t, 100*time.Millisecond)
 }

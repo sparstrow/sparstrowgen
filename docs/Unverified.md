@@ -102,7 +102,7 @@ Machines and Settings → Updates were not looked at: they need his sign-in.
 **From:** US3 (#15), D-034, 2026-09-13 · **Who can run it:** agent — needs a release channel that is
 not the one every installed computer follows (a staging channel, WORKFLOW.md phase 2) or a test
 build pointed at a private manifest
-**How:** Publish, to that channel only, a signed build that cannot reach the server. Passing: after
+**How:** Publish, to that channel only, a build that cannot reach the server. Passing: after
 two minutes the log shows the updater putting the old version back, the old version connects, and
 Settings → Updates shows "did not reconnect within 2 minutes, so v… was put back and is running".
 The runUpdate tests prove the sequence with fake processes; this proves it with real ones.
@@ -144,3 +144,14 @@ as before, and the chat header's Conversations panel no longer has it — check 
 icon-collapsed sidebar states.
 **Status:** open — `tsc --noEmit` and eslint pass on the changed files; not seen in a browser because
 another session's `next dev` held the directory lock on `apps/web` for the whole turn
+
+## U-13 — An installed computer moves off the signing key and then updates from a release GitHub built
+
+**From:** D-035, 2026-09-14 · **Who can run it:** agent on the owner's PC (it needs published releases
+and the installed copy)
+**How:** With 0.2.1 installed and connected, publish 0.2.2 through the workflow and add its `.sig`
+([runbook](runbooks/daemon-release.md)). Passing: the log shows 0.2.1 checking, handing over and the
+updater's `updated` 0.2.1 → 0.2.2, then `connected` from 0.2.2. Then publish 0.2.3 through the workflow
+alone, with no `.sig` on the release. Passing: 0.2.2 installs it the same way, and the installed
+executable's SHA-256 is the one on the 0.2.3 release.
+**Status:** open
