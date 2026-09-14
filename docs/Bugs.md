@@ -509,6 +509,16 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-27 — Reinstalling on a connected computer tells the person to add it again
+
+**Found:** 2026-09-13, by the owner, reinstalling 0.1.2 over his connected computer
+**Status:** open
+
+**Repro:** On a computer that is already paired, run `sparstrowgen-setup.exe` again.
+**Expected / Actual:** a message that it was updated and is still connected / "Go back to sparstrowgen
+in your browser, open Machines and choose Add computer", the first-install text, although nothing
+needs doing.
+
 ## B-26 — Installing over a connected computer failed: the running copy never stopped
 
 **Found:** 2026-09-13, by the owner, running the 0.1.1 installer over his connected 0.1.0
