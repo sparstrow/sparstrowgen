@@ -177,15 +177,24 @@ wrong rather than the outcome.
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
 
-## G-32 — The production Windows URI handler has not been installed or proved on a clean computer
+## G-32 — The Windows installation path is not signed, published, or proved on a clean computer
 
-**Found:** 2026-09-13, US2 implementation
+**Kind:** unproved
+**Raised:** 2026-09-13, US2 implementation
 
-The daemon accepts `pair -request <opaque request>` and stores its paired credential, while the
-browser opens the approved `sparstrowgen://pair` URI. The installer that registers that URI with
-Windows is not part of this repository yet, so a browser cannot distinguish no handler from a slow
-or blocked launch. The setup UI therefore waits honestly; a clean-machine installer proof remains
-required before a production pairing launch is claimed complete.
+The repository now builds a Windows bundle containing the daemon, URI launcher, and per-user
+installer. On this development machine, the launcher successfully registered the
+`sparstrowgen://` handler under the current Windows user; the launcher and bundle build cleanly.
+The browser has honest waiting, retry, and install-help states because an unanswered URI cannot
+distinguish a missing handler from a delayed or blocked launch.
+
+The archive is deliberately unsigned and has not been published at the `NEXT_PUBLIC_WINDOWS_INSTALLER_URL`
+used by the app. It has also not been installed and paired through a browser on a clean Windows
+account, so end-to-end URI activation and the sign-in startup entry remain unproved outside this
+development checkout.
+
+- **If wrong:** a first-time user may be unable to install or launch the local component even though the pairing UI looks available.
+- **Clears when:** a signed release is published, its URL is configured for the web environment, and a clean Windows account installs it, pairs through the browser, restarts, and reconnects successfully.
 
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 

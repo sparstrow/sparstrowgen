@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -34,9 +35,22 @@ func main() {
 	// The agent package reports a degraded process-tree stop through the
 	// default logger rather than by threading one through three backends.
 	slog.SetDefault(log)
-	serverURL := env("SERVER_WS", "ws://localhost:8080/daemon")
+	executable, err := os.Executable()
+	if err != nil {
+		log.Error("could not locate the daemon executable", "err", err)
+		os.Exit(1)
+	}
+	config, err := loadInstallationConfig(executable)
+	if err != nil {
+		log.Error("could not read the installed connection configuration", "err", err)
+		os.Exit(1)
+	}
+	serverURL := serverWS(config)
 	if len(os.Args) > 1 && os.Args[1] == "pair" {
-		pairMain(log)
+		if err := pairMain(config, serverURL); err != nil {
+			log.Error("could not claim pairing request", "err", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -151,6 +165,59 @@ type daemon struct {
 	connectedOnce bool
 }
 
+type installationConfig struct {
+	ServerAPI string `json:"serverApi"`
+	ServerWS  string `json:"serverWs"`
+}
+
+func loadInstallationConfig(executable string) (installationConfig, error) {
+	path := filepath.Join(filepath.Dir(executable), "sparstrowgen.json")
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return installationConfig{}, nil
+	}
+	if err != nil {
+		return installationConfig{}, fmt.Errorf("read installation configuration: %w", err)
+	}
+	var config installationConfig
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return installationConfig{}, fmt.Errorf("read installation configuration: %w", err)
+	}
+	if config.ServerAPI != "" {
+		u, err := url.Parse(config.ServerAPI)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return installationConfig{}, errors.New("installation configuration has an invalid serverApi")
+		}
+	}
+	if config.ServerWS != "" {
+		u, err := url.Parse(config.ServerWS)
+		if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Host == "" {
+			return installationConfig{}, errors.New("installation configuration has an invalid serverWs")
+		}
+	}
+	return config, nil
+}
+
+func serverWS(config installationConfig) string {
+	if configured := os.Getenv("SERVER_WS"); configured != "" {
+		return configured
+	}
+	if config.ServerWS != "" {
+		return config.ServerWS
+	}
+	return "ws://localhost:8080/daemon"
+}
+
+func serverAPI(config installationConfig, ws string) string {
+	if configured := os.Getenv("SERVER_API"); configured != "" {
+		return configured
+	}
+	if config.ServerAPI != "" {
+		return config.ServerAPI
+	}
+	return strings.Replace(strings.Replace(ws, "ws://", "http://", 1), "wss://", "https://", 1)
+}
+
 func (d *daemon) run(ctx context.Context, url, token string) error {
 	// In a header rather than the URL: a query string ends up in proxy logs and
 	// in the server's own access log, and a credential that is written down
@@ -251,50 +318,46 @@ func pairedCredential() string {
 	}
 	return strings.TrimSpace(string(b))
 }
-func pairMain(log *slog.Logger) {
+func pairMain(config installationConfig, ws string) error {
 	fs := flag.NewFlagSet("pair", flag.ExitOnError)
 	request := fs.String("request", "", "one-time pairing request")
 	name := fs.String("name", env("COMPUTERNAME", "This computer"), "computer name")
 	fs.Parse(os.Args[2:])
 	if *request == "" {
-		log.Error("pair requires -request from the sparstrowgen launch link")
-		return
+		return errors.New("pair requires -request from the sparstrowgen launch link")
 	}
-	base := env("SERVER_API", strings.Replace(strings.Replace(env("SERVER_WS", "ws://localhost:8080/daemon"), "ws://", "http://", 1), "wss://", "https://", 1))
+	base := serverAPI(config, ws)
 	base = strings.TrimSuffix(base, "/daemon")
 	body := strings.NewReader(fmt.Sprintf(`{"request":%q,"name":%q}`, *request, *name))
 	res, err := http.Post(base+"/daemon/pair", "application/json", body)
 	if err != nil {
-		log.Error("could not claim pairing request", "err", err)
-		return
+		return fmt.Errorf("call pairing service: %w", err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		log.Error("pairing was refused", "detail", strings.TrimSpace(string(raw)))
-		return
+		return fmt.Errorf("pairing was refused: %s", strings.TrimSpace(string(raw)))
 	}
 	var reply struct {
 		Credential string `json:"credential"`
 	}
-	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil || reply.Credential == "" {
-		log.Error("pairing response had no credential", "err", err)
-		return
+	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
+		return fmt.Errorf("pairing response had no credential: %w", err)
+	}
+	if reply.Credential == "" {
+		return errors.New("pairing response had no credential")
 	}
 	p := credentialPath()
 	if p == "" {
-		log.Error("could not choose a secure credential location")
-		return
+		return errors.New("could not choose a secure credential location")
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
-		log.Error("could not prepare credential location", "err", err)
-		return
+		return fmt.Errorf("prepare credential location: %w", err)
 	}
 	if err := os.WriteFile(p, []byte(reply.Credential+"\n"), 0600); err != nil {
-		log.Error("could not save machine credential", "err", err)
-		return
+		return fmt.Errorf("save machine credential: %w", err)
 	}
-	log.Info("pairing request claimed; approve it in sparstrowgen, then start the daemon")
+	return nil
 }
 
 func (d *daemon) send(msg protocol.DaemonMessage) error {
