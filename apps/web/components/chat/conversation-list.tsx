@@ -17,7 +17,6 @@ import type { Conversation } from "@/lib/chat-types";
 import { useChatView } from "@/lib/store";
 import { providerStyle } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
-import { AccountMenu } from "@/components/auth/account-menu";
 import {
   ConversationName,
   conversationName,
@@ -235,18 +234,15 @@ export function ConversationList({
     <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
       <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
         <h2 className="text-sm font-medium">Conversations</h2>
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onCreate}
-            aria-label="New conversation"
-          >
-            <Plus className="size-4" />
-          </Button>
-          <AccountMenu />
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          onClick={onCreate}
+          aria-label="New conversation"
+        >
+          <Plus className="size-4" />
+        </Button>
       </div>
 
       <div className="shrink-0 px-3 pb-2">

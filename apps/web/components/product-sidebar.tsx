@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { MessageSquareText, MonitorSmartphone, Settings } from "lucide-react";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader,
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { AccountMenu } from "@/components/auth/account-menu";
 
 export function ProductSidebar({ current }: { current: "chat" | "machines" | "settings" }) {
   return <Sidebar collapsible="icon">
@@ -15,5 +16,8 @@ export function ProductSidebar({ current }: { current: "chat" | "machines" | "se
       <SidebarMenuItem><SidebarMenuButton render={<Link href="/machines" />} isActive={current === "machines"} tooltip="Machines"><MonitorSmartphone /> <span>Machines</span></SidebarMenuButton></SidebarMenuItem>
       <SidebarMenuItem><SidebarMenuButton render={<Link href="/settings" />} isActive={current === "settings"} tooltip="Settings"><Settings /> <span>Settings</span></SidebarMenuButton></SidebarMenuItem>
     </SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
+    <SidebarFooter className="items-center group-data-[state=expanded]:items-stretch">
+      <AccountMenu />
+    </SidebarFooter>
   </Sidebar>;
 }
