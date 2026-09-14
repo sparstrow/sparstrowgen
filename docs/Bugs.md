@@ -519,6 +519,10 @@ first-request-wins. It now refuses to start instead.
 in your browser, open Machines and choose Add computer", the first-install text, although nothing
 needs doing.
 
+A paired computer now gets "sparstrowgen is updated on this computer … There is nothing else to do."
+Seen on his PC from the published 0.1.2 download (SHA-256 `4587e57d…ed36`) at 22:42, which also
+replaced the running copy: `daemon stopped` at 22:42:10, `connected` at 22:42:11.
+
 ## B-26 — Installing over a connected computer failed: the running copy never stopped
 
 **Found:** 2026-09-13, by the owner, running the 0.1.1 installer over his connected 0.1.0
