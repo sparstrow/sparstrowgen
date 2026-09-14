@@ -509,6 +509,46 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-21 — Production could never offer the Windows download
+
+**Found:** 2026-09-13, owner: "the app can't connect to the machine"
+**Status:** fixed 2026-09-13
+
+`/install` showed a download only when `NEXT_PUBLIC_WINDOWS_INSTALLER_URL` was set at build time, but
+neither `Dockerfile.web` nor Compose passed it, and no installer had been published anywhere. Every
+production visitor saw "has not been published to this environment yet", so no computer could be
+connected. The page now links to the stable latest-release download on GitHub, which needs no web
+rebuild when a new installer is released.
+
+## B-20 — A disconnected computer retried forever
+
+**Found:** 2026-09-13, reading US2's daemon while tracing the same report
+**Status:** fixed 2026-09-13
+
+The server refused a revoked credential with the same 401 as one still awaiting approval, so the
+daemon could not tell "stop" from "wait" and redialled on its backoff indefinitely. A revoked
+credential now gets 403; the daemon deletes it and exits.
+
+## B-19 — The Machines list never learned that a computer connected
+
+**Found:** 2026-09-13, same trace
+**Status:** fixed 2026-09-13
+
+The `machines` event was broadcast on approve and disconnect only, not when a paired daemon
+connected, dropped or reported its providers. A newly paired computer therefore stayed Offline with
+no providers until the page was reloaded. All three now broadcast it.
+
+## B-18 — The installed daemon was a console program with nowhere to log
+
+**Found:** 2026-09-13, same trace
+**Status:** fixed 2026-09-13
+
+The launcher and the start-at-sign-in entry both started a console executable, which Windows shows
+as a terminal window; closing it stopped the daemon, and its log went only to that window. US2 asks
+for a computer that is reachable without a terminal. The installed daemon is now windowless, gives
+the agent CLIs it starts a hidden console (Multica's approach), and logs to
+`%LOCALAPPDATA%\sparstrowgen\logs\daemon.log`.
+
 ## B-17 — Windows bundle script wrote artifacts under the server directory
 
 **Found:** 2026-09-13, US2 local package verification

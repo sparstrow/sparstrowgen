@@ -701,3 +701,32 @@ depends on, and at invitation-only volume a vendor adds an account, a DNS change
 difference the owner would see. The server refuses to start without complete mail settings; a
 `log` transport exists for development and is refused whenever session cookies are Secure, because
 a deployed log is no place for working links.
+
+## D-033 — The daemon is its own installer, published unsigned until signing exists
+
+**2026-09-13.** Rejected: a zip with a PowerShell install script (three files to extract, and
+PowerShell's execution policy in the way of the one person who cannot be asked to change it); an MSI
+or Inno Setup installer (a second toolchain and a second artifact to sign, for nothing a per-user copy
+lacks); serving the download from the web image (a 7 MB binary in every web deploy); waiting for a
+code-signing certificate (the owner chose to ship now and sign later).
+
+**One executable.** Opened with no arguments, a release build copies itself to
+`%LOCALAPPDATA%\Programs\sparstrowgen`, registers `sparstrowgen://` and a start-at-sign-in entry
+for the current Windows user only, and starts itself with `run`. Opened by the browser with a pairing
+link, it claims the request and restarts the background copy. No administrator rights, and US3's
+updater has one file to replace.
+
+**One server per build.** The release step bakes the API and websocket addresses in with `-ldflags`,
+and a release ignores `SERVER_WS`, `SERVER_API` and `DAEMON_TOKEN`. Those variables are how the
+development route works, and a leftover one would otherwise point an installed copy at a laptop or
+connect it through the shared token without pairing. Development keeps its own data directory for the
+same reason.
+
+**Local, single, and quiet.** The credential lives in `%LOCALAPPDATA%` rather than the roaming
+profile, because it identifies one computer. A named mutex keeps one background copy per Windows
+user, and a named event lets a new install or pairing ask the old copy to stop (G-33). Windowless,
+with a hidden console handed to the agent CLIs, as Multica does.
+
+**Unsigned, and saying so.** Releases are GitHub release assets; the install page links to
+`releases/latest/download/sparstrowgen-setup.exe` and tells the person that Windows will warn. Signing
+is G-32.

@@ -319,45 +319,28 @@ accounts, and nobody else can — each account sees only its own work.
 
 ---
 
-## 7. Point the local daemon at production
+## 7. Connect your computer
 
-On the Windows computer that has the agent CLIs and project files, set:
+On the Windows computer that has the agent CLIs and project files, open
+`https://app.sparstrow.com/machines` and choose **Add computer**.
 
-```powershell
-setx SERVER_WS "wss://api.sparstrow.com/daemon"
-setx DAEMON_TOKEN "<the same saved token from step 1>"
-```
+1. The first time, the page says **This computer has not answered yet**. Choose **Install
+   component**, download `sparstrowgen-setup.exe`, and open it.
+2. Windows says it protected your PC, because the installer is not signed yet (KnownGaps G-32).
+   Choose **More info**, then **Run anyway**. It installs for your Windows account only and says
+   when it is done.
+3. Back in Machines, choose **Add computer** again. The browser asks to open sparstrowgen; allow it.
+4. Choose **Approve computer**. Within a few seconds the computer shows **Online** with its providers.
 
-Close that terminal and open a **new** one—`setx` changes future processes, not
-the shell already open. Start the daemon from the repository:
+It starts again whenever you sign in to Windows, with no window. Its log is
+`%LOCALAPPDATA%\sparstrowgen\logs\daemon.log`; read that first if a computer stays offline.
 
-```powershell
-Set-Location D:\sparstrowgen\server
-go run ./cmd/daemon
-```
+**The shared `DAEMON_TOKEN` route still exists** for running the daemon from source during
+development (`go run ./cmd/daemon` with `SERVER_WS` and `DAEMON_TOKEN` set), and it works for the
+`OWNER_EMAIL` account. An installed copy never uses it.
 
-The daemon dials outward and logs `connected` on success. In the browser, the
-unreachable banner disappears and the installed providers become available in
-the provider picker. Confirm all expected providers (`claude`, `codex`, `agy`)
-appear before sending a real prompt.
-
-If the daemon says:
-
-```text
-the server rejected this machine: DAEMON_TOKEN does not match the server's
-```
-
-the Coolify and Windows values differ. Correct the value; do not diagnose that
-message as a DNS or firewall problem.
-
-The daemon works for the `OWNER_EMAIL` account. If the server refuses it because
-the owner account does not exist yet, finish step 6 first and start the daemon
-again. Other accounts cannot use this computer; each person's own computer is
-connected by pairing, which is not built yet.
-
-**After this step:** the hosted UI can send work through the hosted server to
-the coding-agent CLIs on this computer, while the computer still accepts no
-inbound connection.
+**After this step:** the hosted UI can send work through the hosted server to the coding-agent CLIs on
+this computer, while the computer still accepts no inbound connection.
 
 ---
 
@@ -376,16 +359,16 @@ inbound connection.
 | No confirmation or reset email arrives | Check spam, then read the `server` log for `could not send`; the error is the mail server's answer. |
 | The daemon is refused: the owner account does not exist yet | Register `OWNER_EMAIL` at `/register` (step 6), then start the daemon again. |
 | Somebody uninvited says they signed up | They sent an access request and you were emailed about it. Add the address to `ALLOWED_EMAILS` to approve. |
-| Signed-in screen says the machine is unreachable | Hosting and login work; the daemon in step 7 is not connected. |
-| Providers remain unavailable | Read the daemon log and verify step 7's WebSocket URL and token. |
+| Signed-in screen says the machine is unreachable | Hosting and login work; no computer is connected yet. Do step 7. |
+| Add computer keeps saying the computer has not answered | The installer has not run on this computer, or the browser prompt to open sparstrowgen was dismissed. Install, then choose Add computer again. |
+| A paired computer stays offline | Read `%LOCALAPPDATA%\\sparstrowgen\\logs\\daemon.log`. "disconnected from its account" means it was disconnected: pair it again. |
 
 ## What this deployment does not have yet
 
 - **Invitations are configuration.** Inviting or approving somebody means editing
   `ALLOWED_EMAILS` and redeploying; a place in the product for it is
   [`Later.md`](../Later.md) L-18.
-- **One shared daemon token for every machine.** A token cannot yet be revoked
-  for only one computer ([`Later.md`](../Later.md) L-16).
+- **An unsigned Windows installer.** Windows warns before running it (KnownGaps G-32).
 - **No directory allowlist.** The daemon can run an agent in a folder named by
   an authenticated request.
 - **Backups are Coolify's Postgres backups.** There is no application-level

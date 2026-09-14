@@ -121,7 +121,7 @@ commands:
   migrate: "cd server && goose -dir migrations up"
   server: "cd server && go run ./cmd/server   # :8080"
   daemon: "cd server && go run ./cmd/daemon   # drives the agent CLIs"
-  windows_bundle: "powershell -ExecutionPolicy Bypass -File scripts\\package-windows.ps1 -ServerAPI <https://api.example> -ServerWS <wss://api.example/daemon>   # unsigned candidate bundle; signing and publishing are release steps"
+  windows_installer: "powershell -ExecutionPolicy Bypass -File scripts\\package-windows.ps1   # dist\\windows\\sparstrowgen-setup.exe for api.sparstrow.com; -ServerAPI/-ServerWS for another server (D-033)"
   check: "make check"
 
 # Settings the daemon reads at startup. Everything else is compiled in.
