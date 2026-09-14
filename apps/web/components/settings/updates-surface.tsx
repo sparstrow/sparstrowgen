@@ -28,7 +28,7 @@ export function UpdatesSurface() {
     <SettingsPage title="Updates" description="Control automatic updates for sparstrowgen on each of your computers, or check for a new version manually.">
       {query.isPending ? <UpdatesLoading/>
         : query.isError ? <Empty className="border"><EmptyHeader><EmptyMedia variant="icon"><PlugZap/></EmptyMedia><EmptyTitle>Updates could not be loaded</EmptyTitle><EmptyDescription>{(query.error as Error).message} Nothing on your computers has changed.</EmptyDescription></EmptyHeader><EmptyContent><Button variant="outline" onClick={() => void query.refetch()}>Try again</Button></EmptyContent></Empty>
-        : !query.data.length ? <Empty className="border"><EmptyHeader><EmptyMedia variant="icon"><MonitorSmartphone/></EmptyMedia><EmptyTitle>No computers connected</EmptyTitle><EmptyDescription>Pair a computer to see its version and control how it updates.</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link href="/machines"/>}><Plus/>Add computer</Button></EmptyContent></Empty>
+        : !query.data.length ? <Empty className="border"><EmptyHeader><EmptyMedia variant="icon"><MonitorSmartphone/></EmptyMedia><EmptyTitle>No computers connected</EmptyTitle><EmptyDescription>Pair a computer to see its version and control how it updates.</EmptyDescription></EmptyHeader><EmptyContent><Button nativeButton={false} render={<Link href="/machines"/>}><Plus/>Add computer</Button></EmptyContent></Empty>
         : query.data.map((machine) => <ComputerCard key={machine.id} machine={machine}/>)}
     </SettingsPage>
   </SettingsShell>;
@@ -60,7 +60,7 @@ function ComputerCard({ machine }: { machine: Machine }) {
   const manual = machine.online && !machine.selfUpdates;
   const busy = check.isPending || update.isPending || status.kind === "updating";
   const action = !machine.online ? <Button variant="outline" size="sm" disabled>Check now</Button>
-    : manual ? <Button variant="outline" size="sm" render={<Link href="/install"/>}><Download/>Download update</Button>
+    : manual ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/install"/>}><Download/>Download update</Button>
     : check.isPending ? <Button variant="outline" size="sm" disabled><Loader2 className="motion-safe:animate-spin"/>Checking…</Button>
     : update.isPending || status.kind === "updating" ? <Button variant="outline" size="sm" disabled><Loader2 className="motion-safe:animate-spin"/>Updating…</Button>
     : status.kind === "available" ? <Button variant="outline" size="sm" disabled={busy} onClick={() => update.mutate()}>Update now</Button>

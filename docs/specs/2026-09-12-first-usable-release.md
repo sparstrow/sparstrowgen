@@ -5,7 +5,7 @@
 | **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12 · revision 3 approved 2026-09-13** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
-| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: Settings → Updates, copying Multica's desktop Updates page ([round notes](../../design-system/shots/2026-09-13-computer-updates/README.md)) — wiring on mock data |
+| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: Settings → Updates, copying Multica's desktop Updates page ([round notes](../../design-system/shots/2026-09-13-computer-updates/README.md)) — built on the real backend 2026-09-13; owner review pending (Unverified U-6) |
 | **Open questions** | none |
 
 > **Revision 2026-09-12.** Mapping this release against the phase 2 exit gate found five gaps. You
