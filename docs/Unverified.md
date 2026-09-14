@@ -90,7 +90,12 @@ published release, and the installed copy)
 `docs/runbooks/daemon-release.md`. Within the hour, or at once with Check now, the log shows the
 check, `handing over to the updater`, the updater's `updated`, and a `connected` line from the new
 version; Machines shows it Online with the same pairing, and Settings → Updates shows the new version.
-**Status:** open
+**Status:** verified 2026-09-13 — on the owner's PC, 0.2.0 installed from the published download
+connected at 23:47:13. Its first automatic check found `daemon-v0.2.1`, downloaded and verified it
+(23:48:14) and handed over at 23:48:15; the new copy connected at 23:48:16 with the same credential
+and reported its providers, and the updater logged `updated` 0.2.0 → 0.2.1 at 23:48:21. The installed
+executable's SHA-256 is 0.2.1's (`20c30ccc…2873`), one copy runs, and no failure was recorded.
+Machines and Settings → Updates were not looked at: they need his sign-in.
 
 ## U-8 — An update that cannot reconnect is put back on a real computer
 
