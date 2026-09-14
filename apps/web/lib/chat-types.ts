@@ -81,6 +81,15 @@ export type Machine = {
   lastSeenAt?: string;
   online: boolean;
   providers: Provider[];
+  /** The daemon version it reports, or last reported while offline. Absent for
+   *  a computer that has never said. */
+  version?: string;
+  /** Too old for the hosted app: it is sent no work until it is updated. */
+  tooOld: boolean;
+  /** Whether its version can update itself. Only known while it is online. */
+  selfUpdates: boolean;
+  automaticUpdates: boolean;
+  update: UpdateStatus;
 };
 
 /** Where an update stands for one computer (spec US3). */

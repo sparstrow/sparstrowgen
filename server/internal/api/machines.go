@@ -20,10 +20,24 @@ type machineView struct {
 	store.Machine
 	Online    bool                `json:"online"`
 	Providers []protocol.Provider `json:"providers"`
+	// Updates (spec US3). Version is what the computer reports while it is
+	// connected, and what it last reported otherwise.
+	Version     string                `json:"version,omitempty"`
+	TooOld      bool                  `json:"tooOld"`
+	SelfUpdates bool                  `json:"selfUpdates"`
+	Update      protocol.UpdateStatus `json:"update"`
 }
 
 func (a *API) viewMachine(m store.Machine) machineView {
-	return machineView{Machine: m, Online: a.hub.MachineOnline(m.ID), Providers: a.hub.MachineProviders(m.ID)}
+	rt := a.hub.MachineRuntime(m.ID)
+	v := machineView{
+		Machine: m, Online: a.hub.MachineOnline(m.ID), Providers: a.hub.MachineProviders(m.ID),
+		Version: m.Version, TooOld: a.hub.MachineTooOld(m.ID), SelfUpdates: rt.SelfUpdates, Update: rt.Update,
+	}
+	if rt.Version != "" {
+		v.Version = rt.Version
+	}
+	return v
 }
 func (a *API) listMachines(w http.ResponseWriter, r *http.Request) {
 	u, _ := userFrom(r.Context())

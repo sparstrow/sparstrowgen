@@ -188,6 +188,9 @@ type ServerMessage struct {
 	// Empty asks for the starting points — drive roots on Windows, $HOME
 	// elsewhere — because a browser has no idea what the machine looks like.
 	Path string `json:"path,omitempty"`
+
+	// update_preference
+	Automatic *bool `json:"automatic,omitempty"`
 }
 
 // ReplayEntry is one historical message being handed to a provider that has not
@@ -285,6 +288,14 @@ type DaemonMessage struct {
 	// hello
 	Machine   string     `json:"machine,omitempty"`
 	Providers []Provider `json:"providers,omitempty"`
+	// Absent from daemons older than US3, which is read as protocol 0, no
+	// version, and no updater — never guessed.
+	Version     string `json:"version,omitempty"`
+	Protocol    int    `json:"protocol,omitempty"`
+	SelfUpdates bool   `json:"selfUpdates,omitempty"`
+
+	// update_status
+	Update *UpdateStatus `json:"update,omitempty"`
 
 	// everything else
 	TurnID string `json:"turnId,omitempty"`
@@ -337,6 +348,9 @@ type ClientEvent struct {
 	Text           string        `json:"text,omitempty"`
 	Conversation   *Conversation `json:"conversation,omitempty"`
 	Online         bool          `json:"online,omitempty"`
+	// With EventDaemon: the connected computer is too old to be sent work, so
+	// the surface says to update it rather than offering a send that will fail.
+	TooOld bool `json:"tooOld,omitempty"`
 }
 
 // SpendTicksPerUSD is the fixed-point scale for money. Cost is stored and moved

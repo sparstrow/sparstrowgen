@@ -161,7 +161,21 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if pairedOK && msg.Type == protocol.DaemonHello {
 			a.hub.SetPairedProviders(owner.ID, paired.ID, msg.Providers)
+			a.hub.SetMachineHello(owner.ID, paired.ID, msg.Version, msg.Protocol, msg.SelfUpdates)
+			if msg.Version != "" {
+				if err := a.store.RecordMachineVersion(r.Context(), paired.ID, msg.Version); err != nil {
+					a.log.Warn("could not record the daemon version", "machine", paired.ID, "err", err)
+				}
+			}
+			// Told on every connection, so a change made while it was offline
+			// arrives. A daemon older than US3 ignores it.
+			automatic := paired.AutomaticUpdates
+			a.hub.SendToMachine(paired.ID, protocol.ServerMessage{Type: protocol.ServerUpdatePreference, Automatic: &automatic})
 			a.hub.BroadcastTo(owner.ID, protocol.ClientEvent{Type: protocol.EventMachines})
+			continue
+		}
+		if pairedOK && msg.Type == protocol.DaemonUpdateStatus && msg.Update != nil {
+			a.hub.SetMachineUpdate(owner.ID, paired.ID, *msg.Update)
 			continue
 		}
 		a.handleDaemonMessage(owner.ID, msg)

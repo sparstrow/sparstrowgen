@@ -58,14 +58,16 @@ type Entry struct {
 }
 
 type Machine struct {
-	ID             pgtype.UUID        `json:"id"`
-	UserID         pgtype.UUID        `json:"user_id"`
-	DisplayName    string             `json:"display_name"`
-	CredentialHash []byte             `json:"credential_hash"`
-	ApprovedAt     pgtype.Timestamptz `json:"approved_at"`
-	RevokedAt      pgtype.Timestamptz `json:"revoked_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
+	ID               pgtype.UUID        `json:"id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	DisplayName      string             `json:"display_name"`
+	CredentialHash   []byte             `json:"credential_hash"`
+	ApprovedAt       pgtype.Timestamptz `json:"approved_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt       pgtype.Timestamptz `json:"last_seen_at"`
+	AutomaticUpdates bool               `json:"automatic_updates"`
+	DaemonVersion    *string            `json:"daemon_version"`
 }
 
 type MachinePairing struct {

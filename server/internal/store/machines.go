@@ -19,6 +19,11 @@ type Machine struct {
 	Approved   bool       `json:"approved"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+	// On until the person turns it off (spec US3).
+	AutomaticUpdates bool `json:"automaticUpdates"`
+	// The daemon version this computer last reported. The API shows the live
+	// one while it is connected, so this is not sent as it is.
+	Version string `json:"-"`
 }
 
 type Pairing struct {
@@ -31,7 +36,10 @@ type Pairing struct {
 var ErrPairingUnavailable = errors.New("that pairing request is no longer available")
 
 func machineFrom(row db.Machine) Machine {
-	m := Machine{ID: uuidToString(row.ID), Name: row.DisplayName, Approved: row.ApprovedAt.Valid, CreatedAt: row.CreatedAt.Time}
+	m := Machine{ID: uuidToString(row.ID), Name: row.DisplayName, Approved: row.ApprovedAt.Valid, CreatedAt: row.CreatedAt.Time, AutomaticUpdates: row.AutomaticUpdates}
+	if row.DaemonVersion != nil {
+		m.Version = *row.DaemonVersion
+	}
 	if row.LastSeenAt.Valid {
 		t := row.LastSeenAt.Time
 		m.LastSeenAt = &t

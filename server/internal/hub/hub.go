@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -75,6 +74,7 @@ type client struct {
 type machine struct {
 	conn      *websocket.Conn
 	providers []protocol.Provider
+	runtime   Runtime
 }
 
 // waiter is a request waiting for a machine's answer, and the account whose
@@ -106,7 +106,7 @@ func (h *Hub) AddClient(c *websocket.Conn, userID, sessionHash string) {
 
 	// Tell it what it needs to render immediately, rather than leaving the
 	// surface guessing until the next event happens to arrive.
-	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventDaemon, Online: h.DaemonOnline(userID)})
+	h.sendTo(c, h.daemonEvent(userID))
 	h.sendTo(c, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 }
 
@@ -287,7 +287,7 @@ func (h *Hub) ClearPairedDaemon(userID, machineID string, c *websocket.Conn) boo
 	h.mu.Unlock()
 	_ = c.Close()
 	if current {
-		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventDaemon, Online: h.DaemonOnline(userID)})
+		h.BroadcastTo(userID, h.daemonEvent(userID))
 		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
 	}
 	return current
@@ -426,32 +426,7 @@ func (h *Hub) SendToDaemon(userID string, msg protocol.ServerMessage) bool {
 // The waiter is always removed, on every path, or a client that gave up would
 // leak a channel per keystroke.
 func (h *Hub) Ask(ctx context.Context, userID string, msg protocol.ServerMessage) (protocol.DaemonMessage, error) {
-	id := strconv.FormatUint(h.nextRequest.Add(1), 10)
-	msg.RequestID = id
-
-	// Buffered, so a reply that lands after the caller's context expired is
-	// dropped by the garbage collector rather than blocking the read loop.
-	reply := make(chan protocol.DaemonMessage, 1)
-	h.mu.Lock()
-	h.pending[id] = waiter{userID: userID, reply: reply}
-	h.mu.Unlock()
-
-	defer func() {
-		h.mu.Lock()
-		delete(h.pending, id)
-		h.mu.Unlock()
-	}()
-
-	if !h.SendToDaemon(userID, msg) {
-		return protocol.DaemonMessage{}, ErrDaemonOffline
-	}
-
-	select {
-	case m := <-reply:
-		return m, nil
-	case <-ctx.Done():
-		return protocol.DaemonMessage{}, ctx.Err()
-	}
+	return h.ask(ctx, userID, msg, func(m protocol.ServerMessage) bool { return h.SendToDaemon(userID, m) })
 }
 
 // Deliver hands a machine's reply to whoever is waiting for it, and reports

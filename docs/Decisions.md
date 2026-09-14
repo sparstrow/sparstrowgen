@@ -730,3 +730,38 @@ with a hidden console handed to the agent CLIs, as Multica does.
 **Unsigned, and saying so.** Releases are GitHub release assets; the install page links to
 `releases/latest/download/sparstrowgen-setup.exe` and tells the person that Windows will warn. Signing
 is G-32.
+
+## D-034 — Updates are a signed manifest, swapped in by the old version, and put back if the new one cannot reconnect
+
+**2026-09-13, US3.** Rejected: Windows code signing as the trust root (there is no certificate yet,
+G-32, and a signature on an executable says nothing about which version is newest); trusting HTTPS to
+GitHub alone (anyone able to publish a release or redirect a download could run code on every
+computer); the server announcing versions (a second thing to deploy per release, and a compromised
+server could push code); an updater framework such as Squirrel or MSI (a second toolchain, and none
+waits for an agent CLI to finish); a Windows service as supervisor (it would run without the person's
+PATH and agent credentials, which the release workflow rules out).
+
+**Trust.** Each release publishes `sparstrowgen-update.json` — version, installer URL, SHA-256 — with a
+detached ed25519 signature. The public key is built into every daemon; the private key stays on the
+release machine, outside the repository ([runbook](runbooks/daemon-release.md)). A daemon reads no
+field until the signature verifies, and keeps a download only if its SHA-256 matches. One package,
+`internal/release`, is used by both the tool that signs and the daemon that verifies.
+
+**Never interrupting work.** A check downloads. Installing waits until the turn registry is empty,
+then closes to new turns under the lock turns start under, so work that begins before activation keeps
+the update waiting however long it runs. A turn arriving in the instant after is refused with "send it
+again in a moment". Automatic updates check a minute after starting and then hourly; turning them off
+ends an automatic wait; Update now installs whatever the setting, still waiting for work.
+
+**Rollback.** The running copy copies itself to `updates\sparstrowgen-updater.exe` and starts it, so the
+swap is done by the version known to work. The updater waits for the old copy to exit, renames it
+aside, copies the new one in and starts it. The new copy records its version once the server accepts
+it; if that has not happened within two minutes, or it stops by itself, the updater kills it, puts the
+old executable back, starts it, and leaves `result.json` saying why. The restored copy reports that
+failure and does not retry that version by itself.
+
+**The server decides nothing.** It stores the preference (on by default), relays Check now and Update
+now to the computer, and shows what the computer reports. Hello carries `version`, `protocol` and
+`selfUpdates`; their absence means a daemon older than this. `MinDaemonProtocol`, 0 today, is what
+makes a computer too old: Chat then says to update it in Settings → Updates and sends no work. Raise
+it only after a release those computers could update to.

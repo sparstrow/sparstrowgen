@@ -18,6 +18,41 @@ type runningTurns struct {
 	mu     sync.Mutex
 	cancel map[string]context.CancelFunc
 	asked  map[string]bool
+	// closed refuses new turns while an update replaces this copy.
+	closed bool
+}
+
+// count is how many turns are running now.
+func (r *runningTurns) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.cancel)
+}
+
+// closeIfIdle closes to new turns, but only if none is running. Counting and
+// closing happen under one lock, so a turn cannot start in between (spec US3).
+func (r *runningTurns) closeIfIdle() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.cancel) > 0 {
+		return false
+	}
+	r.closed = true
+	return true
+}
+
+// reopen undoes closeIfIdle when an update could not start.
+func (r *runningTurns) reopen() {
+	r.mu.Lock()
+	r.closed = false
+	r.mu.Unlock()
+}
+
+// closedForUpdate tells a refused turn apart from one that was stopped early.
+func (r *runningTurns) closedForUpdate() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.closed
 }
 
 func newRunningTurns() *runningTurns {
@@ -32,6 +67,12 @@ func newRunningTurns() *runningTurns {
 func (r *runningTurns) begin(id string, cancel context.CancelFunc) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.closed {
+		// Closing for an update. Nothing runs, and closedForUpdate tells the
+		// caller why.
+		delete(r.asked, id)
+		return false
+	}
 	if r.asked[id] {
 		// Nothing will run, so there is nothing left to stop. Dropping it here
 		// is also what keeps `asked` from accumulating ids forever.

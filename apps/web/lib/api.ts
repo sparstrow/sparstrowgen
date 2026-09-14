@@ -224,6 +224,21 @@ export const api = {
     }
   },
 
+  async setAutomaticUpdates(id: string, enabled: boolean): Promise<Machine> {
+    return post(`${BASE}/api/machines/${id}/automatic-updates`, { enabled });
+  },
+
+  /** Asks the computer to check now. Answers with the computer as it stands
+   *  afterwards, including where its update is. */
+  async checkForUpdates(id: string): Promise<Machine> {
+    return post(`${BASE}/api/machines/${id}/updates/check`, {});
+  },
+
+  /** Update now: installs once no agent work is running on that computer. */
+  async applyUpdate(id: string): Promise<Machine> {
+    return post(`${BASE}/api/machines/${id}/updates/apply`, {});
+  },
+
   async disconnectMachine(id: string): Promise<void> {
     const res = await request(`${BASE}/api/machines/${id}`, { method: "DELETE" });
     if (res.status === 401) throw new NotSignedIn();
@@ -345,7 +360,7 @@ export const api = {
 
 export type ServerEvent =
   | { type: "providers"; providers: Provider[] }
-  | { type: "daemon"; online: boolean }
+  | { type: "daemon"; online: boolean; tooOld?: boolean }
   | { type: "machines" }
   | { type: "conversation"; conversation: Conversation }
   | { type: "entry_added"; conversationId: string; entry: Entry }

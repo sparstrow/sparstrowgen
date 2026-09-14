@@ -15,7 +15,7 @@ const approveMachine = `-- name: ApproveMachine :one
 UPDATE machines
 SET approved_at = now()
 WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL
-RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at
+RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version
 `
 
 type ApproveMachineParams struct {
@@ -35,6 +35,8 @@ func (q *Queries) ApproveMachine(ctx context.Context, arg ApproveMachineParams) 
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -69,7 +71,7 @@ func (q *Queries) ApproveMachinePairing(ctx context.Context, arg ApproveMachineP
 }
 
 const approvedMachineForUserCredential = `-- name: ApprovedMachineForUserCredential :one
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version FROM machines
 WHERE credential_hash = $1 AND user_id = $2 AND approved_at IS NOT NULL AND revoked_at IS NULL
 `
 
@@ -90,6 +92,8 @@ func (q *Queries) ApprovedMachineForUserCredential(ctx context.Context, arg Appr
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -126,7 +130,7 @@ func (q *Queries) ClaimMachinePairing(ctx context.Context, arg ClaimMachinePairi
 const createMachine = `-- name: CreateMachine :one
 INSERT INTO machines (user_id, display_name, credential_hash)
 VALUES ($1, $2, $3)
-RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at
+RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version
 `
 
 type CreateMachineParams struct {
@@ -147,6 +151,8 @@ func (q *Queries) CreateMachine(ctx context.Context, arg CreateMachineParams) (M
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -229,7 +235,7 @@ func (q *Queries) DeclineMachinePairing(ctx context.Context, arg DeclineMachineP
 }
 
 const getMachineForUser = `-- name: GetMachineForUser :one
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version FROM machines
 WHERE id = $1::uuid AND user_id = $2::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
 `
 
@@ -250,6 +256,8 @@ func (q *Queries) GetMachineForUser(ctx context.Context, arg GetMachineForUserPa
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -281,7 +289,7 @@ func (q *Queries) GetMachinePairingForUser(ctx context.Context, arg GetMachinePa
 }
 
 const listMachines = `-- name: ListMachines :many
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version FROM machines
 WHERE user_id = $1::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
 ORDER BY created_at DESC
 `
@@ -306,6 +314,8 @@ func (q *Queries) ListMachines(ctx context.Context, dollar_1 pgtype.UUID) ([]Mac
 			&i.RevokedAt,
 			&i.CreatedAt,
 			&i.LastSeenAt,
+			&i.AutomaticUpdates,
+			&i.DaemonVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -318,7 +328,7 @@ func (q *Queries) ListMachines(ctx context.Context, dollar_1 pgtype.UUID) ([]Mac
 }
 
 const machineByCredential = `-- name: MachineByCredential :one
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version FROM machines
 WHERE credential_hash = $1 AND approved_at IS NOT NULL AND revoked_at IS NULL
 `
 
@@ -334,6 +344,8 @@ func (q *Queries) MachineByCredential(ctx context.Context, credentialHash []byte
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -369,11 +381,26 @@ func (q *Queries) MarkPairingAlreadyPaired(ctx context.Context, arg MarkPairingA
 	return i, err
 }
 
+const recordMachineVersion = `-- name: RecordMachineVersion :exec
+UPDATE machines SET daemon_version = $2
+WHERE id = $1 AND revoked_at IS NULL
+`
+
+type RecordMachineVersionParams struct {
+	ID            pgtype.UUID `json:"id"`
+	DaemonVersion *string     `json:"daemon_version"`
+}
+
+func (q *Queries) RecordMachineVersion(ctx context.Context, arg RecordMachineVersionParams) error {
+	_, err := q.db.Exec(ctx, recordMachineVersion, arg.ID, arg.DaemonVersion)
+	return err
+}
+
 const revokeMachine = `-- name: RevokeMachine :one
 UPDATE machines
 SET revoked_at = now()
 WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL
-RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at
+RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version
 `
 
 type RevokeMachineParams struct {
@@ -393,6 +420,8 @@ func (q *Queries) RevokeMachine(ctx context.Context, arg RevokeMachineParams) (M
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
 	)
 	return i, err
 }
@@ -411,6 +440,37 @@ type RevokeUnapprovedMachineParams struct {
 func (q *Queries) RevokeUnapprovedMachine(ctx context.Context, arg RevokeUnapprovedMachineParams) error {
 	_, err := q.db.Exec(ctx, revokeUnapprovedMachine, arg.Column1, arg.Column2)
 	return err
+}
+
+const setMachineAutomaticUpdates = `-- name: SetMachineAutomaticUpdates :one
+UPDATE machines
+SET automatic_updates = $3
+WHERE id = $1::uuid AND user_id = $2::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
+RETURNING id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at, automatic_updates, daemon_version
+`
+
+type SetMachineAutomaticUpdatesParams struct {
+	Column1          pgtype.UUID `json:"column_1"`
+	Column2          pgtype.UUID `json:"column_2"`
+	AutomaticUpdates bool        `json:"automatic_updates"`
+}
+
+func (q *Queries) SetMachineAutomaticUpdates(ctx context.Context, arg SetMachineAutomaticUpdatesParams) (Machine, error) {
+	row := q.db.QueryRow(ctx, setMachineAutomaticUpdates, arg.Column1, arg.Column2, arg.AutomaticUpdates)
+	var i Machine
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DisplayName,
+		&i.CredentialHash,
+		&i.ApprovedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.AutomaticUpdates,
+		&i.DaemonVersion,
+	)
+	return i, err
 }
 
 const touchMachine = `-- name: TouchMachine :exec
