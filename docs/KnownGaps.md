@@ -249,6 +249,20 @@ daemon closes its socket without logging, which points at the server or the prox
 - **Clears when:** the production server log for 21:50:40–21:50:50 is read, or the drop is reproduced
   and explained.
 
+## G-35 — Two test runs of the same package at once corrupt each other
+
+**Kind:** caveat
+**Raised:** 2026-09-13, running a verbose subset while the full suite ran in the background
+
+`internal/testdb` gives each package its own database (G-20), but two `go test` processes for the SAME
+package share it, and the API and store tests empty the users table at the start of each test. Run
+side by side, each wipes the other's accounts: that produced "that address already has an account"
+and five spurious pairing failures, all of which passed when run alone. Left alone because one run at
+a time is the normal case and a per-process database would slow every run.
+
+- **If wrong:** a green or red result that means nothing, from a run that overlapped another.
+- **Clears when:** never run two suites of one package at once, or `testdb` adds a per-process suffix.
+
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 
 **Noticed:** 2026-09-11, codex reviewing the deployment artifacts before the first deploy
