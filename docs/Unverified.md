@@ -154,4 +154,12 @@ and the installed copy)
 updater's `updated` 0.2.1 → 0.2.2, then `connected` from 0.2.2. Then publish 0.2.3 through the workflow
 alone, with no `.sig` on the release. Passing: 0.2.2 installs it the same way, and the installed
 executable's SHA-256 is the one on the 0.2.3 release.
-**Status:** open
+**Status:** verified 2026-09-14 — second half: `daemon-v0.2.3`, built by workflow run 34848559699 with
+no `.sig` on the release, was installed by 0.2.2's first check. It handed over at 09:22:21, the new
+copy connected at 09:22:22, and the updater logged `updated` 0.2.2 → 0.2.3 at 09:22:27. The installed
+executable's SHA-256 is 0.2.3's (`ac302635…480f`), one copy runs, no failure was recorded. First half: `daemon-v0.2.2`, built by workflow run 34848075138
+(every step passed), got its `.sig` from the old key over byte-identical manifest bytes (SHA-256
+`490a99a8…d6cb`; the key's public half is the one 0.2.1 trusts). On the owner's PC 0.2.1 handed over at
+09:19:18, the new copy connected at 09:19:19, and the updater logged `updated` 0.2.1 → 0.2.2 at
+09:19:24. The installed executable's SHA-256 is 0.2.2's (`12037d34…be77`), one copy runs, no failure
+was recorded.

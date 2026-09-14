@@ -66,6 +66,10 @@ carries `sparstrowgen-update.json.sig`:
 A computer still on 0.2.0 or 0.2.1 after that says it could not check for updates, and needs the
 installer opened once.
 
+**Done 2026-09-14.** 0.2.2 carried the `.sig`, and the owner's PC moved 0.2.1 → 0.2.2 at 09:19 and then
+installed 0.2.3, which has no signature, at 09:22 (Unverified U-13). With the owner's confirmation the
+key file and its folder were deleted the same morning. There is no key anywhere any more.
+
 ## Never
 
 - Mark a test or pre-release build as latest: every installed computer would install it.
