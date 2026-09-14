@@ -202,3 +202,16 @@ func (s *Store) MachineForCredential(ctx context.Context, hash []byte) (Machine,
 	_ = s.q.TouchMachine(ctx, row.ID)
 	return machineFrom(row), uuidToString(row.UserID), true, nil
 }
+
+// CredentialRevoked reports whether a credential belongs to a computer that was
+// disconnected. An unknown credential, or one still awaiting approval, is not.
+func (s *Store) CredentialRevoked(ctx context.Context, hash []byte) (bool, error) {
+	row, err := s.q.MachineByCredentialAnyState(ctx, hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return row.RevokedAt.Valid, nil
+}

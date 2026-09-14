@@ -177,40 +177,58 @@ wrong rather than the outcome.
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
 
-## G-32 — The Windows installation path is not signed, published, or proved on a clean computer
+## G-32 — The Windows installer is unsigned and not yet proved on a clean computer
 
 **Kind:** unproved
-**Raised:** 2026-09-13, US2 implementation
+**Raised:** 2026-09-13, US2 implementation · **Revised:** 2026-09-13, when the installer became one
+self-installing executable (D-033), and again after the owner's first real install
 
-The Windows pairing and installation implementation exists and works locally: the repository builds
-the daemon and URI launcher, packages them with the per-user installer, and produces the release
-archive. On this development machine, the launcher successfully registered the `sparstrowgen://`
-handler under the current Windows user; the launcher and bundle build cleanly. The browser has
-honest waiting, retry, and install-help states because an unanswered URI cannot distinguish a
-missing handler from a delayed or blocked launch.
+**Verified.** `scripts/package-windows.ps1` builds `sparstrowgen-setup.exe` for one server. API tests
+cover the pairing journey against a real database: claim once, refused before approval (401),
+connected after approval, providers and the `machines` event reaching the browser, 403 after
+disconnect while another computer stays online, and another account unable to see, approve or
+disconnect. Daemon tests cover the link parser, claiming and saving a credential, a release ignoring
+leftover `SERVER_WS` and `DAEMON_TOKEN`, and a 403 deleting the credential and stopping. The release
+executable itself was run on the development PC without installing: background mode with no
+credential logged "not paired yet" and exited without a window, and a made-up pairing link was
+refused by production, saved nothing, and showed an error box.
 
-Production distribution is incomplete. The Windows launcher and daemon executables, installer,
-and archive are unsigned, and no Windows installer or package has been published at a stable
-release URL. The product therefore cannot yet direct a first-time user to a trusted production
-download. The package has also not completed the full installation, pairing, persistence, and real
-Chat path on a clean Windows machine.
+**Proved on the owner's PC, 2026-09-13,** with a locally built production executable (SHA-256
+`3a8441d4…8922`) against `api.sparstrow.com`: the installer copied itself into
+`%LOCALAPPDATA%\Programs\sparstrowgen` and registered `sparstrowgen://` and start at sign-in; **Add
+computer** in Chrome opened the link, which claimed the request; the daemon was refused four times at
+two-second intervals until approval, connected nine seconds after the claim, reported claude, codex
+and agy as available, and ran one real Chat turn (claude, 4 s). One copy ran, with no visible window.
 
-- **If wrong:** a first-time user may be unable to install or launch the local component, or may
-  encounter Windows publisher or SmartScreen warnings, even though the pairing UI looks available.
-- **Clears when:** all of the following pass and the proof is recorded:
-  1. Obtain an appropriate Windows code-signing identity and configure it for the production release
-     process.
-  2. Sign the production launcher, daemon, and installer/package artifacts, then verify every
-     expected signature on the artifacts that will be published.
-  3. Publish the Windows installer or package at a stable release URL.
-  4. Wire the product's install and download experience to that published release.
-  5. On a clean Windows machine, verify the complete journey: install → `sparstrowgen://` pairing →
-     browser approval → daemon startup → daemon persistence across restart/sign-in → one real Chat
-     turn through the paired computer.
-  6. Record the release identity, stable URL, signature-verification output, clean-machine setup,
-     and end-to-end result as durable proof.
+**Not verified.** Still connected after signing out of Windows and back in; installing over a running
+copy; the journey on a Windows account that has never run sparstrowgen; the download from the
+published release rather than a local build. The executable is unsigned, so Windows SmartScreen
+warns before running it.
 
-Keep G-32 open until every closure criterion above passes.
+- **If wrong:** a first-time user downloads the installer and still cannot pair, with the browser
+  showing "has not answered yet".
+- **Clears when:** all of the following pass and the proof is recorded here:
+  1. After signing out of Windows and back in, the owner's paired computer is online without anyone
+     starting anything.
+  2. On a Windows account that has never run sparstrowgen, the published download installs, pairs
+     from Machines, and runs one Chat turn.
+  3. A Windows code-signing identity signs the executable in the release step, and the published
+     signature verifies.
+
+## G-33 — Reinstalling or re-pairing ends turns running on that computer
+
+**Kind:** caveat
+**Raised:** 2026-09-13, building the self-installing executable
+
+Installing over a running copy, or opening a new pairing link, asks the running background daemon to
+exit so the new copy or credential takes over (`stopRunning` in `server/cmd/daemon/install_windows.go`).
+Any agent turn in flight on that computer ends, and the conversation records that the computer
+disconnected; resending it works. Left alone because both are deliberate actions by the person at
+that computer, and waiting for idle is exactly what US3's updater must build properly rather than
+something to half-build here.
+
+- **If wrong:** a long turn is lost when someone re-pairs mid-answer.
+- **Clears when:** US3's idle-aware activation is used for reinstall and re-pairing too.
 
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 

@@ -1,41 +1,12 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
-
-func TestInstallationConfigSuppliesReleaseEndpoints(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "sparstrowgen.json"), []byte(`{"serverApi":"https://api.example.test","serverWs":"wss://api.example.test/daemon"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	config, err := loadInstallationConfig(filepath.Join(dir, "sparstrowgen-daemon.exe"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := serverWS(config); got != "wss://api.example.test/daemon" {
-		t.Errorf("server websocket = %q", got)
-	}
-	if got := serverAPI(config, serverWS(config)); got != "https://api.example.test" {
-		t.Errorf("server API = %q", got)
-	}
-}
-
-func TestInstallationConfigRejectsInvalidEndpoint(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "sparstrowgen.json"), []byte(`{"serverWs":"https://not-a-websocket.example.test"}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := loadInstallationConfig(filepath.Join(dir, "sparstrowgen-daemon.exe")); err == nil {
-		t.Fatal("accepted an invalid installed websocket endpoint")
-	}
-}
 
 // Moving a conversation is physically just this: no CLI can resume another's
 // session, so a provider that has not seen the history is told it in the
