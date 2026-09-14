@@ -9,13 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -31,46 +29,100 @@ import (
 )
 
 func main() {
+	args := os.Args[1:]
+	switch {
+	case len(args) == 1 && isPairingLink(args[0]):
+		os.Exit(report(activate(args[0]), ""))
+	case len(args) > 0 && args[0] == "install":
+		os.Exit(report(install(), installedNotice))
+	case len(args) > 0 && args[0] == "pair":
+		os.Exit(pairCommand(args[1:]))
+	case len(args) > 0 && args[0] == "run":
+		runBackground()
+	case len(args) == 0 && released():
+		// Double-clicking sparstrowgen-setup.exe.
+		os.Exit(report(install(), installedNotice))
+	case len(args) == 0:
+		runForeground()
+	default:
+		fmt.Fprintln(os.Stderr, "usage: daemon [run | install | pair -request <id> | sparstrowgen://pair?request=<id>]")
+		os.Exit(2)
+	}
+}
+
+const installedNotice = "sparstrowgen is installed on this computer and will start when you sign in to Windows.\n\nGo back to sparstrowgen in your browser, open Machines and choose Add computer."
+
+// report shows the outcome to the person who opened the executable and returns
+// its exit code. A successful pairing link says nothing: the browser moves on.
+func report(err error, success string) int {
+	if err != nil {
+		notify("sparstrowgen could not finish.\n\n"+err.Error(), true)
+		return 1
+	}
+	if success != "" {
+		notify(success, false)
+	}
+	return 0
+}
+
+// runForeground is `go run ./cmd/daemon`: logs in the terminal, Ctrl+C stops it.
+func runForeground() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if !serve(ctx, log) {
+		os.Exit(1)
+	}
+}
+
+// runBackground is the installed daemon: no window, logs in a file, and at
+// most one copy per Windows user.
+func runBackground() {
+	log, closeLog := fileLogger()
+	defer closeLog()
+	release, ok := singleInstance()
+	if !ok {
+		log.Info("sparstrowgen is already running for this Windows user")
+		return
+	}
+	defer release()
+	ensureHiddenConsole()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	watchForExit(stop)
+	serve(ctx, log)
+}
+
+// fileLogger writes to <data>/logs/daemon.log, keeping one previous file once
+// it passes 5 MB. It discards when there is nowhere to write.
+func fileLogger() (*slog.Logger, func()) {
+	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
+	dir, err := dataDir()
+	if err != nil {
+		return discard, func() {}
+	}
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0o700); err != nil {
+		return discard, func() {}
+	}
+	path := filepath.Join(logs, "daemon.log")
+	if info, err := os.Stat(path); err == nil && info.Size() > 5<<20 {
+		_ = os.Rename(path, path+".1")
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return discard, func() {}
+	}
+	return slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{Level: slog.LevelInfo})), func() { _ = f.Close() }
+}
+
+// serve connects and reconnects until ctx ends or the computer is disconnected.
+// It reports false when it could not start at all.
+func serve(ctx context.Context, log *slog.Logger) bool {
 	// The agent package reports a degraded process-tree stop through the
 	// default logger rather than by threading one through three backends.
 	slog.SetDefault(log)
-	executable, err := os.Executable()
-	if err != nil {
-		log.Error("could not locate the daemon executable", "err", err)
-		os.Exit(1)
-	}
-	config, err := loadInstallationConfig(executable)
-	if err != nil {
-		log.Error("could not read the installed connection configuration", "err", err)
-		os.Exit(1)
-	}
-	serverURL := serverWS(config)
-	if len(os.Args) > 1 && os.Args[1] == "pair" {
-		if err := pairMain(config, serverURL); err != nil {
-			log.Error("could not claim pairing request", "err", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	// The shared secret proving this is the machine that was installed, not
-	// something else that found the socket. Required, for the same reason the
-	// server requires it: a daemon that silently connects without one would be
-	// refused by the server anyway, and failing here says why in one line
-	// instead of as an endless reconnect loop.
-	token := pairedCredential()
-	if token == "" {
-		token = os.Getenv("DAEMON_TOKEN")
-	}
-	if token == "" {
-		log.Error("no machine credential is available — pair this computer or set DAEMON_TOKEN for the legacy local route")
-		os.Exit(1)
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+	url := serverWS()
 	d := &daemon{log: log, backends: agent.Backends(), turns: newRunningTurns()}
 
 	// Bounded exponential backoff with full jitter. The attempt counter resets
@@ -79,7 +131,28 @@ func main() {
 	// resetting on the dial is what turns a flapping link into a hot loop.
 	attempt := 0
 	for ctx.Err() == nil {
-		if err := d.run(ctx, serverURL, token); err != nil && ctx.Err() == nil {
+		// Read on every attempt: pairing writes a new credential while this
+		// copy may already be waiting.
+		token, paired := machineToken()
+		if token == "" {
+			if released() {
+				log.Info("this computer is not paired yet; pair it from Machines in sparstrowgen")
+			} else {
+				log.Error("no machine credential is available — pair this computer or set DAEMON_TOKEN for the legacy local route")
+			}
+			return false
+		}
+		err := d.run(ctx, url, token)
+		if errors.Is(err, errDisconnected) {
+			log.Warn("this computer was disconnected from its account; forgetting its credential")
+			if paired {
+				if err := forgetCredential(); err != nil {
+					log.Error("could not remove the revoked credential", "err", err)
+				}
+			}
+			return true
+		}
+		if err != nil && ctx.Err() == nil {
 			log.Warn("connection lost", "err", err, "attempt", attempt+1)
 		}
 		if ctx.Err() != nil {
@@ -91,6 +164,9 @@ func main() {
 		}
 		delay := backoff(attempt)
 		attempt++
+		if errors.Is(err, errAwaitingApproval) && paired && recentlyPaired() {
+			delay = approvalPoll
+		}
 		log.Info("reconnecting", "in", delay)
 		select {
 		case <-ctx.Done():
@@ -98,7 +174,17 @@ func main() {
 		}
 	}
 	log.Info("daemon stopped")
+	return true
 }
+
+// approvalPoll is how often a freshly paired computer checks whether it has
+// been approved, so the browser is not left waiting on a 30s backoff.
+const approvalPoll = 2 * time.Second
+
+var (
+	errAwaitingApproval = errors.New("the server has not accepted this computer: it is waiting for approval in the browser, or its credential does not match")
+	errDisconnected     = errors.New("this computer was disconnected from its account")
+)
 
 const (
 	backoffBase = 500 * time.Millisecond
@@ -165,59 +251,6 @@ type daemon struct {
 	connectedOnce bool
 }
 
-type installationConfig struct {
-	ServerAPI string `json:"serverApi"`
-	ServerWS  string `json:"serverWs"`
-}
-
-func loadInstallationConfig(executable string) (installationConfig, error) {
-	path := filepath.Join(filepath.Dir(executable), "sparstrowgen.json")
-	raw, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return installationConfig{}, nil
-	}
-	if err != nil {
-		return installationConfig{}, fmt.Errorf("read installation configuration: %w", err)
-	}
-	var config installationConfig
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return installationConfig{}, fmt.Errorf("read installation configuration: %w", err)
-	}
-	if config.ServerAPI != "" {
-		u, err := url.Parse(config.ServerAPI)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return installationConfig{}, errors.New("installation configuration has an invalid serverApi")
-		}
-	}
-	if config.ServerWS != "" {
-		u, err := url.Parse(config.ServerWS)
-		if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Host == "" {
-			return installationConfig{}, errors.New("installation configuration has an invalid serverWs")
-		}
-	}
-	return config, nil
-}
-
-func serverWS(config installationConfig) string {
-	if configured := os.Getenv("SERVER_WS"); configured != "" {
-		return configured
-	}
-	if config.ServerWS != "" {
-		return config.ServerWS
-	}
-	return "ws://localhost:8080/daemon"
-}
-
-func serverAPI(config installationConfig, ws string) string {
-	if configured := os.Getenv("SERVER_API"); configured != "" {
-		return configured
-	}
-	if config.ServerAPI != "" {
-		return config.ServerAPI
-	}
-	return strings.Replace(strings.Replace(ws, "ws://", "http://", 1), "wss://", "https://", 1)
-}
-
 func (d *daemon) run(ctx context.Context, url, token string) error {
 	// In a header rather than the URL: a query string ends up in proxy logs and
 	// in the server's own access log, and a credential that is written down
@@ -226,11 +259,15 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 		"Authorization": []string{"Bearer " + token},
 	})
 	if err != nil {
-		// 401 is not a connection problem and will not fix itself by retrying,
-		// so say what it actually is rather than letting it look like the
-		// network being down.
-		if res != nil && res.StatusCode == http.StatusUnauthorized {
-			return errors.New("the server rejected this machine: its credential was revoked or it is still waiting for approval")
+		// 401 and 403 are not connection problems, so say what they are rather
+		// than letting them look like the network being down.
+		if res != nil {
+			switch res.StatusCode {
+			case http.StatusUnauthorized:
+				return errAwaitingApproval
+			case http.StatusForbidden:
+				return errDisconnected
+			}
 		}
 		return err
 	}
@@ -295,69 +332,6 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 			go d.listDir(msg)
 		}
 	}
-}
-
-func credentialPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "sparstrowgen", "machine-credential")
-}
-func pairedCredential() string {
-	if raw := os.Getenv("SPARSTROWGEN_MACHINE_CREDENTIAL"); raw != "" {
-		return raw
-	}
-	p := credentialPath()
-	if p == "" {
-		return ""
-	}
-	b, err := os.ReadFile(p)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-func pairMain(config installationConfig, ws string) error {
-	fs := flag.NewFlagSet("pair", flag.ExitOnError)
-	request := fs.String("request", "", "one-time pairing request")
-	name := fs.String("name", env("COMPUTERNAME", "This computer"), "computer name")
-	fs.Parse(os.Args[2:])
-	if *request == "" {
-		return errors.New("pair requires -request from the sparstrowgen launch link")
-	}
-	base := serverAPI(config, ws)
-	base = strings.TrimSuffix(base, "/daemon")
-	body := strings.NewReader(fmt.Sprintf(`{"request":%q,"name":%q}`, *request, *name))
-	res, err := http.Post(base+"/daemon/pair", "application/json", body)
-	if err != nil {
-		return fmt.Errorf("call pairing service: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		return fmt.Errorf("pairing was refused: %s", strings.TrimSpace(string(raw)))
-	}
-	var reply struct {
-		Credential string `json:"credential"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
-		return fmt.Errorf("pairing response had no credential: %w", err)
-	}
-	if reply.Credential == "" {
-		return errors.New("pairing response had no credential")
-	}
-	p := credentialPath()
-	if p == "" {
-		return errors.New("could not choose a secure credential location")
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
-		return fmt.Errorf("prepare credential location: %w", err)
-	}
-	if err := os.WriteFile(p, []byte(reply.Credential+"\n"), 0600); err != nil {
-		return fmt.Errorf("save machine credential: %w", err)
-	}
-	return nil
 }
 
 func (d *daemon) send(msg protocol.DaemonMessage) error {

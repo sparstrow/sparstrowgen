@@ -31,6 +31,11 @@ var errMachineWentAway = errors.New("your machine disconnected before this turn 
 // for exists. Nothing it did could be shown to anybody.
 var errNoOwnerAccount = errors.New("the owner account does not exist yet — create it, then restart the daemon")
 
+// errMachineDisconnected tells a paired computer its credential was revoked, so
+// it stops retrying instead of dialling forever with something that can never
+// work again.
+var errMachineDisconnected = errors.New("this computer was disconnected from its account — pair it again to reconnect")
+
 func defaultFolder() string {
 	if wd, err := os.Getwd(); err == nil {
 		return wd
@@ -76,6 +81,18 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !legacy && !pairedOK {
+		// 403 and 401 mean different things to the daemon. A disconnected
+		// computer must stop and forget its credential; one still waiting for
+		// approval must keep trying. Both are refused either way.
+		revoked, err := a.store.CredentialRevoked(r.Context(), auth.HashToken(presented))
+		if err != nil {
+			a.fail(w, errors.New("could not verify this machine"), http.StatusServiceUnavailable)
+			return
+		}
+		if revoked {
+			a.fail(w, errMachineDisconnected, http.StatusForbidden)
+			return
+		}
 		a.log.Warn("refused a daemon connection", "remote", r.RemoteAddr)
 		a.fail(w, errors.New("this machine is not authorised"), http.StatusUnauthorized)
 		return
@@ -104,6 +121,7 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 	a.log.Info("daemon connected", "remote", r.RemoteAddr, "account", owner.Email)
 	if pairedOK {
 		a.hub.SetPairedDaemon(owner.ID, paired.ID, conn)
+		a.hub.BroadcastTo(owner.ID, protocol.ClientEvent{Type: protocol.EventMachines})
 	} else {
 		a.hub.SetDaemon(owner.ID, conn)
 	}
@@ -116,6 +134,9 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		current := false
 		if pairedOK {
 			current = a.hub.ClearPairedDaemon(owner.ID, paired.ID, conn)
+			if current {
+				a.hub.BroadcastTo(owner.ID, protocol.ClientEvent{Type: protocol.EventMachines})
+			}
 		} else {
 			current = a.hub.ClearDaemon(owner.ID, conn)
 		}
@@ -141,6 +162,7 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if pairedOK && msg.Type == protocol.DaemonHello {
 			a.hub.SetPairedProviders(owner.ID, paired.ID, msg.Providers)
+			a.hub.BroadcastTo(owner.ID, protocol.ClientEvent{Type: protocol.EventMachines})
 			continue
 		}
 		a.handleDaemonMessage(owner.ID, msg)
