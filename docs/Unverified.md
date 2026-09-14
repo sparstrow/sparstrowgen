@@ -134,7 +134,18 @@ proves the server side; the surface has not been seen in this state.
 once the API is back.
 **Status:** open — tried 2026-09-13; the page stayed on its loading placeholders instead (G-36)
 
-## U-12 — An installed computer moves off the signing key and then updates from a release GitHub built
+## U-12 — The account menu, moved to the primary sidebar, renders and works in the browser
+
+**From:** account-menu relocation, 2026-09-14 · **Who can run it:** owner (his own dev server is
+already running); agent on a later turn once no other session holds the `apps/web` dev-server lock
+**How:** Look at the primary sidebar (Chat/Machines/Settings) on any page. Passing: the account icon
+sits in its footer, opens the same dropdown (email, Change password, Sign out, Sign out everywhere)
+as before, and the chat header's Conversations panel no longer has it — check both expanded and
+icon-collapsed sidebar states.
+**Status:** open — `tsc --noEmit` and eslint pass on the changed files; not seen in a browser because
+another session's `next dev` held the directory lock on `apps/web` for the whole turn
+
+## U-13 — An installed computer moves off the signing key and then updates from a release GitHub built
 
 **From:** D-035, 2026-09-14 · **Who can run it:** agent on the owner's PC (it needs published releases
 and the installed copy)
