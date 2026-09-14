@@ -121,7 +121,8 @@ commands:
   migrate: "cd server && goose -dir migrations up"
   server: "cd server && go run ./cmd/server   # :8080"
   daemon: "cd server && go run ./cmd/daemon   # drives the agent CLIs"
-  windows_installer: "powershell -ExecutionPolicy Bypass -File scripts\\package-windows.ps1 -Version x.y.z   # dist\\windows: sparstrowgen-setup.exe plus the signed update manifest, for api.sparstrow.com; -ServerAPI/-ServerWS for another server (D-033, D-034, docs/runbooks/daemon-release.md)"
+  windows_installer: "powershell -ExecutionPolicy Bypass -File scripts\\package-windows.ps1 -Version x.y.z   # dist\\windows: sparstrowgen-setup.exe plus the update manifest, for api.sparstrow.com; -ServerAPI/-ServerWS for another server. Only to try a build: releases come from daemon_release (D-033, D-035)"
+  daemon_release: "git tag -a daemon-vx.y.z <commit on main> -m \"what changed\" && git push origin daemon-vx.y.z   # .github/workflows/daemon-release.yml tests, builds and publishes it as latest; no key (docs/runbooks/daemon-release.md)"
   check: "make check"
 
 # Settings the daemon reads at startup. Everything else is compiled in.

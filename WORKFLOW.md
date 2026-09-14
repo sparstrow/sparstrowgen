@@ -122,8 +122,8 @@ Use expand/contract for every server-daemon protocol change:
 
 The installed supervisor may prepare an update in the background, but it must
 not change versions or restart while any sparstrowgen agent work is active on
-that computer. It checks again immediately before activation, verifies signature
-and checksum, keeps the previous version, verifies restart and reconnect, and
+that computer. It checks again immediately before activation, verifies the
+checksum, keeps the previous version, verifies restart and reconnect, and
 rolls back on failure. A production server must never require an unpublished
 daemon.
 

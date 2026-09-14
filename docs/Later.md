@@ -264,3 +264,17 @@ the profile header and Machines list where it directly explains online/offline f
 
 **Unblocks when:** a workflow needs someone to inspect or choose a registered folder from the
 machine profile, or a connection fact becomes necessary to diagnose or manage that computer.
+
+## L-20 — Restart a computer's sparstrowgen from the app
+
+**Status:** parked **Raised:** 2026-09-14, owner, comparing updates with Multica
+
+Multica's desktop app starts, restarts and recovers its daemon itself, because it runs on the same
+computer. A web page can only ask a computer that is still connected, which does not help one that is
+stuck, and ours already restarts itself after an update and starts at Windows sign-in. A Restart
+action per connected computer in Settings → Updates, waiting for agent work first, was offered and
+put off.
+
+**Unblocks when:** someone needs a computer restarted while it is still connected — for example after
+installing or signing in to an agent CLI it has not noticed — or when a desktop app is built, which
+would own starting and recovering the daemon the way Multica's does.

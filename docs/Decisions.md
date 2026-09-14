@@ -733,6 +733,9 @@ is G-32.
 
 ## D-034 — Updates are a signed manifest, swapped in by the old version, and put back if the new one cannot reconnect
 
+**Its Trust paragraph is replaced 2026-09-14 by D-035: there is no signing key.** Waiting for work,
+rollback and the server's role stand.
+
 **2026-09-13, US3.** Rejected: Windows code signing as the trust root (there is no certificate yet,
 G-32, and a signature on an executable says nothing about which version is newest); trusting HTTPS to
 GitHub alone (anyone able to publish a release or redirect a download could run code on every
@@ -765,3 +768,32 @@ now to the computer, and shows what the computer reports. Hello carries `version
 `selfUpdates`; their absence means a daemon older than this. `MinDaemonProtocol`, 0 today, is what
 makes a computer too old: Chat then says to update it in Settings → Updates and sends no work. Raise
 it only after a release those computers could update to.
+
+## D-035 — Updates trust our GitHub releases and a checksum, as Multica's do; there is no signing key
+
+**2026-09-14, owner, after US3 shipped.** Replaces D-034's Trust paragraph. His objection: a key that
+someone must back up is a burden nobody using the app should carry, and losing it stops every computer
+updating until each is reinstalled by hand. Multica has no key (`server/internal/cli/update.go`,
+`.github/workflows/release.yml`): GitHub Actions builds each release from a tag and publishes
+`checksums.txt`, and its daemon installs the latest release only if the download matches it.
+
+**Trust.** A `daemon-vX.Y.Z` tag on a commit already on main makes
+`.github/workflows/daemon-release.yml` check that the version is higher than the latest, run the daemon
+and update tests on Windows, build, and publish the release as latest. Its `sparstrowgen-update.json`
+names the version, the installer URL and the installer's SHA-256. The daemon reads it over HTTPS from
+GitHub, refuses it unless the installer is on that same site, and keeps a download only if its SHA-256
+matches (`internal/release`). Fields it does not know are ignored, so an older daemon reads a newer
+manifest.
+
+Rejected: keeping ed25519 with the key in GitHub's secret store (once GitHub builds releases the key
+sits beside the upload rights, so a takeover gets both, and a lost or leaked key still means
+reinstalling every computer); keeping the key on the owner's PC (the burden this removes). Accepted:
+whoever controls the GitHub repository can ship an update to every computer. They could already
+replace the installer the install page links to, and whoever controls our server can already send
+agent work to a connected computer, so the key protected less than it appeared to. What protects
+updates now is two-factor sign-in on every account with write access to the repository.
+
+**Moving off the key.** 0.2.0 and 0.2.1 accept only a signed manifest, so 0.2.2 is published with a
+`.sig` made by the old key ([runbook](runbooks/daemon-release.md)); releases after it carry none, and the
+key is deleted once no computer needs it. A computer still on 0.2.0 or 0.2.1 after that reports that
+it could not check, and needs the installer opened once. It keeps its pairing.
