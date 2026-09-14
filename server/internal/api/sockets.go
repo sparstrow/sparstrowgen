@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
@@ -67,7 +68,14 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 	// rather than a working websocket that is then closed — and so that nothing
 	// is registered in the hub on the strength of a connection we are about to
 	// reject.
-	if !a.daemonAuthorised(r) {
+	presented := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	legacy := a.daemonAuthorised(r)
+	paired, pairedUserID, pairedOK, err := a.store.MachineForCredential(r.Context(), auth.HashToken(presented))
+	if err != nil {
+		a.fail(w, errors.New("could not verify this machine"), http.StatusServiceUnavailable)
+		return
+	}
+	if !legacy && !pairedOK {
 		a.log.Warn("refused a daemon connection", "remote", r.RemoteAddr)
 		a.fail(w, errors.New("this machine is not authorised"), http.StatusUnauthorized)
 		return
@@ -81,7 +89,9 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errors.New("could not reach the database"), http.StatusServiceUnavailable)
 		return
 	}
-	if !exists {
+	if !legacy {
+		owner.ID = pairedUserID
+	} else if !exists {
 		a.fail(w, errNoOwnerAccount, http.StatusConflict)
 		return
 	}
@@ -92,14 +102,24 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log.Info("daemon connected", "remote", r.RemoteAddr, "account", owner.Email)
-	a.hub.SetDaemon(owner.ID, conn)
+	if pairedOK {
+		a.hub.SetPairedDaemon(owner.ID, paired.ID, conn)
+	} else {
+		a.hub.SetDaemon(owner.ID, conn)
+	}
 	defer func() {
 		a.log.Info("daemon disconnected", "account", owner.Email)
 		// Only if this socket was still the account's current machine. One that
 		// has already reconnected has replaced it, and abandoning turns then
 		// would kill the new connection's work on the strength of the old one's
 		// teardown.
-		if a.hub.ClearDaemon(owner.ID, conn) {
+		current := false
+		if pairedOK {
+			current = a.hub.ClearPairedDaemon(owner.ID, paired.ID, conn)
+		} else {
+			current = a.hub.ClearDaemon(owner.ID, conn)
+		}
+		if current {
 			a.abandonTurns(owner.ID, errMachineWentAway.Error())
 		}
 	}()
@@ -117,6 +137,10 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		// A reply to something the server asked (a directory listing) belongs to
 		// whoever is waiting for it, not to the event handling below.
 		if a.hub.Deliver(owner.ID, msg) {
+			continue
+		}
+		if pairedOK && msg.Type == protocol.DaemonHello {
+			a.hub.SetPairedProviders(owner.ID, paired.ID, msg.Providers)
 			continue
 		}
 		a.handleDaemonMessage(owner.ID, msg)

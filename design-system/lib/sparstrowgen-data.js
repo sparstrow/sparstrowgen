@@ -55,4 +55,32 @@ window.SPARSTROW_SEED = {
   ],
 
   notInvitedExample: "jordan.reyes@contoso.com",
+
+  machines: [
+    {
+      id: "desktop-river",
+      name: "DESKTOP-RIVER",
+      thisDevice: true,
+      status: "online",
+      lastSeen: "just now",
+      activeWork: "None",
+      providers: [
+        { id: "claude", name: "Claude", status: "Available" },
+        { id: "codex", name: "Codex", status: "Available" },
+        { id: "agy", name: "agy", status: "Available" },
+      ],
+    },
+    {
+      id: "finance-laptop",
+      name: "FINANCE-LAPTOP",
+      thisDevice: false,
+      status: "offline",
+      lastSeen: "yesterday at 5:42 PM",
+      activeWork: "None",
+      providers: [
+        { id: "claude", name: "Claude", status: "Waiting for computer" },
+        { id: "codex", name: "Codex", status: "Waiting for computer" },
+      ],
+    },
+  ],
 };

@@ -6,11 +6,41 @@ to the next screen.
 
 ---
 
+## DD-007 — Machines uses a list followed by a focused profile
+
+**2026-09-13 · US2 computer pairing.** The owner selected direction A for the Machines index and
+direction B for the machine profile. Direction C's permanent master-detail workspace was not
+selected.
+
+**Why:** the owner chose A + B from the rendered directions. This makes the approved interaction a
+dedicated Machines list whose rows open a separate, focused machine profile; no further reason was
+given for rejecting C.
+
+## DD-006 — Machines is a durable product destination
+
+**2026-09-13 · US2 computer pairing.** The first three shots placed pairing inside Chat, on a
+temporary setup page, or in a side panel. The owner replaced that premise: "I want a separate
+sidebar menu for machines ... and a profile for the machine. Because we are gonna enhance the
+feature later."
+
+**Why:** a computer is not just a transient prerequisite for sending a message. It is an account-
+scoped entity whose connection, providers, folders, disconnect action and later approved
+capabilities need a stable home. The persistent sidebar therefore contains Chat and Machines.
+Machines uses the separately rendered list-to-profile navigation recorded in DD-007.
+
+## DD-005 — The current chat choices are the product foundation
+
+**2026-09-13 · product foundation.** The owner chose the familiar Claude Code desktop-style shell,
+then adopted the provider-switch divider from the terminal direction and the centred agent reading
+column from the document direction. These choices now live in root `DESIGN.md`; feature directions
+may vary their local composition but do not reopen the shell, reading geometry, or restrained-color
+rules without a new rendered decision.
+
 ## DD-004 — Prototypes mirror the live app's tokens until a design system exists
 
-**2026-09-12 · all prototypes.** There is no `DESIGN.md` yet. Rather than invent a palette per
-prototype, `tokens/colors.css` copies `apps/web/app/globals.css` verbatim. When `design-brief` and
-`design-system` run, they take that file over.
+**2026-09-12 · all prototypes.** Prototypes mirror `apps/web/app/globals.css` rather than inventing
+a palette per prototype. The design system now records that source and its fingerprint in
+`system.json`; `ds.mjs check` reports drift.
 
 ## DD-003 — Email confirmation is a link only
 

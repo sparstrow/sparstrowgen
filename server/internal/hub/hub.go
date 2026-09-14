@@ -47,7 +47,10 @@ type Hub struct {
 	// after a network drop should not be locked out by its own stale socket.
 	// Several machines per account arrive with pairing (US2), where each gets
 	// its own credential and identity.
-	machines map[string]*machine
+	machines    map[string]*machine
+	paired      map[string]*machine
+	pairedUsers map[string]string
+	primary     map[string]string
 
 	// Waiters for daemon replies, by request id. See Ask.
 	pending map[string]waiter
@@ -86,8 +89,9 @@ func New(log *slog.Logger) *Hub {
 	return &Hub{
 		clients:  map[*websocket.Conn]client{},
 		machines: map[string]*machine{},
-		pending:  map[string]waiter{},
-		log:      log,
+		paired:   map[string]*machine{}, pairedUsers: map[string]string{}, primary: map[string]string{},
+		pending: map[string]waiter{},
+		log:     log,
 	}
 }
 
@@ -238,7 +242,90 @@ func (h *Hub) ClearDaemon(userID string, c *websocket.Conn) bool {
 func (h *Hub) DaemonOnline(userID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.machines[userID] != nil
+	if h.machines[userID] != nil {
+		return true
+	}
+	for id, owner := range h.pairedUsers {
+		if owner == userID && h.paired[id] != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// SetPairedDaemon keeps every approved computer independently connected. The
+// legacy owner token remains a separate compatibility route until migration.
+func (h *Hub) SetPairedDaemon(userID, machineID string, c *websocket.Conn) {
+	h.mu.Lock()
+	old := h.paired[machineID]
+	h.paired[machineID] = &machine{conn: c, providers: []protocol.Provider{}}
+	h.pairedUsers[machineID] = userID
+	h.primary[userID] = machineID
+	h.mu.Unlock()
+	if old != nil {
+		_ = old.conn.Close()
+	}
+	h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventDaemon, Online: true})
+}
+func (h *Hub) ClearPairedDaemon(userID, machineID string, c *websocket.Conn) bool {
+	h.mu.Lock()
+	m := h.paired[machineID]
+	current := m != nil && m.conn == c
+	if current {
+		delete(h.paired, machineID)
+		delete(h.pairedUsers, machineID)
+		if h.primary[userID] == machineID {
+			delete(h.primary, userID)
+			for id, owner := range h.pairedUsers {
+				if owner == userID && h.paired[id] != nil {
+					h.primary[userID] = id
+					break
+				}
+			}
+		}
+	}
+	h.mu.Unlock()
+	_ = c.Close()
+	if current {
+		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventDaemon, Online: h.DaemonOnline(userID)})
+		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
+	}
+	return current
+}
+func (h *Hub) MachineOnline(machineID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.paired[machineID] != nil
+}
+func (h *Hub) MachineProviders(machineID string) []protocol.Provider {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	m := h.paired[machineID]
+	if m == nil {
+		return []protocol.Provider{}
+	}
+	out := make([]protocol.Provider, len(m.providers))
+	copy(out, m.providers)
+	return out
+}
+func (h *Hub) SetPairedProviders(userID, machineID string, p []protocol.Provider) {
+	h.mu.Lock()
+	m := h.paired[machineID]
+	if m != nil {
+		m.providers = p
+	}
+	h.mu.Unlock()
+	if m != nil {
+		h.BroadcastTo(userID, protocol.ClientEvent{Type: protocol.EventProviders, Providers: h.Providers(userID)})
+	}
+}
+func (h *Hub) DisconnectMachine(machineID string) {
+	h.mu.RLock()
+	m := h.paired[machineID]
+	h.mu.RUnlock()
+	if m != nil {
+		_ = m.conn.Close()
+	}
 }
 
 // SetProviders records what an account's machine can run. Ignored when that
@@ -247,6 +334,9 @@ func (h *Hub) DaemonOnline(userID string) bool {
 func (h *Hub) SetProviders(userID string, p []protocol.Provider) {
 	h.mu.Lock()
 	m := h.machines[userID]
+	if m == nil && h.primary[userID] != "" {
+		m = h.paired[h.primary[userID]]
+	}
 	if m != nil {
 		m.providers = p
 	}
@@ -286,6 +376,9 @@ func (h *Hub) Providers(userID string) []protocol.Provider {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	m := h.machines[userID]
+	if m == nil && h.primary[userID] != "" {
+		m = h.paired[h.primary[userID]]
+	}
 	if m == nil {
 		return []protocol.Provider{}
 	}
@@ -300,6 +393,9 @@ func (h *Hub) Providers(userID string) []protocol.Provider {
 func (h *Hub) SendToDaemon(userID string, msg protocol.ServerMessage) bool {
 	h.mu.RLock()
 	m := h.machines[userID]
+	if m == nil && h.primary[userID] != "" {
+		m = h.paired[h.primary[userID]]
+	}
 	h.mu.RUnlock()
 	if m == nil {
 		return false

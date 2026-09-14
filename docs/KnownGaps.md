@@ -177,6 +177,41 @@ wrong rather than the outcome.
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
 
+## G-32 — The Windows installation path is not signed, published, or proved on a clean computer
+
+**Kind:** unproved
+**Raised:** 2026-09-13, US2 implementation
+
+The Windows pairing and installation implementation exists and works locally: the repository builds
+the daemon and URI launcher, packages them with the per-user installer, and produces the release
+archive. On this development machine, the launcher successfully registered the `sparstrowgen://`
+handler under the current Windows user; the launcher and bundle build cleanly. The browser has
+honest waiting, retry, and install-help states because an unanswered URI cannot distinguish a
+missing handler from a delayed or blocked launch.
+
+Production distribution is incomplete. The Windows launcher and daemon executables, installer,
+and archive are unsigned, and no Windows installer or package has been published at a stable
+release URL. The product therefore cannot yet direct a first-time user to a trusted production
+download. The package has also not completed the full installation, pairing, persistence, and real
+Chat path on a clean Windows machine.
+
+- **If wrong:** a first-time user may be unable to install or launch the local component, or may
+  encounter Windows publisher or SmartScreen warnings, even though the pairing UI looks available.
+- **Clears when:** all of the following pass and the proof is recorded:
+  1. Obtain an appropriate Windows code-signing identity and configure it for the production release
+     process.
+  2. Sign the production launcher, daemon, and installer/package artifacts, then verify every
+     expected signature on the artifacts that will be published.
+  3. Publish the Windows installer or package at a stable release URL.
+  4. Wire the product's install and download experience to that published release.
+  5. On a clean Windows machine, verify the complete journey: install → `sparstrowgen://` pairing →
+     browser approval → daemon startup → daemon persistence across restart/sign-in → one real Chat
+     turn through the paired computer.
+  6. Record the release identity, stable URL, signature-verification output, clean-machine setup,
+     and end-to-end result as durable proof.
+
+Keep G-32 open until every closure criterion above passes.
+
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 
 **Noticed:** 2026-09-11, codex reviewing the deployment artifacts before the first deploy

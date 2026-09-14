@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12** |
+| **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12 · revision 3 approved 2026-09-13** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
-| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2, US3: not designed yet |
+| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: not designed yet |
 | **Open questions** | none |
 
 > **Revision 2026-09-12.** Mapping this release against the phase 2 exit gate found five gaps. You
@@ -29,6 +29,11 @@
 > Until it exists, I inferred that you learn of a request by email and approve it by allowing the
 > address the same way you invite someone. You also chose: the password is set after the email is
 > confirmed, and the email confirms with a link only.
+>
+> **Revision 3, 2026-09-13, from your review of US2 design shots.** Computers now have a dedicated
+> product destination and a durable profile rather than living only inside Chat setup. This brings
+> the account-scoped machines list into US2 so later approved computer capabilities have a stable
+> home. The owner selected the separate Machines list and focused profile directions (A + B).
 
 ## What's wrong today
 
@@ -44,8 +49,9 @@ way to check whether that installed part is current or to decide whether it upda
 
 The people I allow create their own accounts and sign in normally without a server code. Anyone
 else can ask me for access, and I decide. Each
-person's work and computers are theirs alone. The product helps them connect the computer they are
-using without copying a shared machine secret, and they can disconnect it again. Once connected,
+person's work and computers are theirs alone. The product gives those computers a durable place
+where the person can connect one without copying a shared machine secret, inspect it, and
+disconnect it again. Once connected,
 they can leave safe automatic updates on or turn them off and check deliberately. This is the
 smallest release that makes the hosted app usable without understanding its hosting.
 
@@ -105,6 +111,9 @@ command.
   computer remains connected to my account and becomes reachable without a terminal.
 - *(added)* **Given** my computer is connected to my account, **when** another account is signed in,
   **then** it cannot send work to my computer or learn anything about it.
+- *(added)* **Given** I have one or more connected computers, **when** I manage them, **then** I can
+  see only my computers, open one to inspect its connection state and available providers, and
+  return later as more computer capabilities are added.
 - *(added)* **Given** a computer should no longer act for me, **when** I disconnect it, **then** it is
   refused from its next attempt, what it still holds can never restore access, reconnecting it
   needs my approval again, and any other computer I have connected keeps working.

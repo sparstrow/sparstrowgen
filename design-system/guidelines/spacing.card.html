@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Spacing</title>
+<meta name="description" content="Spacing — foundation">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html { color-scheme: dark; }
+  body { margin:0; padding:var(--space-5,20px); background:var(--card,#161618); color:var(--foreground,#f4f4f5);
+         font-family:var(--font-sans,system-ui); font-size:13px; }
+  .row { display:grid; grid-template-columns:110px 1fr; gap:var(--space-4,16px); align-items:center;
+         padding:var(--space-4,16px) 0; border-bottom:1px solid var(--border,#26262b); }
+  .row:last-child { border-bottom:0; }
+  .lbl { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted-fg,#8a8a93); }
+  .specimens { display:flex; flex-wrap:wrap; gap:var(--space-3,12px); align-items:center; }
+  .measure { display:grid; grid-template-columns:44px auto; gap:12px; align-items:center; }
+  .bar { height:12px; border-radius:var(--radius-sm); background:var(--foreground); opacity:.8; }
+  .s1 { width:var(--space-1); } .s2 { width:var(--space-2); } .s3 { width:var(--space-3); }
+  .s4 { width:var(--space-4); } .s6 { width:var(--space-6); } .s8 { width:var(--space-8); }
+  .demo { display:grid; gap:var(--space-2); padding:var(--space-4); border:1px solid var(--border); border-radius:var(--radius-lg); }
+  .line { height:8px; width:180px; border-radius:var(--radius-sm); background:var(--muted); }
+  .line.short { width:112px; }
+</style></head>
+<body class="dark">
+<div class="row"><div class="lbl">Scale</div><div class="specimens">
+  <div class="measure"><span>4</span><i class="bar s1"></i></div><div class="measure"><span>8</span><i class="bar s2"></i></div>
+  <div class="measure"><span>12</span><i class="bar s3"></i></div><div class="measure"><span>16</span><i class="bar s4"></i></div>
+  <div class="measure"><span>24</span><i class="bar s6"></i></div><div class="measure"><span>32</span><i class="bar s8"></i></div>
+</div></div>
+<div class="row"><div class="lbl">Grouping</div><div class="specimens"><div class="demo"><div class="line"></div><div class="line short"></div></div></div></div>
+</body></html>

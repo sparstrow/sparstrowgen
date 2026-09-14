@@ -1,0 +1,9 @@
+:root {
+  --font-sans: "Geist", "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "Cascadia Mono", monospace;
+  --text-meta: 0.75rem;
+  --text-ui: 0.875rem;
+  --text-body: 0.9375rem;
+  --text-title: 1.125rem;
+  --reading-measure: 48rem;
+}

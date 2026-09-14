@@ -509,6 +509,17 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-17 — Windows bundle script wrote artifacts under the server directory
+
+**Found:** 2026-09-13, US2 local package verification
+**Status:** fixed 2026-09-13
+
+`go build -C server` resolves a relative output path from `server/`, while the
+archive step resolved the same path from the repository root. The resulting
+bundle contained only the install script. The package script now resolves its
+output directory to an absolute path before either command runs, so the archive
+contains both executables and the installer.
+
 ## B-16 — A failed Postgres connection printed the database password in the server log
 
 **Found:** 2026-09-11, deployment-readiness audit before the first Coolify deploy
