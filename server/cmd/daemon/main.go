@@ -34,14 +34,16 @@ func main() {
 	case len(args) == 1 && isPairingLink(args[0]):
 		os.Exit(report(activate(args[0]), ""))
 	case len(args) > 0 && args[0] == "install":
-		os.Exit(report(install(), installedNotice))
+		err := install()
+		os.Exit(report(err, installedNotice()))
 	case len(args) > 0 && args[0] == "pair":
 		os.Exit(pairCommand(args[1:]))
 	case len(args) > 0 && args[0] == "run":
 		runBackground()
 	case len(args) == 0 && released():
 		// Double-clicking sparstrowgen-setup.exe.
-		os.Exit(report(install(), installedNotice))
+		err := install()
+		os.Exit(report(err, installedNotice()))
 	case len(args) == 0:
 		runForeground()
 	default:
@@ -50,7 +52,14 @@ func main() {
 	}
 }
 
-const installedNotice = "sparstrowgen is installed on this computer and will start when you sign in to Windows.\n\nGo back to sparstrowgen in your browser, open Machines and choose Add computer."
+// installedNotice is what a finished install says. A computer that is already
+// paired needs nothing more, so it is not sent back to Add computer (B-27).
+func installedNotice() string {
+	if readCredential(credentialName) != "" {
+		return "sparstrowgen is updated on this computer.\n\nThis computer is already paired, so it reconnects by itself. There is nothing else to do."
+	}
+	return "sparstrowgen is installed on this computer and will start when you sign in to Windows.\n\nGo back to sparstrowgen in your browser, open Machines and choose Add computer."
+}
 
 // report shows the outcome to the person who opened the executable and returns
 // its exit code. A successful pairing link says nothing: the browser moves on.

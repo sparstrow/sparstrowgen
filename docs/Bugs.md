@@ -512,7 +512,7 @@ first-request-wins. It now refuses to start instead.
 ## B-27 — Reinstalling on a connected computer tells the person to add it again
 
 **Found:** 2026-09-13, by the owner, reinstalling 0.1.2 over his connected computer
-**Status:** open
+**Status:** fixed 2026-09-13 (0.1.2)
 
 **Repro:** On a computer that is already paired, run `sparstrowgen-setup.exe` again.
 **Expected / Actual:** a message that it was updated and is still connected / "Go back to sparstrowgen
