@@ -143,7 +143,8 @@ the shadcn registry before being hand-built.
 | Inline persistent machine attention state | Expected | Where Chat needs the machine | Must contain a next action |
 | Disconnect confirmation | Expected | US2 computer action | Names the effect on active work and reconnection |
 | Generic dashboard | Not building | — | Conversation remains the product's centre |
-| Account settings | Expected | Persistent product sidebar | Password security only; it is not a generic preferences area |
+| Settings with its own menu | Expected | Persistent product sidebar | Approved by the owner 2026-09-13, modelled on Multica's Settings. Grouped entries in a settings menu beside the page; holds only what is built — Account → Password, Computers → Updates |
+| Computer updates | Expected | Settings → Updates | One card per connected computer: current version, automatic updates, check for updates |
 | Command palette | Not building | — | No proven navigation volume or owner request |
 | Appearance preferences | Not yet | — | Separate draft feature after the Phase 1 gate |
 

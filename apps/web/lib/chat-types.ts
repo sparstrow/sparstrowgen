@@ -83,6 +83,27 @@ export type Machine = {
   providers: Provider[];
 };
 
+/** Where an update stands for one computer (spec US3). */
+export type UpdateStatus =
+  | { kind: "unchecked" }
+  | { kind: "current" }
+  | { kind: "available"; version: string }
+  | { kind: "waiting"; version: string; activeTasks: number }
+  | { kind: "updating"; version: string }
+  | { kind: "failed"; message: string };
+
+export type ComputerUpdates = {
+  machineId: string;
+  name: string;
+  online: boolean;
+  /** As last reported by the computer. */
+  version: string;
+  /** The hosted app no longer works with this version; it cannot update itself. */
+  tooOld: boolean;
+  automatic: boolean;
+  status: UpdateStatus;
+};
+
 export type Pairing = {
   id: string;
   status: "pending" | "claimed" | "approved" | "rejected";

@@ -5,7 +5,7 @@
 | **Status** | **Approved 2026-09-12 · revisions 1 and 2 approved 2026-09-12 · revision 3 approved 2026-09-13** |
 | **Created** | 2026-09-12 |
 | **Trigger** | "pairing, signing or creating an account without the secure code for the machine, and update, auto update setting is a must to build first; all other are later" |
-| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: not designed yet |
+| **Design** | US1: [`account-access` handoff](../../design-system/designs/Accounts/account-access.handoff.md) — built on the real backend 2026-09-12 · US2: [`machine-workspace` prototype](../../design-system/designs/Machines/machine-workspace.handoff.md) — A + B selected, awaiting prototype review · US3: Settings → Updates, copying Multica's desktop Updates page ([round notes](../../design-system/shots/2026-09-13-computer-updates/README.md)) — wiring on mock data |
 | **Open questions** | none |
 
 > **Revision 2026-09-12.** Mapping this release against the phase 2 exit gate found five gaps. You
@@ -34,6 +34,13 @@
 > product destination and a durable profile rather than living only inside Chat setup. This brings
 > the account-scoped machines list into US2 so later approved computer capabilities have a stable
 > home. The owner selected the separate Machines list and focused profile directions (A + B).
+>
+> **Revision 4, 2026-09-13, from choosing US3's direction.** Update controls live in a Settings area
+> with its own menu, as an Updates page like Multica's desktop app — not on the computer's profile.
+> This replaces the earlier note that this release establishes no general Settings area; the menu
+> holds only what this release needs (the existing password page, and Updates). Because updates
+> belong to each connected computer rather than to the browser, I inferred that the page shows the
+> same controls once per computer. Correct that if you meant something else.
 
 ## What's wrong today
 
