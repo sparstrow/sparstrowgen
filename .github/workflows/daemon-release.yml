@@ -1,0 +1,89 @@
+name: Daemon release
+
+# Pushing a tag daemon-vX.Y.Z builds and publishes that version of the Windows
+# daemon as the latest release. Every installed computer with automatic updates
+# on installs it within the hour, once no agent work is running.
+# docs/runbooks/daemon-release.md, docs/Decisions.md D-035.
+
+on:
+  push:
+    tags:
+      - "daemon-v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daemon-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag
+        id: meta
+        shell: pwsh
+        run: |
+          if ($env:TAG -notmatch '^daemon-v(\d+\.\d+\.\d+)$') { throw "Release tags must be daemon-vX.Y.Z; got '$env:TAG'." }
+          $version = $Matches[1]
+          # checkout turns an annotated tag into a lightweight one; fetch it again for its message.
+          git fetch --force origin "refs/tags/$($env:TAG):refs/tags/$($env:TAG)"
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "$env:TAG is not on main. Only merged commits are released." }
+          $latest = gh release view --json tagName --jq .tagName 2>$null
+          if ($LASTEXITCODE -eq 0 -and $latest -match '^daemon-v(\d+\.\d+\.\d+)$') {
+            if ([version]$version -le [version]$Matches[1]) { throw "$version is not higher than the latest release, $latest. Never reuse or go back." }
+          }
+          $global:LASTEXITCODE = 0
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Test the daemon and its updates
+        working-directory: server
+        run: go test ./cmd/daemon/... ./cmd/releasetool/... ./internal/release/... ./internal/protocol/...
+
+      - name: Build
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: ./scripts/package-windows.ps1 -Version $env:VERSION
+
+      - name: Publish
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $hash = ((Get-Content -LiteralPath dist/windows/sparstrowgen-setup.exe.sha256) -split '\s+')[0]
+          $changes = (git tag -l --format='%(contents)' $env:TAG | Out-String).Trim()
+          if (-not $changes) { $changes = 'See the commits since the previous release.' }
+          $run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $notes = @'
+          The component that connects a Windows computer to sparstrowgen.
+
+          **What changed:** {CHANGES}
+
+          **Updating:** installed computers install this by themselves within the hour, once no agent work is running. Check it in **Settings → Updates**. On 0.1.x, or on 0.2.0 or 0.2.1 if the computer missed 0.2.2, open `sparstrowgen-setup.exe` once.
+
+          **Unsigned.** Windows will say it protected your PC. Choose **More info**, then **Run anyway**. Signing is tracked in KnownGaps G-32.
+
+          SHA-256 `{HASH}`
+
+          Built from {SHA} by [this run]({RUN}).
+          '@
+          $notes = $notes.Replace('{CHANGES}', $changes).Replace('{HASH}', $hash).Replace('{SHA}', $env:GITHUB_SHA).Replace('{RUN}', $run)
+          Set-Content -LiteralPath release-notes.md -Value $notes -Encoding utf8
+          gh release create $env:TAG dist/windows/sparstrowgen-setup.exe dist/windows/sparstrowgen-setup.exe.sha256 dist/windows/sparstrowgen-update.json --verify-tag --latest --title "sparstrowgen for Windows $env:VERSION" --notes-file release-notes.md
