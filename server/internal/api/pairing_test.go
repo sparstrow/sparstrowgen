@@ -47,17 +47,28 @@ func (r *rig) startPairing() (id, request string) {
 	return out.Pairing.ID, strings.TrimPrefix(out.LaunchURI, prefix)
 }
 
-// claimPairing is the daemon spending the request. It carries no session.
-func (r *rig) claimPairing(request, name string) (int, string) {
+type claimReply struct {
+	MachineID     string `json:"machineId"`
+	Credential    string `json:"credential"`
+	AlreadyPaired bool   `json:"alreadyPaired"`
+}
+
+// claimWith is the daemon spending the request, presenting the credential it
+// already holds (or none). It carries no session.
+func (r *rig) claimWith(request, name, current string) (int, claimReply) {
 	r.t.Helper()
-	res := r.stranger().post("/daemon/pair", map[string]string{"request": request, "name": name})
-	var out struct {
-		Credential string `json:"credential"`
-	}
+	res := r.stranger().post("/daemon/pair", map[string]string{"request": request, "name": name, "current": current})
+	var out claimReply
 	if res.StatusCode == http.StatusOK {
 		decodeInto(r.t, res, &out)
 	}
-	return res.StatusCode, out.Credential
+	return res.StatusCode, out
+}
+
+func (r *rig) claimPairing(request, name string) (int, string) {
+	r.t.Helper()
+	status, out := r.claimWith(request, name, "")
+	return status, out.Credential
 }
 
 func (r *rig) dialPaired(credential string) (*websocket.Conn, int) {
@@ -261,8 +272,83 @@ func TestAnotherAccountCannotSeeApproveOrDisconnectAComputer(t *testing.T) {
 			t.Errorf("%s %s by another account: %s, want %d", c.method, c.path, res.Status, c.want)
 		}
 	}
-	if list := r.machines(); len(list) != 2 {
-		t.Fatalf("owner machines = %d, want 2", len(list))
+	// Only the approved computer: the one still waiting belongs to its pairing,
+	// not to the list (B-23).
+	if list := r.machines(); len(list) != 1 || list[0].ID != machineID {
+		t.Fatalf("owner machines = %+v, want only the approved computer", list)
+	}
+}
+
+func TestNotNowRemovesTheWaitingComputerAndTellsItToStop(t *testing.T) {
+	r := newRig(t)
+	id, request := r.startPairing()
+	status, out := r.claimWith(request, "FINANCE-LAPTOP", "")
+	if status != http.StatusOK || out.Credential == "" {
+		t.Fatalf("claim: status %d", status)
+	}
+
+	if res := r.post("/api/machines/pairings/"+id+"/decline", map[string]any{}); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("decline: %s", res.Status)
+	}
+	var p store.Pairing
+	decodeInto(t, r.get("/api/machines/pairings/"+id), &p)
+	if p.Status != "rejected" {
+		t.Errorf("pairing status after Not now = %q, want rejected", p.Status)
+	}
+	if list := r.machines(); len(list) != 0 {
+		t.Errorf("a declined computer is still listed: %+v", list)
+	}
+	if res := r.get("/api/machines/" + out.MachineID); res.StatusCode != http.StatusNotFound {
+		t.Errorf("a declined computer's page: %s, want 404", res.Status)
+	}
+	if conn, code := r.dialPaired(out.Credential); conn != nil || code != http.StatusForbidden {
+		t.Fatalf("a declined computer dialled: conn %v, status %d; want 403 so it stops", conn != nil, code)
+	}
+	if res := r.post("/api/machines/pairings/"+id+"/approve", map[string]any{}); res.StatusCode != http.StatusConflict {
+		t.Errorf("a declined computer could still be approved: %s", res.Status)
+	}
+}
+
+func TestAComputerWaitingForApprovalIsNotListedAndKeepsWaiting(t *testing.T) {
+	r := newRig(t)
+	_, request := r.startPairing()
+	_, out := r.claimWith(request, "WAITING-PC", "")
+	if list := r.machines(); len(list) != 0 {
+		t.Errorf("an unapproved computer is listed: %+v", list)
+	}
+	if res := r.get("/api/machines/" + out.MachineID); res.StatusCode != http.StatusNotFound {
+		t.Errorf("an unapproved computer's page: %s, want 404", res.Status)
+	}
+	if conn, code := r.dialPaired(out.Credential); conn != nil || code != http.StatusUnauthorized {
+		t.Fatalf("a computer still awaiting approval: status %d, want 401 so it keeps waiting", code)
+	}
+}
+
+func TestAddingAComputerThatIsAlreadyConnectedChangesNothing(t *testing.T) {
+	r := newRig(t)
+	machineID, credential, _ := r.pairComputer("DESKTOP-RIVER")
+
+	id, request := r.startPairing()
+	status, out := r.claimWith(request, "DESKTOP-RIVER", credential)
+	if status != http.StatusOK || !out.AlreadyPaired || out.Credential != "" || out.MachineID != machineID {
+		t.Fatalf("claim on a connected computer: status %d, reply %+v", status, out)
+	}
+	var p store.Pairing
+	decodeInto(t, r.get("/api/machines/pairings/"+id), &p)
+	if p.Status != "approved" || p.MachineID != machineID {
+		t.Errorf("pairing = %+v, want approved for the existing computer", p)
+	}
+	if list := r.machines(); len(list) != 1 || list[0].ID != machineID || !list[0].Online {
+		t.Errorf("machines after adding it again = %+v, want the one computer, still online", list)
+	}
+
+	// Another account presenting the owner's credential is an ordinary new
+	// pairing for that account, never a way to reach the owner's computer.
+	other := r.secondAccount()
+	_, otherRequest := other.startPairing()
+	status, theirs := other.claimWith(otherRequest, "SHARED-PC", credential)
+	if status != http.StatusOK || theirs.AlreadyPaired || theirs.Credential == "" || theirs.MachineID == machineID {
+		t.Errorf("another account's claim with the owner's credential: status %d, reply %+v", status, theirs)
 	}
 }
 

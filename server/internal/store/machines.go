@@ -74,12 +74,17 @@ func (s *Store) Pairing(ctx context.Context, userID, pairingID string) (Pairing,
 	return pairingFrom(row), nil
 }
 
-// ClaimPairing creates the computer and atomically spends its opaque launch
-// request. A second daemon with the same request loses the update race.
-func (s *Store) ClaimPairing(ctx context.Context, tokenHash, credentialHash []byte, name string) (Pairing, string, error) {
+// ClaimPairing atomically spends an opaque launch request. A second daemon with
+// the same request loses the update race.
+//
+// currentHash is the credential the claiming computer already holds, if any.
+// When it belongs to an approved computer of the SAME account, the request
+// resolves to that computer: nothing new is created and no credential is
+// issued, so adding a computer that is already connected cannot duplicate it.
+func (s *Store) ClaimPairing(ctx context.Context, tokenHash, credentialHash, currentHash []byte, name string) (pairing Pairing, machineID string, alreadyPaired bool, err error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return Pairing{}, "", err
+		return Pairing{}, "", false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
@@ -88,22 +93,38 @@ func (s *Store) ClaimPairing(ctx context.Context, tokenHash, credentialHash []by
 	var userID pgtype.UUID
 	if err := tx.QueryRow(ctx, "SELECT user_id FROM machine_pairings WHERE token_hash=$1 AND status='pending' AND expires_at > now() FOR UPDATE", tokenHash).Scan(&userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Pairing{}, "", ErrPairingUnavailable
+			return Pairing{}, "", false, ErrPairingUnavailable
 		}
-		return Pairing{}, "", err
+		return Pairing{}, "", false, err
+	}
+	if len(currentHash) > 0 {
+		existing, err := q.ApprovedMachineForUserCredential(ctx, db.ApprovedMachineForUserCredentialParams{CredentialHash: currentHash, UserID: userID})
+		switch {
+		case err == nil:
+			p, err := q.MarkPairingAlreadyPaired(ctx, db.MarkPairingAlreadyPairedParams{TokenHash: tokenHash, MachineID: existing.ID})
+			if err != nil {
+				return Pairing{}, "", false, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return Pairing{}, "", false, err
+			}
+			return pairingFrom(p), uuidToString(existing.ID), true, nil
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Pairing{}, "", false, err
+		}
 	}
 	m, err := q.CreateMachine(ctx, db.CreateMachineParams{UserID: userID, DisplayName: name, CredentialHash: credentialHash})
 	if err != nil {
-		return Pairing{}, "", err
+		return Pairing{}, "", false, err
 	}
 	p, err := q.ClaimMachinePairing(ctx, db.ClaimMachinePairingParams{TokenHash: tokenHash, MachineID: m.ID})
 	if err != nil {
-		return Pairing{}, "", err
+		return Pairing{}, "", false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Pairing{}, "", err
+		return Pairing{}, "", false, err
 	}
-	return pairingFrom(p), uuidToString(m.ID), nil
+	return pairingFrom(p), uuidToString(m.ID), false, nil
 }
 
 func (s *Store) ApprovePairing(ctx context.Context, userID, pairingID string) (Machine, error) {
@@ -138,6 +159,39 @@ func (s *Store) ApprovePairing(ctx context.Context, userID, pairingID string) (M
 	return machineFrom(m), nil
 }
 
+// DeclinePairing is "Not now". The request can no longer be claimed or
+// approved, and a computer that already claimed it is retired, so its
+// credential is refused from its next dial.
+func (s *Store) DeclinePairing(ctx context.Context, userID, pairingID string) error {
+	u, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	p, err := parseUUID(pairingID)
+	if err != nil {
+		return ErrPairingUnavailable
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	row, err := q.DeclineMachinePairing(ctx, db.DeclineMachinePairingParams{Column1: p, Column2: u})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPairingUnavailable
+	}
+	if err != nil {
+		return err
+	}
+	if row.MachineID.Valid {
+		if err := q.RevokeUnapprovedMachine(ctx, db.RevokeUnapprovedMachineParams{Column1: row.MachineID, Column2: u}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) Machines(ctx context.Context, userID string) ([]Machine, error) {
 	u, err := parseUUID(userID)
 	if err != nil {
@@ -153,6 +207,7 @@ func (s *Store) Machines(ctx context.Context, userID string) ([]Machine, error) 
 	}
 	return out, nil
 }
+
 func (s *Store) Machine(ctx context.Context, userID, id string) (Machine, error) {
 	u, err := parseUUID(userID)
 	if err != nil {
@@ -171,6 +226,7 @@ func (s *Store) Machine(ctx context.Context, userID, id string) (Machine, error)
 	}
 	return machineFrom(row), nil
 }
+
 func (s *Store) RevokeMachine(ctx context.Context, userID, id string) (Machine, error) {
 	u, err := parseUUID(userID)
 	if err != nil {
@@ -203,15 +259,16 @@ func (s *Store) MachineForCredential(ctx context.Context, hash []byte) (Machine,
 	return machineFrom(row), uuidToString(row.UserID), true, nil
 }
 
-// CredentialRevoked reports whether a credential belongs to a computer that was
-// disconnected. An unknown credential, or one still awaiting approval, is not.
-func (s *Store) CredentialRevoked(ctx context.Context, hash []byte) (bool, error) {
-	row, err := s.q.MachineByCredentialAnyState(ctx, hash)
+// CredentialRefused reports whether a credential can never connect again:
+// disconnected, or declined or expired before approval. An unknown credential,
+// or one whose pairing can still be approved, is not refused.
+func (s *Store) CredentialRefused(ctx context.Context, hash []byte) (bool, error) {
+	refused, err := s.q.CredentialRefused(ctx, hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	return row.RevokedAt.Valid, nil
+	return refused, nil
 }

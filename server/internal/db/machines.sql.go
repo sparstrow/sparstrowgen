@@ -68,6 +68,32 @@ func (q *Queries) ApproveMachinePairing(ctx context.Context, arg ApproveMachineP
 	return i, err
 }
 
+const approvedMachineForUserCredential = `-- name: ApprovedMachineForUserCredential :one
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+WHERE credential_hash = $1 AND user_id = $2 AND approved_at IS NOT NULL AND revoked_at IS NULL
+`
+
+type ApprovedMachineForUserCredentialParams struct {
+	CredentialHash []byte      `json:"credential_hash"`
+	UserID         pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) ApprovedMachineForUserCredential(ctx context.Context, arg ApprovedMachineForUserCredentialParams) (Machine, error) {
+	row := q.db.QueryRow(ctx, approvedMachineForUserCredential, arg.CredentialHash, arg.UserID)
+	var i Machine
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DisplayName,
+		&i.CredentialHash,
+		&i.ApprovedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const claimMachinePairing = `-- name: ClaimMachinePairing :one
 UPDATE machine_pairings
 SET status = 'claimed', machine_id = $2, claimed_at = now()
@@ -154,8 +180,57 @@ func (q *Queries) CreateMachinePairing(ctx context.Context, arg CreateMachinePai
 	return i, err
 }
 
+const credentialRefused = `-- name: CredentialRefused :one
+SELECT (m.revoked_at IS NOT NULL OR (m.approved_at IS NULL AND NOT EXISTS (
+    SELECT 1 FROM machine_pairings p
+    WHERE p.machine_id = m.id AND p.status = 'claimed' AND p.expires_at > now()
+)))::boolean AS refused
+FROM machines m
+WHERE m.credential_hash = $1
+`
+
+// A credential that can never connect: its computer was disconnected, or it
+// was never approved and can no longer be, because its pairing was declined
+// or has expired.
+func (q *Queries) CredentialRefused(ctx context.Context, credentialHash []byte) (bool, error) {
+	row := q.db.QueryRow(ctx, credentialRefused, credentialHash)
+	var refused bool
+	err := row.Scan(&refused)
+	return refused, err
+}
+
+const declineMachinePairing = `-- name: DeclineMachinePairing :one
+UPDATE machine_pairings
+SET status = 'rejected', decided_at = now()
+WHERE id = $1::uuid AND user_id = $2::uuid AND status IN ('pending', 'claimed')
+RETURNING id, user_id, token_hash, status, machine_id, created_at, expires_at, claimed_at, decided_at
+`
+
+type DeclineMachinePairingParams struct {
+	Column1 pgtype.UUID `json:"column_1"`
+	Column2 pgtype.UUID `json:"column_2"`
+}
+
+func (q *Queries) DeclineMachinePairing(ctx context.Context, arg DeclineMachinePairingParams) (MachinePairing, error) {
+	row := q.db.QueryRow(ctx, declineMachinePairing, arg.Column1, arg.Column2)
+	var i MachinePairing
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Status,
+		&i.MachineID,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ClaimedAt,
+		&i.DecidedAt,
+	)
+	return i, err
+}
+
 const getMachineForUser = `-- name: GetMachineForUser :one
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL
+SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
+WHERE id = $1::uuid AND user_id = $2::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
 `
 
 type GetMachineForUserParams struct {
@@ -207,10 +282,12 @@ func (q *Queries) GetMachinePairingForUser(ctx context.Context, arg GetMachinePa
 
 const listMachines = `-- name: ListMachines :many
 SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines
-WHERE user_id = $1::uuid AND revoked_at IS NULL
+WHERE user_id = $1::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
 ORDER BY created_at DESC
 `
 
+// Only approved computers. One still waiting for approval belongs to the
+// pairing in progress, not to the account's list.
 func (q *Queries) ListMachines(ctx context.Context, dollar_1 pgtype.UUID) ([]Machine, error) {
 	rows, err := q.db.Query(ctx, listMachines, dollar_1)
 	if err != nil {
@@ -261,22 +338,33 @@ func (q *Queries) MachineByCredential(ctx context.Context, credentialHash []byte
 	return i, err
 }
 
-const machineByCredentialAnyState = `-- name: MachineByCredentialAnyState :one
-SELECT id, user_id, display_name, credential_hash, approved_at, revoked_at, created_at, last_seen_at FROM machines WHERE credential_hash = $1
+const markPairingAlreadyPaired = `-- name: MarkPairingAlreadyPaired :one
+UPDATE machine_pairings
+SET status = 'approved', machine_id = $2, claimed_at = now(), decided_at = now()
+WHERE token_hash = $1 AND status = 'pending' AND expires_at > now()
+RETURNING id, user_id, token_hash, status, machine_id, created_at, expires_at, claimed_at, decided_at
 `
 
-func (q *Queries) MachineByCredentialAnyState(ctx context.Context, credentialHash []byte) (Machine, error) {
-	row := q.db.QueryRow(ctx, machineByCredentialAnyState, credentialHash)
-	var i Machine
+type MarkPairingAlreadyPairedParams struct {
+	TokenHash []byte      `json:"token_hash"`
+	MachineID pgtype.UUID `json:"machine_id"`
+}
+
+// The computer presenting this request is already approved for the same
+// account, so the request resolves to that computer instead of a duplicate.
+func (q *Queries) MarkPairingAlreadyPaired(ctx context.Context, arg MarkPairingAlreadyPairedParams) (MachinePairing, error) {
+	row := q.db.QueryRow(ctx, markPairingAlreadyPaired, arg.TokenHash, arg.MachineID)
+	var i MachinePairing
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.DisplayName,
-		&i.CredentialHash,
-		&i.ApprovedAt,
-		&i.RevokedAt,
+		&i.TokenHash,
+		&i.Status,
+		&i.MachineID,
 		&i.CreatedAt,
-		&i.LastSeenAt,
+		&i.ExpiresAt,
+		&i.ClaimedAt,
+		&i.DecidedAt,
 	)
 	return i, err
 }
@@ -307,6 +395,22 @@ func (q *Queries) RevokeMachine(ctx context.Context, arg RevokeMachineParams) (M
 		&i.LastSeenAt,
 	)
 	return i, err
+}
+
+const revokeUnapprovedMachine = `-- name: RevokeUnapprovedMachine :exec
+UPDATE machines
+SET revoked_at = now()
+WHERE id = $1::uuid AND user_id = $2::uuid AND approved_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeUnapprovedMachineParams struct {
+	Column1 pgtype.UUID `json:"column_1"`
+	Column2 pgtype.UUID `json:"column_2"`
+}
+
+func (q *Queries) RevokeUnapprovedMachine(ctx context.Context, arg RevokeUnapprovedMachineParams) error {
+	_, err := q.db.Exec(ctx, revokeUnapprovedMachine, arg.Column1, arg.Column2)
+	return err
 }
 
 const touchMachine = `-- name: TouchMachine :exec

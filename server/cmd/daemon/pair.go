@@ -17,9 +17,9 @@ import (
 
 const linkScheme = "sparstrowgen"
 
-// pairingWindow matches the server's pairing lifetime. While a credential is
-// this fresh the daemon is probably waiting on a person approving it in the
-// browser, so it checks back quickly instead of backing off.
+// pairingWindow matches the server's pairing lifetime. While a pending
+// credential is this fresh the daemon is probably waiting on a person approving
+// it in the browser, so it checks back quickly instead of backing off.
 const pairingWindow = 10 * time.Minute
 
 func isPairingLink(arg string) bool {
@@ -47,21 +47,27 @@ func pairingRequest(raw string) (string, error) {
 	return request, nil
 }
 
-// claim spends a pairing request and saves the credential it earns. The
-// computer still cannot connect until the person approves it in the browser.
-func claim(ctx context.Context, api, request, name string) error {
-	body, err := json.Marshal(map[string]string{"request": request, "name": name})
+// claim spends a pairing request.
+//
+// It sends the credential this computer already holds, so the server can tell
+// when the computer is already connected to the same account; then nothing
+// changes and alreadyPaired is true. Otherwise the new credential is saved as
+// pending, and only becomes this computer's credential once it is approved.
+func claim(ctx context.Context, api, request, name string) (alreadyPaired bool, err error) {
+	body, err := json.Marshal(map[string]string{
+		"request": request, "name": name, "current": readCredential(credentialName),
+	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, api+"/daemon/pair", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return false, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("could not reach sparstrowgen: %w", err)
+		return false, fmt.Errorf("could not reach sparstrowgen: %w", err)
 	}
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 8192))
@@ -70,25 +76,32 @@ func claim(ctx context.Context, api, request, name string) error {
 			Error string `json:"error"`
 		}
 		if json.Unmarshal(raw, &refused) == nil && refused.Error != "" {
-			return fmt.Errorf("pairing was refused: %s", refused.Error)
+			return false, fmt.Errorf("pairing was refused: %s", refused.Error)
 		}
-		return fmt.Errorf("pairing was refused: %s", res.Status)
+		return false, fmt.Errorf("pairing was refused: %s", res.Status)
 	}
 	var reply struct {
-		Credential string `json:"credential"`
+		Credential    string `json:"credential"`
+		AlreadyPaired bool   `json:"alreadyPaired"`
 	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Credential == "" {
-		return errors.New("pairing succeeded but sparstrowgen sent no credential")
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		return false, errors.New("pairing succeeded but sparstrowgen sent an unreadable reply")
 	}
-	if err := saveCredential(reply.Credential); err != nil {
-		return fmt.Errorf("save this computer's credential: %w", err)
+	if reply.AlreadyPaired {
+		return true, nil
 	}
-	return nil
+	if reply.Credential == "" {
+		return false, errors.New("pairing succeeded but sparstrowgen sent no credential")
+	}
+	if err := writeCredential(pendingName, reply.Credential); err != nil {
+		return false, fmt.Errorf("save this computer's credential: %w", err)
+	}
+	return false, nil
 }
 
-// recentlyPaired is true while a fresh credential may still be awaiting approval.
+// recentlyPaired is true while a pending credential may still be awaiting approval.
 func recentlyPaired() bool {
-	p, err := credentialFile()
+	p, err := credentialPath(pendingName)
 	if err != nil {
 		return false
 	}
@@ -113,9 +126,14 @@ func pairCommand(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := claim(ctx, serverAPI(), *request, computerName()); err != nil {
+	already, err := claim(ctx, serverAPI(), *request, computerName())
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
+	}
+	if already {
+		fmt.Println("this computer is already connected to that account; nothing changed")
+		return 0
 	}
 	fmt.Println("claimed; approve this computer in the browser, then start the daemon")
 	return 0
