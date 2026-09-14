@@ -509,6 +509,49 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-25 — A disconnected computer could delete a credential a new pairing had just saved
+
+**Found:** 2026-09-13, reading the owner's daemon log after his first pairing session
+**Status:** fixed 2026-09-13
+
+On a 403 the daemon deleted the credential file, whatever it now held. Opening a new pairing link
+writes that file while the old copy may be mid-dial, so the old copy's 403 could delete the credential
+the person had just earned, and the computer would look unpaired. In his log the two landed in the
+same second (21:53:32) and happened to fall in the safe order. It now deletes only the credential it
+dialled with.
+
+## B-24 — Adding a computer that was already connected swapped out its working credential
+
+**Found:** 2026-09-13, same session
+**Status:** fixed 2026-09-13
+
+**Add computer** on a connected computer made a second machine record and overwrote the working
+credential on disk with an unapproved one, so the computer went offline, and declining left it
+unpaired. The daemon now sends the credential it holds with the claim: a computer already approved
+for the same account resolves to that computer and nothing changes. A new credential otherwise waits
+in a separate pending file and replaces the working one only once approved; declined or expired, it
+is dropped and the computer goes back to its earlier pairing.
+
+## B-23 — A computer nobody approved stayed in the Machines list with no way to finish or remove it
+
+**Found:** 2026-09-13, owner: "the machine page showed the computer in the list but was showing
+disconnected or not approved status … there was no option for me to approve or delete"
+**Status:** fixed 2026-09-13
+
+Claiming a pairing created the machine record immediately, and the list showed every record not
+disconnected, approved or not. Its page said "Approve this computer to finish pairing" with no way to
+do so, since approving only exists in the pairing panel. The list and profile now show approved
+computers only, and a computer whose pairing was declined or has expired gets 403 and stops.
+
+## B-22 — "Not now" on the approval step did nothing
+
+**Found:** 2026-09-13, owner: "When I clicked not now nothing happened, it looked like stale page"
+**Status:** fixed 2026-09-13
+
+"Not now" was a link to `/machines` from `/machines`, so nothing changed: the approval panel stayed,
+the request stayed approvable, and the computer kept waiting. It now declines the request on the
+server, which retires the waiting computer, and closes the panel.
+
 ## B-21 — Production could never offer the Windows download
 
 **Found:** 2026-09-13, owner: "the app can't connect to the machine"

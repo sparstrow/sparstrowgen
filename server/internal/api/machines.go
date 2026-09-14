@@ -114,6 +114,9 @@ func (a *API) daemonPair(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Request string `json:"request"`
 		Name    string `json:"name"`
+		// Current is the credential this computer already holds, if any. An
+		// older daemon sends none, which is treated as a first pairing.
+		Current string `json:"current"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
 		a.fail(w, errors.New("that pairing request could not be read"), 400)
@@ -132,7 +135,11 @@ func (a *API) daemonPair(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, 500)
 		return
 	}
-	_, machineID, err := a.store.ClaimPairing(r.Context(), auth.HashToken(body.Request), credentialHash, body.Name)
+	var currentHash []byte
+	if body.Current != "" {
+		currentHash = auth.HashToken(body.Current)
+	}
+	_, machineID, alreadyPaired, err := a.store.ClaimPairing(r.Context(), auth.HashToken(body.Request), credentialHash, currentHash, body.Name)
 	if errors.Is(err, store.ErrPairingUnavailable) {
 		a.fail(w, errors.New("that pairing request has expired or was already used"), 409)
 		return
@@ -141,5 +148,24 @@ func (a *API) daemonPair(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, 500)
 		return
 	}
+	if alreadyPaired {
+		writeJSON(w, map[string]any{"machineId": machineID, "alreadyPaired": true})
+		return
+	}
 	writeJSON(w, map[string]string{"machineId": machineID, "credential": credential})
+}
+
+func (a *API) declinePairing(w http.ResponseWriter, r *http.Request) {
+	u, _ := userFrom(r.Context())
+	err := a.store.DeclinePairing(r.Context(), u.ID, chi.URLParam(r, "id"))
+	if errors.Is(err, store.ErrPairingUnavailable) {
+		a.fail(w, errors.New("that pairing request was already approved, declined or has expired"), 409)
+		return
+	}
+	if err != nil {
+		a.fail(w, err, 500)
+		return
+	}
+	a.hub.BroadcastTo(u.ID, protocol.ClientEvent{Type: protocol.EventMachines})
+	w.WriteHeader(http.StatusNoContent)
 }

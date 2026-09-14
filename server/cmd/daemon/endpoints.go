@@ -70,16 +70,33 @@ func dataDir() (string, error) {
 	return filepath.Join(base, name), nil
 }
 
-func credentialFile() (string, error) {
+const (
+	credentialName = "machine-credential"
+	// pendingName holds a credential that is waiting for approval. The computer
+	// keeps its working credential until the new one is approved, so declining
+	// a new pairing never unpairs a computer that was already connected.
+	pendingName = "machine-credential.pending"
+)
+
+type credentialKind int
+
+const (
+	noCredential credentialKind = iota
+	pendingCredential
+	pairedCredential
+	sharedToken
+)
+
+func credentialPath(name string) (string, error) {
 	dir, err := dataDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "machine-credential"), nil
+	return filepath.Join(dir, name), nil
 }
 
-func readCredential() string {
-	p, err := credentialFile()
+func readCredential(name string) string {
+	p, err := credentialPath(name)
 	if err != nil {
 		return ""
 	}
@@ -90,8 +107,8 @@ func readCredential() string {
 	return strings.TrimSpace(string(b))
 }
 
-func saveCredential(credential string) error {
-	p, err := credentialFile()
+func writeCredential(name, credential string) error {
+	p, err := credentialPath(name)
 	if err != nil {
 		return err
 	}
@@ -101,8 +118,32 @@ func saveCredential(credential string) error {
 	return os.WriteFile(p, []byte(credential+"\n"), 0o600)
 }
 
-func forgetCredential() error {
-	p, err := credentialFile()
+// promotePending makes an approved pending credential this computer's
+// credential, replacing any earlier one. It does nothing if the pending file
+// has since been replaced by a newer pairing.
+func promotePending(credential string) error {
+	if readCredential(pendingName) != credential {
+		return nil
+	}
+	from, err := credentialPath(pendingName)
+	if err != nil {
+		return err
+	}
+	to, err := credentialPath(credentialName)
+	if err != nil {
+		return err
+	}
+	return os.Rename(from, to)
+}
+
+// forgetCredential removes a saved credential only if it is still the one that
+// was refused. A new pairing can land between an old copy's dial and its 403,
+// and deleting that would unpair the computer the person just paired.
+func forgetCredential(name, refused string) error {
+	if readCredential(name) != refused {
+		return nil
+	}
+	p, err := credentialPath(name)
 	if err != nil {
 		return err
 	}
@@ -112,14 +153,21 @@ func forgetCredential() error {
 	return nil
 }
 
-// machineToken is what the daemon dials with. A paired credential always wins.
-// Only a development build falls back to the shared DAEMON_TOKEN route.
-func machineToken() (token string, paired bool) {
-	if c := readCredential(); c != "" {
-		return c, true
+// machineToken is what the daemon dials with next. A pairing waiting for
+// approval goes first; then the computer's approved credential. Only a
+// development build falls back to the shared DAEMON_TOKEN route.
+func machineToken() (string, credentialKind) {
+	if c := readCredential(pendingName); c != "" {
+		return c, pendingCredential
+	}
+	if c := readCredential(credentialName); c != "" {
+		return c, pairedCredential
 	}
 	if released() {
-		return "", false
+		return "", noCredential
 	}
-	return os.Getenv("DAEMON_TOKEN"), false
+	if t := os.Getenv("DAEMON_TOKEN"); t != "" {
+		return t, sharedToken
+	}
+	return "", noCredential
 }

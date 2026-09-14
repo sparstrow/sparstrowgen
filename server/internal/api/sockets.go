@@ -31,10 +31,9 @@ var errMachineWentAway = errors.New("your machine disconnected before this turn 
 // for exists. Nothing it did could be shown to anybody.
 var errNoOwnerAccount = errors.New("the owner account does not exist yet — create it, then restart the daemon")
 
-// errMachineDisconnected tells a paired computer its credential was revoked, so
-// it stops retrying instead of dialling forever with something that can never
-// work again.
-var errMachineDisconnected = errors.New("this computer was disconnected from its account — pair it again to reconnect")
+// errMachineDisconnected tells a computer its credential can never work again —
+// disconnected, or declined or expired before approval — so it stops retrying.
+var errMachineDisconnected = errors.New("this computer was disconnected, or its pairing was declined or expired — pair it again to connect")
 
 func defaultFolder() string {
 	if wd, err := os.Getwd(); err == nil {
@@ -81,15 +80,15 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !legacy && !pairedOK {
-		// 403 and 401 mean different things to the daemon. A disconnected
-		// computer must stop and forget its credential; one still waiting for
+		// 403 and 401 mean different things to the daemon. A credential that
+		// can never work again must be forgotten; one still waiting for
 		// approval must keep trying. Both are refused either way.
-		revoked, err := a.store.CredentialRevoked(r.Context(), auth.HashToken(presented))
+		refused, err := a.store.CredentialRefused(r.Context(), auth.HashToken(presented))
 		if err != nil {
 			a.fail(w, errors.New("could not verify this machine"), http.StatusServiceUnavailable)
 			return
 		}
-		if revoked {
+		if refused {
 			a.fail(w, errMachineDisconnected, http.StatusForbidden)
 			return
 		}

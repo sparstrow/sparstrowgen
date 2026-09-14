@@ -167,6 +167,7 @@ func (a *API) Routes() http.Handler {
 		r.Post("/api/machines/pairings", a.createPairing)
 		r.Get("/api/machines/pairings/{id}", a.getPairing)
 		r.Post("/api/machines/pairings/{id}/approve", a.approvePairing)
+		r.Post("/api/machines/pairings/{id}/decline", a.declinePairing)
 		r.Get("/api/machines/{id}", a.getMachine)
 		r.Delete("/api/machines/{id}", a.revokeMachine)
 		r.Get("/api/conversations", a.listConversations)

@@ -213,6 +213,17 @@ export const api = {
     return post(`${BASE}/api/machines/pairings/${id}/approve`, {});
   },
 
+  /** "Not now": the request can no longer be approved, and a computer that
+   *  already claimed it is told to stop. */
+  async declinePairing(id: string): Promise<void> {
+    const res = await request(`${BASE}/api/machines/pairings/${id}/decline`, { method: "POST" });
+    if (res.status === 401) throw new NotSignedIn();
+    if (!res.ok && res.status !== 409) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+    }
+  },
+
   async disconnectMachine(id: string): Promise<void> {
     const res = await request(`${BASE}/api/machines/${id}`, { method: "DELETE" });
     if (res.status === 401) throw new NotSignedIn();

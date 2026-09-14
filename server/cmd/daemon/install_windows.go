@@ -96,12 +96,8 @@ func activate(link string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := claim(ctx, serverAPI(), request, computerName()); err != nil {
-		return err
-	}
-	// A copy already running holds the old credential, or none. Restart it so
-	// it dials with the one just earned.
-	if err := stopRunning(); err != nil {
+	already, err := claim(ctx, serverAPI(), request, computerName())
+	if err != nil {
 		return err
 	}
 	self, err := os.Executable()
@@ -109,6 +105,16 @@ func activate(link string) error {
 		return err
 	}
 	if err := registerStartup(self); err != nil {
+		return err
+	}
+	if already {
+		// Nothing changed, so nothing running is interrupted. A second
+		// background copy exits by itself if one is already running.
+		return startBackground(self)
+	}
+	// A copy already running is dialling with its old credential, or none.
+	// Restart it so it waits on the pending one.
+	if err := stopRunning(); err != nil {
 		return err
 	}
 	return startBackground(self)

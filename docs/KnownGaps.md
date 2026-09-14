@@ -220,8 +220,10 @@ warns before running it.
 **Kind:** caveat
 **Raised:** 2026-09-13, building the self-installing executable
 
-Installing over a running copy, or opening a new pairing link, asks the running background daemon to
-exit so the new copy or credential takes over (`stopRunning` in `server/cmd/daemon/install_windows.go`).
+Installing over a running copy, or pairing a computer again with a new credential, asks the running
+background daemon to exit so the new copy or credential takes over (`stopRunning` in
+`server/cmd/daemon/install_windows.go`). Adding a computer that is already connected to the same
+account changes nothing and restarts nothing.
 Any agent turn in flight on that computer ends, and the conversation records that the computer
 disconnected; resending it works. Left alone because both are deliberate actions by the person at
 that computer, and waiting for idle is exactly what US3's updater must build properly rather than
@@ -229,6 +231,23 @@ something to half-build here.
 
 - **If wrong:** a long turn is lost when someone re-pairs mid-answer.
 - **Clears when:** US3's idle-aware activation is used for reinstall and re-pairing too.
+
+## G-34 — An approved computer's connection closed abnormally, and nothing explains why
+
+**Kind:** caveat
+**Raised:** 2026-09-13, reading the owner's daemon log after his first pairing session
+
+From `%LOCALAPPDATA%\sparstrowgen\logs\daemon.log` on his PC: connected at 21:49:26 and ran a turn;
+at 21:50:44 the socket closed with `1006 (abnormal closure)`; the next dials at 21:50:45 and 21:50:47
+were refused as not approved; at 21:50:48 that copy stopped for a new pairing link. PR #11 merged at
+21:51:40, so this was not the deploy. The refusals fit the new pairing having already overwritten the
+credential on disk (B-24), though the three seconds before that copy stopped do not. Nothing in the
+daemon closes its socket without logging, which points at the server or the proxy for the 1006.
+
+- **If wrong:** an approved computer occasionally drops for a moment. It reconnects by itself, so the
+  cost is a turn ended mid-answer (B-8 behaviour).
+- **Clears when:** the production server log for 21:50:40–21:50:50 is read, or the drop is reproduced
+  and explained.
 
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 

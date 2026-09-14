@@ -133,7 +133,7 @@ func serve(ctx context.Context, log *slog.Logger) bool {
 	for ctx.Err() == nil {
 		// Read on every attempt: pairing writes a new credential while this
 		// copy may already be waiting.
-		token, paired := machineToken()
+		token, kind := machineToken()
 		if token == "" {
 			if released() {
 				log.Info("this computer is not paired yet; pair it from Machines in sparstrowgen")
@@ -142,11 +142,32 @@ func serve(ctx context.Context, log *slog.Logger) bool {
 			}
 			return false
 		}
+		d.onConnect = nil
+		if kind == pendingCredential {
+			d.onConnect = func() {
+				if err := promotePending(token); err != nil {
+					log.Error("could not keep the newly approved credential", "err", err)
+					return
+				}
+				log.Info("this computer's pairing was approved")
+			}
+		}
 		err := d.run(ctx, url, token)
 		if errors.Is(err, errDisconnected) {
+			if kind == pendingCredential {
+				// Declined or expired before approval. Any earlier pairing is
+				// untouched, so go straight back to it.
+				log.Warn("this pairing was declined or has expired; keeping any earlier pairing")
+				if err := forgetCredential(pendingName, token); err != nil {
+					log.Error("could not remove the refused pairing", "err", err)
+					return true
+				}
+				attempt = 0
+				continue
+			}
 			log.Warn("this computer was disconnected from its account; forgetting its credential")
-			if paired {
-				if err := forgetCredential(); err != nil {
+			if kind == pairedCredential {
+				if err := forgetCredential(credentialName, token); err != nil {
 					log.Error("could not remove the revoked credential", "err", err)
 				}
 			}
@@ -164,7 +185,7 @@ func serve(ctx context.Context, log *slog.Logger) bool {
 		}
 		delay := backoff(attempt)
 		attempt++
-		if errors.Is(err, errAwaitingApproval) && paired && recentlyPaired() {
+		if errors.Is(err, errAwaitingApproval) && kind == pendingCredential && recentlyPaired() {
 			delay = approvalPoll
 		}
 		log.Info("reconnecting", "in", delay)
@@ -249,6 +270,10 @@ type daemon struct {
 	// connectedOnce records that this attempt got as far as a working socket,
 	// which is what makes resetting the retry counter meaningful.
 	connectedOnce bool
+
+	// onConnect runs once a dial succeeds. A pending credential becomes this
+	// computer's credential only here, when the server has accepted it.
+	onConnect func()
 }
 
 func (d *daemon) run(ctx context.Context, url, token string) error {
@@ -278,6 +303,9 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 	d.mu.Unlock()
 	d.connectedOnce = true
 	d.log.Info("connected", "server", url)
+	if d.onConnect != nil {
+		d.onConnect()
+	}
 
 	// Nothing can be delivered once this socket is gone, and the server gives up
 	// on turns it can no longer hear about (docs/Bugs.md B-8). A CLI still
