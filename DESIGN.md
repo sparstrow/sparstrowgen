@@ -143,7 +143,7 @@ the shadcn registry before being hand-built.
 | Inline persistent machine attention state | Expected | Where Chat needs the machine | Must contain a next action |
 | Disconnect confirmation | Expected | US2 computer action | Names the effect on active work and reconnection |
 | Generic dashboard | Not building | — | Conversation remains the product's centre |
-| Generic Settings page | Not building in Phase 1 | — | Only approved setup and update jobs are designed |
+| Account settings | Expected | Persistent product sidebar | Password security only; it is not a generic preferences area |
 | Command palette | Not building | — | No proven navigation volume or owner request |
 | Appearance preferences | Not yet | — | Separate draft feature after the Phase 1 gate |
 
