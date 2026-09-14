@@ -201,7 +201,8 @@ two-second intervals until approval, connected nine seconds after the claim, rep
 and agy as available, and ran one real Chat turn (claude, 4 s). One copy ran, with no visible window.
 
 **Not verified.** Still connected after signing out of Windows and back in; installing over a running
-copy; the journey on a Windows account that has never run sparstrowgen; the download from the
+copy (the first real attempt, 0.1.1 over a connected 0.1.0, failed as B-26 — fixed in 0.1.2, not yet
+re-run on his PC); the journey on a Windows account that has never run sparstrowgen; the download from the
 published release rather than a local build. The executable is unsigned, so Windows SmartScreen
 warns before running it.
 

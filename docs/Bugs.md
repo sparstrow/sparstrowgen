@@ -509,6 +509,22 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-26 — Installing over a connected computer failed: the running copy never stopped
+
+**Found:** 2026-09-13, by the owner, running the 0.1.1 installer over his connected 0.1.0
+**Status:** fixed 2026-09-13 (0.1.2)
+
+**Repro:** With the computer connected, run `sparstrowgen-setup.exe` again.
+**Expected / Actual:** the running copy exits and the new one takes over / after 15 seconds an error
+box said "the running sparstrowgen did not stop in time", and the old copy kept running.
+
+The stop request cancelled the daemon's context, but a connected daemon waits in a websocket read
+that does not watch the context, so it only noticed between connection attempts. The first install
+worked because nothing was connected yet. The socket is now closed when the context ends.
+`TestAConnectedComputerStopsWhenAsked` connects to a silent server and requires `run` to return
+once cancelled. A copy already running 0.1.0 or 0.1.1 still has the old code, so upgrading from
+those needs it ended once by hand (Task Manager → sparstrowgen → End task).
+
 ## B-25 — A disconnected computer could delete a credential a new pairing had just saved
 
 **Found:** 2026-09-13, reading the owner's daemon log after his first pairing session
