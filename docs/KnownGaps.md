@@ -177,11 +177,11 @@ wrong rather than the outcome.
   packaged), or `gone` reads `/proc/<pid>/stat` and treats state `Z` as gone. The second is
   Linux-only and would need a different answer on macOS, which is why it was not done now.
 
-## G-32 — The Windows installer is unsigned and its install step is not yet proved
+## G-32 — The Windows installer is unsigned and not yet proved on a clean computer
 
 **Kind:** unproved
 **Raised:** 2026-09-13, US2 implementation · **Revised:** 2026-09-13, when the installer became one
-self-installing executable (D-033)
+self-installing executable (D-033), and again after the owner's first real install
 
 **Verified.** `scripts/package-windows.ps1` builds `sparstrowgen-setup.exe` for one server. API tests
 cover the pairing journey against a real database: claim once, refused before approval (401),
@@ -193,18 +193,25 @@ executable itself was run on the development PC without installing: background m
 credential logged "not paired yet" and exited without a window, and a made-up pairing link was
 refused by production, saved nothing, and showed an error box.
 
-**Not verified.** The install step — copying into `%LOCALAPPDATA%\Programs\sparstrowgen`, the
-`sparstrowgen://` and start-at-sign-in registry entries, and replacing a running copy — has not run
-on any computer, and neither has the browser → link → approval → Chat journey through an installed
-copy. The executable is unsigned, so Windows SmartScreen warns before running it.
+**Proved on the owner's PC, 2026-09-13,** with a locally built production executable (SHA-256
+`3a8441d4…8922`) against `api.sparstrow.com`: the installer copied itself into
+`%LOCALAPPDATA%\Programs\sparstrowgen` and registered `sparstrowgen://` and start at sign-in; **Add
+computer** in Chrome opened the link, which claimed the request; the daemon was refused four times at
+two-second intervals until approval, connected nine seconds after the claim, reported claude, codex
+and agy as available, and ran one real Chat turn (claude, 4 s). One copy ran, with no visible window.
+
+**Not verified.** Still connected after signing out of Windows and back in; installing over a running
+copy; the journey on a Windows account that has never run sparstrowgen; the download from the
+published release rather than a local build. The executable is unsigned, so Windows SmartScreen
+warns before running it.
 
 - **If wrong:** a first-time user downloads the installer and still cannot pair, with the browser
   showing "has not answered yet".
 - **Clears when:** all of the following pass and the proof is recorded here:
-  1. The owner installs from the published release on his PC, pairs from Machines, and one real Chat
-     turn runs through the paired computer; it is still connected after signing out of Windows and
-     back in.
-  2. The same journey passes on a clean Windows user account or machine.
+  1. After signing out of Windows and back in, the owner's paired computer is online without anyone
+     starting anything.
+  2. On a Windows account that has never run sparstrowgen, the published download installs, pairs
+     from Machines, and runs one Chat turn.
   3. A Windows code-signing identity signs the executable in the release step, and the published
      signature verifies.
 
