@@ -73,3 +73,58 @@ pairs again)
 it was disconnected and stopped, `machine-credential` is gone from `%LOCALAPPDATA%\sparstrowgen`,
 and only a new Add computer plus approval brings it back.
 **Status:** open
+
+## U-6 — The owner confirms Settings → Updates reads and behaves as he wants
+
+**From:** US3 (#15), 2026-09-13 · **Who can run it:** owner
+**How:** He chose the design by pointing at Multica's Updates page and approved building the rest
+without confirming it in the app first. Open Settings → Updates, try Check now and the automatic
+switch, and say what to change. Passing: no changes, or his changes recorded as feedback.
+**Status:** open
+
+## U-7 — An installed computer updates itself from a published release and stays connected
+
+**From:** US3 (#15), D-034, 2026-09-13 · **Who can run it:** agent on the owner's PC (it needs a
+published release, and the installed copy)
+**How:** With 0.2.0 installed and connected, publish a higher release through
+`docs/runbooks/daemon-release.md`. Within the hour, or at once with Check now, the log shows the
+check, `handing over to the updater`, the updater's `updated`, and a `connected` line from the new
+version; Machines shows it Online with the same pairing, and Settings → Updates shows the new version.
+**Status:** open
+
+## U-8 — An update that cannot reconnect is put back on a real computer
+
+**From:** US3 (#15), D-034, 2026-09-13 · **Who can run it:** agent — needs a release channel that is
+not the one every installed computer follows (a staging channel, WORKFLOW.md phase 2) or a test
+build pointed at a private manifest
+**How:** Publish, to that channel only, a signed build that cannot reach the server. Passing: after
+two minutes the log shows the updater putting the old version back, the old version connects, and
+Settings → Updates shows "did not reconnect within 2 minutes, so v… was put back and is running".
+The runUpdate tests prove the sequence with fake processes; this proves it with real ones.
+**Status:** open
+
+## U-9 — An update waits while a real agent turn runs, and installs when it ends
+
+**From:** US3 (#15), 2026-09-13 · **Who can run it:** owner (it needs his signed-in Chat)
+**How:** Start a long Chat turn, then press Update now in Settings → Updates while it runs. Passing:
+it says "It installs after the agent task running on this computer finishes", the turn completes
+normally, and only then does the computer install and reconnect.
+**Status:** open
+
+## U-10 — Chat on a too-old computer says to update it instead of failing
+
+**From:** US3 (#15), 2026-09-13 · **Who can run it:** agent — needs a deployment where
+`MinDaemonProtocol` can be raised without stranding real computers (staging)
+**How:** Raise `MinDaemonProtocol` above a connected computer's protocol. Passing: Chat's composer
+says the computer is too old and to update it in Settings → Updates, sending is disabled, and
+Settings → Updates marks it too old with Download update. `TestATooOldComputerIsToldToUpdateAndSentNoWork`
+proves the server side; the surface has not been seen in this state.
+**Status:** open
+
+## U-11 — Settings → Updates shows its error card when the computers cannot be loaded
+
+**From:** US3 (#15), G-36, 2026-09-13 · **Who can run it:** agent
+**How:** With the API stopped, open Settings → Updates. Passing: within a few seconds it says
+"Updates could not be loaded" and that nothing on the computers has changed, and Try again recovers
+once the API is back.
+**Status:** open — tried 2026-09-13; the page stayed on its loading placeholders instead (G-36)

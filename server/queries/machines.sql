@@ -84,6 +84,16 @@ SET revoked_at = now()
 WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL
 RETURNING *;
 
+-- name: SetMachineAutomaticUpdates :one
+UPDATE machines
+SET automatic_updates = $3
+WHERE id = $1::uuid AND user_id = $2::uuid AND approved_at IS NOT NULL AND revoked_at IS NULL
+RETURNING *;
+
+-- name: RecordMachineVersion :exec
+UPDATE machines SET daemon_version = $2
+WHERE id = $1 AND revoked_at IS NULL;
+
 -- name: TouchMachine :exec
 UPDATE machines SET last_seen_at = now()
 WHERE id = $1 AND revoked_at IS NULL;

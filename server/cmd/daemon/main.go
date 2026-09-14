@@ -40,6 +40,9 @@ func main() {
 		os.Exit(pairCommand(args[1:]))
 	case len(args) > 0 && args[0] == "run":
 		runBackground()
+	case len(args) > 0 && args[0] == "apply-update":
+		// The updater process, started by a copy handing over (update.go).
+		os.Exit(applyUpdateCommand(args[1:]))
 	case len(args) == 0 && released():
 		// Double-clicking sparstrowgen-setup.exe.
 		err := install()
@@ -132,7 +135,14 @@ func serve(ctx context.Context, log *slog.Logger) bool {
 	// default logger rather than by threading one through three backends.
 	slog.SetDefault(log)
 	url := serverWS()
+	// Handing over to an update ends this copy the same way a stop request does.
+	ctx, handOver := context.WithCancel(ctx)
+	defer handOver()
 	d := &daemon{log: log, backends: agent.Backends(), turns: newRunningTurns()}
+	d.updates = newUpdater(log, d.turns, d.send, handOver)
+	if d.updates != nil {
+		go d.updates.loop(ctx, d.isConnected)
+	}
 
 	// Bounded exponential backoff with full jitter. The attempt counter resets
 	// only after a connection has actually been established, not after a dial
@@ -287,6 +297,9 @@ type daemon struct {
 	// detect reports the installed providers; nil means agent.Detect. Tests
 	// replace it so a connection never runs the real CLIs.
 	detect func(context.Context) []protocol.Provider
+
+	// updates is nil when this copy cannot update itself (update.go).
+	updates *updater
 }
 
 func (d *daemon) run(ctx context.Context, url, token string) error {
@@ -356,10 +369,22 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 	for _, p := range providers {
 		d.log.Info("provider", "id", p.ID, "availability", p.Availability, "models", len(p.Models))
 	}
+	// Cleared on the way out, so nothing reads a closed socket as connected.
+	defer func() {
+		d.mu.Lock()
+		if d.conn == conn {
+			d.conn = nil
+		}
+		d.mu.Unlock()
+	}()
 	if err := d.send(protocol.DaemonMessage{
 		Type: protocol.DaemonHello, Machine: hostname(), Providers: providers,
+		Version: version, Protocol: protocol.DaemonProtocol, SelfUpdates: d.updates != nil,
 	}); err != nil {
 		return err
+	}
+	if d.updates != nil {
+		d.updates.connected()
 	}
 
 	for {
@@ -391,6 +416,13 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 			// take a moment, and a turn already streaming must not stall behind
 			// somebody browsing for a folder.
 			go d.listDir(msg)
+		case msg.Type == protocol.ServerCheckUpdate || msg.Type == protocol.ServerApplyUpdate:
+			// Off the read loop: a check can go on to download an installer.
+			go d.answerUpdate(ctx, msg)
+		case msg.Type == protocol.ServerUpdatePreference && msg.Automatic != nil:
+			if d.updates != nil {
+				d.updates.setAutomatic(*msg.Automatic)
+			}
 		}
 	}
 }
@@ -440,6 +472,15 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if !d.turns.begin(t.TurnID, cancel) {
+		if d.turns.closedForUpdate() {
+			// Arrived in the moment between the last idle check and handing over.
+			log.Info("turn refused: this copy is installing an update")
+			_ = d.send(protocol.DaemonMessage{
+				Type: protocol.DaemonFailed, TurnID: t.TurnID,
+				Error: "this computer is installing a sparstrowgen update — send the message again in a moment",
+			})
+			return
+		}
 		// The stop overtook the start. Nothing ran, so there is nothing to kill
 		// and no text to keep — but the turn still has to be closed out, or the
 		// server waits on it forever.

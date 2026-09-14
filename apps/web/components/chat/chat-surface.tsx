@@ -99,9 +99,14 @@ export function ChatSurface() {
 
   const [pickingFolder, setPickingFolder] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
+  // The connected computer is too old to be sent work (spec US3).
+  const [daemonTooOld, setDaemonTooOld] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const onDaemon = useCallback((online: boolean) => setDaemonOnline(online), []);
+  const onDaemon = useCallback((online: boolean, tooOld = false) => {
+    setDaemonOnline(online);
+    setDaemonTooOld(online && tooOld);
+  }, []);
   useRealtime(onDaemon);
 
   const { data: providers = [] } = useProviders();
@@ -174,16 +179,22 @@ export function ChatSurface() {
   const usableProviders = useMemo(
     () =>
       providers.map((p) =>
-        daemonOnline
-          ? p
-          : {
+        !daemonOnline
+          ? {
               ...p,
               availability: "waitable" as const,
               unavailableReason: "Machine unreachable",
               headroom: null,
-            },
+            }
+          : daemonTooOld
+            ? {
+                ...p,
+                availability: "blocked" as const,
+                unavailableReason: "Computer needs an update",
+              }
+            : p,
       ),
-    [providers, daemonOnline],
+    [providers, daemonOnline, daemonTooOld],
   );
 
   // -------------------------------------------------------------------------
@@ -435,11 +446,13 @@ export function ChatSurface() {
                 activeProvider={activeProvider}
                 activeModel={activeModel}
                 pending={pending}
-                disabled={!daemonOnline || inFlight !== null}
+                disabled={!daemonOnline || daemonTooOld || inFlight !== null}
                 disabledReason={
                   !daemonOnline
                     ? "Your machine is unreachable, so nothing new can be sent. Everything already said stays readable."
-                    : undefined
+                    : daemonTooOld
+                      ? "Your computer's sparstrowgen is too old for this app, so nothing new can be sent. Update it in Settings → Updates. Everything already said stays readable."
+                      : undefined
                 }
                 value={draft}
                 onChange={(v) => selectedId && setDraft(selectedId, v)}

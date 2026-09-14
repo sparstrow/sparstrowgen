@@ -170,6 +170,9 @@ func (a *API) Routes() http.Handler {
 		r.Post("/api/machines/pairings/{id}/decline", a.declinePairing)
 		r.Get("/api/machines/{id}", a.getMachine)
 		r.Delete("/api/machines/{id}", a.revokeMachine)
+		r.Post("/api/machines/{id}/automatic-updates", a.setAutomaticUpdates)
+		r.Post("/api/machines/{id}/updates/check", a.checkForUpdates)
+		r.Post("/api/machines/{id}/updates/apply", a.applyUpdate)
 		r.Get("/api/conversations", a.listConversations)
 		r.Post("/api/conversations", a.createConversation)
 		r.Get("/api/conversations/{id}", a.getConversation)
@@ -413,6 +416,12 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	// help, and must not be used.
 	if !a.hub.DaemonOnline(user.ID) {
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
+		return
+	}
+	// Refused before anything is written: a turn a too-old computer cannot run
+	// would only fail, and the person needs to be told to update instead.
+	if a.hub.DaemonTooOld(user.ID) {
+		a.fail(w, errMachineTooOld, http.StatusConflict)
 		return
 	}
 

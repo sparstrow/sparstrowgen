@@ -340,7 +340,7 @@ export function useStopTurn() {
  *  arrives every few characters, and refetching a whole transcript on each one
  *  would be absurd. Conversation-level changes invalidate, because they are
  *  rare and the server's version is authoritative. */
-export function useRealtime(onDaemon: (online: boolean) => void) {
+export function useRealtime(onDaemon: (online: boolean, tooOld?: boolean) => void) {
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -359,7 +359,7 @@ export function useRealtime(onDaemon: (online: boolean) => void) {
           break;
 
         case "daemon":
-          onDaemon(ev.online);
+          onDaemon(ev.online, ev.tooOld ?? false);
           break;
 
         case "machines":

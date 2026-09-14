@@ -81,6 +81,36 @@ export type Machine = {
   lastSeenAt?: string;
   online: boolean;
   providers: Provider[];
+  /** The daemon version it reports, or last reported while offline. Absent for
+   *  a computer that has never said. */
+  version?: string;
+  /** Too old for the hosted app: it is sent no work until it is updated. */
+  tooOld: boolean;
+  /** Whether its version can update itself. Only known while it is online. */
+  selfUpdates: boolean;
+  automaticUpdates: boolean;
+  update: UpdateStatus;
+};
+
+/** Where an update stands for one computer (spec US3). */
+export type UpdateStatus =
+  | { kind: "unchecked" }
+  | { kind: "current" }
+  | { kind: "available"; version: string }
+  | { kind: "waiting"; version: string; activeTasks: number }
+  | { kind: "updating"; version: string }
+  | { kind: "failed"; message: string };
+
+export type ComputerUpdates = {
+  machineId: string;
+  name: string;
+  online: boolean;
+  /** As last reported by the computer. */
+  version: string;
+  /** The hosted app no longer works with this version; it cannot update itself. */
+  tooOld: boolean;
+  automatic: boolean;
+  status: UpdateStatus;
 };
 
 export type Pairing = {
