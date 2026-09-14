@@ -20,7 +20,8 @@ question, a parked decision, or an idea, it goes in [`Later.md`](Later.md).
 you noticed while doing something else.
 
 - Ticked a checklist item on weaker evidence than it asked for → say so where you ticked it, *and*
-  open an `unproved` entry here.
+  open an `unproved` entry here. Each check that would settle it goes into
+  [`Unverified.md`](Unverified.md), and the entry names its U-ids.
 - Noticed something odd and didn't act on it because it was out of scope → open a `caveat`. Going
   back to fix it is a separate decision; recording it is not optional.
 
@@ -204,11 +205,13 @@ and agy as available, and ran one real Chat turn (claude, 4 s). One copy ran, wi
 connected 0.1.0) failed as B-26. With 0.1.2 (SHA-256 `1a943abb…7fdc`), once the old copy was ended by
 hand, it connected and ran a Chat turn (claude, 3 s). He then ran the installer twice more while
 connected: the log shows `daemon stopped` at 22:35:32 and 22:35:57, each followed by `connected`
-about a second later, with one copy left running from the installed path.
+about a second later, with one copy left running from the installed path. The published 0.1.2 download
+(release `daemon-v0.1.2`, SHA-256 `4587e57d…ed36`, the same bytes `releases/latest` serves) then
+replaced the running copy the same way at 22:42:10.
 
-**Not verified.** Still connected after signing out of Windows and back in; the journey on a Windows account that has never run sparstrowgen; the download from the
-published release rather than a local build. The executable is unsigned, so Windows SmartScreen
-warns before running it.
+**Not verified.** Still connected after signing out of Windows and back in (U-1); the journey on a
+Windows account that has never run sparstrowgen (U-2). The executable is unsigned, so Windows
+SmartScreen warns before running it.
 
 - **If wrong:** a first-time user downloads the installer and still cannot pair, with the browser
   showing "has not answered yet".

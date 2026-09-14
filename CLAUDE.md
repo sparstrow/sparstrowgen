@@ -140,7 +140,12 @@ the rule.
    Something fragile or surprising you deliberately left alone → [`docs/KnownGaps.md`](docs/KnownGaps.md).
    Fixing it is a separate decision; recording it isn't optional.
 8. **Shipping without proof is allowed. Shipping without saying so is not.** Name what you ran, and
-   open a KnownGaps entry in the same change.
+   open a KnownGaps entry in the same change. Every check you could not run goes into
+   [`docs/Unverified.md`](docs/Unverified.md) as a step someone can take, with who can run it.
+   **Verify when time permits:** before finishing a turn, run any open check the agent can run
+   itself, and hand the owner the ones only he can run while he is testing anyway. Mark each
+   verified with the date and the proof, or failed with a bug — never on weaker evidence than it
+   asks for.
 9. **An open question blocks one thing, not everything.** Park it in `docs/Later.md`, build the
    rest, report "done except L-n".
 10. **Destructive operations need confirmation in chat** — dropping tables, deleting protected
@@ -193,6 +198,7 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | Can the backend do this? | [`Capabilities.md`](docs/Capabilities.md) — if it's unanswered, answer it there |
 | Why we chose X over Y | [`Decisions.md`](docs/Decisions.md) |
 | Built but unproved, or a caveat noticed in passing | [`KnownGaps.md`](docs/KnownGaps.md) |
+| A check nobody has run yet — verify when time permits | [`Unverified.md`](docs/Unverified.md) |
 | Behaving wrong | [`Bugs.md`](docs/Bugs.md) |
 | Question, parked, or just an idea | [`Later.md`](docs/Later.md) |
 | What he wants and why | [`docs/specs/`](docs/specs/) |

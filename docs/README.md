@@ -1,6 +1,6 @@
 # docs/
 
-Everything that isn't code but needs to survive a session. Five files and four folders — if you're
+Everything that isn't code but needs to survive a session. Six files and four folders — if you're
 unsure where something goes, it's one of these.
 
 ```
@@ -8,6 +8,7 @@ docs/
 ├── Capabilities.md    what the backend can deliver — READ BEFORE DESIGNING
 ├── Decisions.md       load-bearing choices, and what they beat
 ├── KnownGaps.md       built-but-unproved, and caveats noticed in passing
+├── Unverified.md      checks not yet run on built things — verify them when time permits
 ├── Bugs.md            wrong behaviour in the running app
 ├── Later.md           questions, parked work, and ideas — one file, one format
 ├── feedback/          what he said after looking at a built surface, verbatim
@@ -44,6 +45,7 @@ server/migrations/                                  the schema it needed
 | "Can the backend actually do this?" | `Capabilities.md` — and if it isn't answered there, answer it there |
 | "We chose X over Y, here's why" | `Decisions.md` |
 | "Built, but I couldn't prove it" / "works only within these limits" | `KnownGaps.md` (`unproved`) |
+| "Here is a check nobody has run yet" | `Unverified.md` — one entry per check; verify them when time permits |
 | "I noticed something fragile and left it alone" | `KnownGaps.md` (`caveat`) |
 | "This is behaving wrong" | `Bugs.md` |
 | "Later" / "just an idea" / "I'm not answering that now" | `Later.md` |
