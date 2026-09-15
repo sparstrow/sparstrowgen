@@ -524,7 +524,9 @@ first-request-wins. It now refuses to start instead.
 "Failed to fetch Nothing on your computers has changed." (Firefox words it differently again)
 **Fix:** `request()` in `apps/web/lib/api.ts` replaces a fetch that got no answer at all with "The
 server could not be reached.", keeping the original as its cause. It covers every call, including
-the sign-in page's "Can't reach the server" detail.
+the sign-in page's "Can't reach the server" detail. Seen on production after #25 deployed, with the
+testing account and the machines request failing in the page: the card read "The server could not be
+reached. Nothing on your computers has changed.", and Try again recovered.
 **Release note:** Fixed: when sparstrowgen's server can't be reached, pages now say so in plain words
 instead of "Failed to fetch".
 
