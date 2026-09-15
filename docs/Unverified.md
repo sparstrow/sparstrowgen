@@ -22,6 +22,9 @@ settle it. [`Bugs.md`](Bugs.md) is for a check that ran and failed.
 
 Ids are never reused.
 
+The owner's open checks, as one sitting in the order to run them:
+[`runbooks/owner-checks.md`](runbooks/owner-checks.md).
+
 ## Format
 
 ```
