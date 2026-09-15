@@ -228,28 +228,71 @@ var keepAnyway = map[string]bool{
 	"CLAUDE_CODE_OAUTH_TOKEN": true,
 }
 
+// userEnvironment is the user's environment as it is now, not as this process
+// inherited it. A variable so tests can supply one; nil outside Windows.
+var userEnvironment = readUserEnvironment
+
 // scrubbedEnv drops every variable that lets one agent CLI notice it is running
 // inside another. PATH, HOME and the provider's own home directories stay:
 // CODEX_HOME is how codex finds its credentials even with --ignore-user-config.
+//
+// It then fills in from the user's current environment (docs/Bugs.md B-28). The
+// daemon inherits the environment of whatever started it — Windows sign-in, the
+// copy it updated from, the browser that opened a pairing link, a terminal — so
+// a token set with setx after that never arrived, and every claude turn spent
+// three minutes retrying 401s before failing. A variable the process lacks is
+// taken from the user environment, and CLAUDE_CODE_OAUTH_TOKEN is taken from it
+// even when the process has one, because that is where a replacement is written.
 func scrubbedEnv() []string {
-	const dropPrefix = "CLAUDE"
 	out := make([]string, 0, len(os.Environ()))
+	at := map[string]int{}
+	add := func(key, kv string) {
+		upper := strings.ToUpper(key)
+		if upper == "" {
+			out = append(out, kv) // Windows' per-drive "=C:" entries, never deduplicated
+			return
+		}
+		if !passes(upper) {
+			return
+		}
+		if i, ok := at[upper]; ok {
+			out[i] = kv
+			return
+		}
+		at[upper] = len(out)
+		out = append(out, kv)
+	}
 	for _, kv := range os.Environ() {
 		key, _, ok := strings.Cut(kv, "=")
 		if !ok {
 			continue
 		}
+		add(key, kv)
+	}
+	for key, value := range userEnvironment() {
 		upper := strings.ToUpper(key)
-		switch {
-		case keepAnyway[upper]:
-		case strings.HasPrefix(upper, dropPrefix):
-			continue
-		case upper == "ANTHROPIC_BASE_URL", upper == "ANTHROPIC_API_KEY":
-			// A base URL inherited from a host session would silently point the
-			// spawned CLI somewhere we did not choose.
+		if value == "" || upper == "PATH" {
+			continue // the process PATH already joins the machine's and the user's
+		}
+		if _, has := at[upper]; has && upper != "CLAUDE_CODE_OAUTH_TOKEN" {
 			continue
 		}
-		out = append(out, kv)
+		add(key, key+"="+value)
 	}
 	return out
+}
+
+// passes reports whether a variable may reach a spawned agent CLI.
+func passes(upper string) bool {
+	switch {
+	case keepAnyway[upper]:
+		return true
+	case strings.HasPrefix(upper, "CLAUDE"):
+		return false
+	case upper == "ANTHROPIC_BASE_URL", upper == "ANTHROPIC_API_KEY":
+		// A base URL inherited from a host session would silently point the
+		// spawned CLI somewhere we did not choose.
+		return false
+	}
+	return true
 }

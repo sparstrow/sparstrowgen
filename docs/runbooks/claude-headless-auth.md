@@ -38,8 +38,11 @@ environment:
 setx CLAUDE_CODE_OAUTH_TOKEN "<the token it printed>"
 ```
 
-`setx` persists it for future shells; the shell you are in keeps its old value
-until reopened, so start the daemon from a **new** terminal.
+`setx` writes it to your Windows user environment. On Windows the daemon reads
+that environment afresh for every turn, so the next claude turn uses the new
+token without restarting anything — however the daemon was started (docs/Bugs.md
+B-28). Elsewhere, start the daemon from a **new** terminal so it inherits the
+variable.
 
 The daemon scrubs `CLAUDE_*` from the environment before spawning any CLI, and
 this variable is explicitly exempted (`keepAnyway` in
@@ -48,7 +51,7 @@ would delete the fix.
 
 ## Check it worked
 
-Restart the daemon and send one message on claude. Or, directly:
+Send one message on claude. Or, directly:
 
 ```bash
 claude -p "reply with exactly: ok" --output-format stream-json --verbose --strict-mcp-config

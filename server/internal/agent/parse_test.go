@@ -367,6 +367,56 @@ func TestAgyResumeUsesConversationFlag(t *testing.T) {
 // environment
 // ---------------------------------------------------------------------------
 
+// B-28: a daemon started before the token was set, or from a program that never
+// had it, must still hand claude the user's current token.
+func TestScrubbedEnvTakesTheUsersCurrentEnvironment(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat01-replaced")
+	t.Setenv("CODEX_HOME", `C:\from\process`)
+	old := userEnvironment
+	userEnvironment = func() map[string]string {
+		return map[string]string{
+			"CLAUDE_CODE_OAUTH_TOKEN":        "sk-ant-oat01-current",
+			"CODEX_HOME":                     `C:\from\user`,
+			"SPARSTROWGEN_ONLY_IN_USER_ENV":  "yes",
+			"CLAUDECODE":                     "1",
+			"ANTHROPIC_BASE_URL":             "https://example.invalid",
+			"Path":                           `C:\only\user`,
+			"SPARSTROWGEN_EMPTY_IN_USER_ENV": "",
+		}
+	}
+	t.Cleanup(func() { userEnvironment = old })
+
+	values := map[string][]string{}
+	for _, kv := range scrubbedEnv() {
+		key, value, _ := strings.Cut(kv, "=")
+		values[strings.ToUpper(key)] = append(values[strings.ToUpper(key)], value)
+	}
+
+	if got := values["CLAUDE_CODE_OAUTH_TOKEN"]; len(got) != 1 || got[0] != "sk-ant-oat01-current" {
+		t.Errorf("token = %v; the user's current token must replace the one the process inherited", got)
+	}
+	if got := values["SPARSTROWGEN_ONLY_IN_USER_ENV"]; len(got) != 1 || got[0] != "yes" {
+		t.Errorf("a variable only the user environment has = %v, want it filled in", got)
+	}
+	if got := values["CODEX_HOME"]; len(got) != 1 || got[0] != `C:\from\process` {
+		t.Errorf("CODEX_HOME = %v; a variable the process already has must keep its value", got)
+	}
+	if _, ok := values["CLAUDECODE"]; ok {
+		t.Error("the user environment must not bring back a scrubbed variable")
+	}
+	if _, ok := values["ANTHROPIC_BASE_URL"]; ok {
+		t.Error("the user environment must not bring back ANTHROPIC_BASE_URL")
+	}
+	for _, p := range values["PATH"] {
+		if p == `C:\only\user` {
+			t.Error("PATH must stay the process's, which already joins machine and user")
+		}
+	}
+	if _, ok := values["SPARSTROWGEN_EMPTY_IN_USER_ENV"]; ok {
+		t.Error("an empty user variable must not be added")
+	}
+}
+
 func TestScrubbedEnvKeepsTheOAuthTokenAndDropsTheRest(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat01-test")
 	t.Setenv("CLAUDECODE", "1")
