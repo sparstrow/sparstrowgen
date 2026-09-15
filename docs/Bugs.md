@@ -512,7 +512,7 @@ first-request-wins. It now refuses to start instead.
 ## B-29 — A turn running in one conversation locked every conversation
 
 **Found:** 2026-09-14, by the owner, starting a long claude turn to try Update now
-**Status:** open
+**Status:** fixed 2026-09-14 (#21)
 
 **Repro:** Send a message in one conversation. While it runs, open another conversation or create a
 new one.
@@ -528,11 +528,18 @@ Reproduced on production 2026-09-14 with agent@sparstrow.com and its own test co
 after "hi" was sent in a claude conversation, a second conversation (agy) in which nothing had been
 sent said "agy is working — stop it to type", with the composer disabled and "working · 7s".
 
+**Fixed** in #21: the turn in flight is kept per conversation. Seen on production after the deploy
+(server restarted 22:39:50), with the same account and test computer: "Reply with exactly: ok" sent to
+agy in one conversation showed "working · 4s" and a locked composer there, while the claude
+conversation showed "Message claude…", enabled, with no working indicator. A message sent from it ran
+at the same time (the daemon log has agy from 22:40:33 and claude from 22:40:41 to 22:40:44, while agy
+was still running). Going back to the agy conversation still showed its own "working · 14s".
+
 ## B-28 — After the daemon was restarted from another program, every claude turn worked for three minutes and failed
 
 **Found:** 2026-09-14, by the owner, right after the agent returned his computer to 0.2.3 at the end of
 the U-8 rollback test
-**Status:** open
+**Status:** fixed 2026-09-14 (#21)
 
 **Repro:** Start the installed daemon from a process whose environment lacks the user-level
 `CLAUDE_CODE_OAUTH_TOKEN` — here, the agent's tool shell, a child of an app started before the token
@@ -551,6 +558,13 @@ claude unable to sign in until someone restarts it from a new terminal.
 Reproduced on production 2026-09-14 with agent@sparstrow.com: a daemon built from `main`, started
 with no token in its process, ran "hi" on claude from 22:31:00 and failed at 22:34:08 with "claude is
 not authenticated (10 retries)".
+
+**Fixed** in #21: on Windows the daemon fills an agent CLI's environment from the user's current
+environment (`HKCU\Environment`), and always takes `CLAUDE_CODE_OAUTH_TOKEN` from it
+(`TestScrubbedEnvTakesTheUsersCurrentEnvironment`). Seen on production the same evening: the same test
+computer and scratch folder, now running a daemon built from the fix and still with no token in its
+process, ran "Reply with exactly: ok" on claude from 22:39:09 and finished at 22:39:12 with "ok" and
+recorded usage. The owner's own PC had already been restarted with his user environment at 21:13.
 
 **Found:** 2026-09-13, by the owner, reinstalling 0.1.2 over his connected computer
 **Status:** fixed 2026-09-13 (0.1.2)
