@@ -27,8 +27,16 @@ const BASE =
  *  `include` and not `same-origin`: in development the app is on :3000 and the
  *  API on :8080, which is a different ORIGIN even though it is the same site.
  *  In production a proxy puts them on one origin and this costs nothing. */
-function request(url: string, init: RequestInit = {}) {
-  return fetch(url, { ...init, credentials: "include" });
+async function request(url: string, init: RequestInit = {}) {
+  try {
+    return await fetch(url, { ...init, credentials: "include" });
+  } catch (error) {
+    // fetch rejects only when no answer arrived at all. Its own wording differs
+    // per browser ("Failed to fetch", "NetworkError when attempting to fetch
+    // resource.") and reads as a fault in the page, so it is replaced (B-31).
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new Error("The server could not be reached.", { cause: error });
+  }
 }
 
 /** POSTs JSON and throws the server's own wording on failure.

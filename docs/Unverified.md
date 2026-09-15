@@ -176,7 +176,14 @@ Not seen as a screenshot: the browser pane would not draw, so page text and DOM 
 **How:** With the API stopped, open Settings → Updates. Passing: within a few seconds it says
 "Updates could not be loaded" and that nothing on the computers has changed, and Try again recovers
 once the API is back.
-**Status:** open — tried 2026-09-13; the page stayed on its loading placeholders instead (G-36)
+**Status:** verified 2026-09-14 — on production with the testing account, in a visible Browser pane,
+with the machines request made to fail in the page as a refused connection does (the API itself
+cannot be stopped there). The loading placeholders showed, then after 1,010 ms "Updates could not be
+loaded" with "Nothing on your computers has changed." and Try again; with requests allowed again,
+Try again showed the computer within 250 ms. The 2026-09-13 attempt stayed on its placeholders only
+because the Browser pane was hidden: TanStack Query pauses a retry while the page is not visible
+(`focusManager` in `retryer.js`), and resumes it when the page is seen (G-36, closed). The card's
+message was the browser's raw "Failed to fetch", now plain words (B-31).
 
 ## U-12 — The account menu, moved to the primary sidebar, renders and works in the browser
 
