@@ -278,3 +278,29 @@ put off.
 **Unblocks when:** someone needs a computer restarted while it is still connected — for example after
 installing or signing in to an agent CLI it has not noticed — or when a desktop app is built, which
 would own starting and recovering the daemon the way Multica's does.
+
+## L-21 — May agy run tools without asking, so it can read and change the folder?
+
+**Status:** question **Raised:** 2026-09-14 (B-11, moved here under the new rule 7)
+
+agy denies every tool in headless mode, so in sparstrowgen it can only answer from memory and never
+read the folder. Its two ways out are `--dangerously-skip-permissions`, which approves everything
+including commands, or an allow-rule in your own agy `settings.json`. claude and codex already read
+the folder without either. **Recommendation:** first check whether agy's `--sandbox` confines a
+skip-permissions run to the conversation's folder (the agent can check this, spending a little agy
+quota). If it does, run agy with both, which matches what codex can do; if it does not, leave agy
+chat-only and say so on its provider chip.
+
+**Unblocks when:** you say yes to the sandbox check, or pick one of the two routes.
+
+## L-22 — With two computers on one account, which one runs Chat?
+
+**Status:** question **Raised:** 2026-09-14 (KnownGaps G-37)
+
+Chat has no choice of computer: it uses whichever connected most recently, so pairing a second
+computer quietly moves Chat to it, and a redeploy can move it back. **Recommendation:** a
+conversation remembers the computer its folder is on and always runs there, and a new conversation
+starts on the computer you pick when choosing its folder. The alternative is one working computer per
+account. Either way it is a design round, because new conversations would show a computer choice.
+
+**Unblocks when:** you pick a direction, or a second computer is actually used.

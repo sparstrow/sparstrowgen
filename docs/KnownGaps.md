@@ -22,8 +22,8 @@ you noticed while doing something else.
 - Ticked a checklist item on weaker evidence than it asked for → say so where you ticked it, *and*
   open an `unproved` entry here. Each check that would settle it goes into
   [`Unverified.md`](Unverified.md), and the entry names its U-ids.
-- Noticed something odd and didn't act on it because it was out of scope → open a `caveat`. Going
-  back to fix it is a separate decision; recording it is not optional.
+- Noticed something odd and left it alone → open a `caveat`. If it is actually wrong behaviour, it is
+  a bug instead: fix it in the same turn unless the fix needs the owner (CLAUDE.md §4 rule 7).
 
 A caveat that lives only in a chat message does not exist. The next session does not read chat.
 

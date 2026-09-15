@@ -5,13 +5,20 @@ surfaces, because a problem mentioned only in chat does not exist to the next se
 
 Entries are marked resolved in place, never deleted, so the record survives. Ids are never reused.
 
+**Fix it in the turn it is found** (CLAUDE.md §4 rule 7). It stays open only when the fix needs the
+owner, and then its question goes in [`Later.md`](Later.md). The change log and release
+announcements are written from the **Release note** lines.
+
 Format — keep it to this, no template needed:
 
 ```
 ## B-n — <what is wrong, in one line>
-**Found:** <YYYY-MM-DD>, <by whom / during what>   **Status:** open | fixed <date>
+**Found:** <YYYY-MM-DD>, <by whom / during what>   **Status:** open — needs owner, L-n | fixed <date> (#PR)
 **Repro:** <the shortest reliable path to see it>
 **Expected / Actual:** <one line each>
+**Fix:** <what changed, and how it was seen fixed>
+**Release note:** <one line in the words a user would read: "Fixed: …">
+
 **Security:** <only if it is a trust-boundary issue — auth bypass, data crossing users,
 a leaked credential. Never paste a live secret or a working exploit payload.>
 ```

@@ -164,10 +164,11 @@ isn't lost the next time this conversation compacts.
   whatever source of truth exists, or the ordinary UX baseline when none
   does. It doesn't invent new requirements or expand what the surface is
   supposed to do.
-- **Fixing stops at the bug in front of you.** A verification pass that
-  surfaces a genuinely separate, out-of-scope problem reports it — flag it to
-  the user, or use the project's own bug-tracking convention if it has one —
-  rather than silently pulling it into the current change.
+- **A separate bug found along the way follows the project's rule for found
+  bugs** — in this repo, CLAUDE.md §4 rule 7: fix it in the same turn and log
+  it as fixed, unless the fix needs the owner. Never silently: it gets its own
+  entry and its own line in the report, so it is not hidden inside the change
+  being verified.
 - **Don't fake the loop.** A single click with no console check, or a
   checklist item ticked without actually exercising it, defeats the entire
   reason this exists. The value here is entirely in the rigor; a shortcut
