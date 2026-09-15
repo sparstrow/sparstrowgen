@@ -516,21 +516,40 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-34 — agy could end a turn with a blank answer and call it done
+
+**Found:** 2026-09-14, by the agent, re-checking B-11 after the owner signed agy in
+**Status:** fixed 2026-09-14
+**Repro:** Ask agy to do something it needs a refused tool for, such as reading a file with a command.
+**Expected / Actual:** the turn fails saying what agy was not allowed to do / agy 1.2.3 reported
+`"status":"SUCCESS"` with `"response":""` and `denied_actions: RunCommand`, so the app showed an empty
+answer as finished. Multica also found agy exiting 0 with nothing to show on a provider error, on its
+own timeout and on an unknown model.
+**Fix:** `parseAgy` fails a turn with no answer that had a tool refused, naming the tool. A turn with no
+answer and no reason is explained from agy's own log (`--log-file`): a provider error, agy's timeout,
+a bad exit, or "agy finished without writing an answer". A model this computer's agy does not list is
+refused before starting, naming the ones it does (`agy models`, remembered for 10 minutes). Tested
+against the captured refusal and each log marker.
+**Release note:** Fixed: when agy stops without answering, the conversation now says why, instead of
+showing an empty reply.
+
 ## B-33 — agy stops any turn that runs longer than five minutes
 
-**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** open — being
-fixed next
+**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** fixed 2026-09-14
 **Repro:** Give agy a task that takes more than five minutes.
 **Expected / Actual:** it runs until done, bounded by the daemon's own 15-minute silence watchdog / agy
 gives up at five minutes. `agy --help` (1.2.3): `--print-timeout  Timeout for print mode wait (default
 5m0s)`, and `agyArgs` never passes it. Multica found the same and always passes a very long value
 (MUL-3570), because agy has no "off" setting and, when it times out, prints an error and exits 0,
 which reads as a finished turn. Not yet reproduced here with a real five-minute turn.
+**Fix:** every agy turn passes `--print-timeout 24h0m0s`, so the daemon's own 15-minute silence
+watchdog is what ends a stuck turn. Checked by the argument test; a real turn longer than five minutes
+has not been run, because it would spend several minutes of agy quota to show a flag working.
+**Release note:** Fixed: agy no longer gives up on tasks that take longer than five minutes.
 
 ## B-32 — A long prompt or a long catch-up after switching agent cannot start on Windows
 
-**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** open — being
-fixed next
+**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** fixed 2026-09-14
 **Repro:** In a conversation whose earlier turns total more than about 32,000 characters, switch to
 another agent and send a message. Or paste a message that long.
 **Expected / Actual:** the turn runs / it fails before the agent starts. Windows limits a whole
@@ -541,6 +560,13 @@ prompt, uncapped, so long conversations are exactly the ones that break.
 
 Multica avoids it by writing claude's prompt to stdin (`--input-format stream-json`). codex `exec`
 reads a prompt of `-` from stdin, and agy has `--input-format stream-json` too.
+**Fix:** no adapter puts the prompt on the command line any more. claude gets one stream-json user
+message on stdin, codex a prompt of `-` with the text on stdin, and agy one stream-json `user` event
+(its shape read out of agy 1.2.3 and tried by hand first). Seen with the real CLIs: the new live test
+(`SPARSTROWGEN_LIVE_AGENTS=claude,codex,agy go test -run TestLive ./internal/agent/`) sent a
+40,075-character prompt to each, and claude answered "ok" in 4 s, codex in 6 s and agy in 1 m 30 s.
+**Release note:** Fixed: long conversations, and very long messages, can now switch agent and send on
+Windows instead of failing to start.
 
 ## B-31 — With the server unreachable, error cards show the browser's "Failed to fetch"
 
