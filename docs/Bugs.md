@@ -524,6 +524,10 @@ could clear it, so switching away while a turn ran left every conversation locke
 back to the one that started it. The server and daemon already run turns in different conversations
 side by side.
 
+Reproduced on production 2026-09-14 with agent@sparstrow.com and its own test computer: six seconds
+after "hi" was sent in a claude conversation, a second conversation (agy) in which nothing had been
+sent said "agy is working — stop it to type", with the composer disabled and "working · 7s".
+
 ## B-28 — After the daemon was restarted from another program, every claude turn worked for three minutes and failed
 
 **Found:** 2026-09-14, by the owner, right after the agent returned his computer to 0.2.3 at the end of
@@ -543,6 +547,10 @@ in 1.7 s with the user's token added. The product flaw underneath is that the da
 environment of whatever started it — sign-in, the copy it updated from, the browser that opened a
 pairing link — so a start from anything older than the `setx`, or a token replaced later, leaves
 claude unable to sign in until someone restarts it from a new terminal.
+
+Reproduced on production 2026-09-14 with agent@sparstrow.com: a daemon built from `main`, started
+with no token in its process, ran "hi" on claude from 22:31:00 and failed at 22:34:08 with "claude is
+not authenticated (10 retries)".
 
 **Found:** 2026-09-13, by the owner, reinstalling 0.1.2 over his connected computer
 **Status:** fixed 2026-09-13 (0.1.2)
