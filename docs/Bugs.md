@@ -565,6 +565,9 @@ message on stdin, codex a prompt of `-` with the text on stdin, and agy one stre
 (its shape read out of agy 1.2.3 and tried by hand first). Seen with the real CLIs: the new live test
 (`SPARSTROWGEN_LIVE_AGENTS=claude,codex,agy go test -run TestLive ./internal/agent/`) sent a
 40,075-character prompt to each, and claude answered "ok" in 4 s, codex in 6 s and agy in 1 m 30 s.
+Then on production, through a test computer built from the fix on the testing account: claude answered
+that 40,075-character message, and switching the conversation to codex made the daemon hand codex it
+as the catch-up (`replay=2`, 10,019 tokens), which codex answered "ok" in 5 s.
 **Release note:** Fixed: long conversations, and very long messages, can now switch agent and send on
 Windows instead of failing to start.
 
