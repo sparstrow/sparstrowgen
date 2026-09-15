@@ -106,7 +106,16 @@ build pointed at a private manifest
 two minutes the log shows the updater putting the old version back, the old version connects, and
 Settings → Updates shows "did not reconnect within 2 minutes, so v… was put back and is running".
 The runUpdate tests prove the sequence with fake processes; this proves it with real ones.
-**Status:** open
+**Status:** open — the rollback itself verified 2026-09-14 on the owner's PC, with his approval. A test
+base build 0.9.1, reading updates from a pre-release `daemon-test-rollback` that no real computer
+follows, was put in place with `apply-update` at 20:46:06 (from 0.2.3). Its first check found 0.9.2, a
+build pointed at `wss://127.0.0.1:9`, and handed over at 20:47:03. 0.9.2 was refused 14 times, and at
+20:49:04 the updater logged "v0.9.2 did not reconnect within 2 minutes, so v0.9.1 was put back and is
+running". 0.9.1 connected the same second, with its hash back in place (`aa23de8b…`), `result.json`
+read, and one copy running. Its next check, at 20:50, did not retry 0.9.2. The PC was then returned to
+official 0.2.3 the same way (`updated` 0.9.1 → 0.2.3 at 20:50:47, hash `ac302635…480f`), and the test
+release and its tag were deleted. **Still to see:** that message in Settings → Updates on his account,
+which needs his sign-in; the restored status was replaced when 0.2.3 went back in.
 
 ## U-9 — An update waits while a real agent turn runs, and installs when it ends
 
@@ -124,7 +133,16 @@ normally, and only then does the computer install and reconnect.
 says the computer is too old and to update it in Settings → Updates, sending is disabled, and
 Settings → Updates marks it too old with Download update. `TestATooOldComputerIsToldToUpdateAndSentNoWork`
 proves the server side; the surface has not been seen in this state.
-**Status:** open
+**Status:** verified 2026-09-14 — on a local stack rather than staging: main's server built in a scratch
+copy with `MinDaemonProtocol = 2` (port 8091), the web app on 3091, and a dev daemon (protocol 1)
+paired through the real pairing flow, with its own `SPARSTROWGEN_HOME` so the PC's credential was never
+read. `/api/machines` returned it online with `tooOld: true`. Settings → Updates said "Too old for
+sparstrowgen. This computer cannot run agent work until it is updated", with automatic updates
+unavailable and Download update. Chat marked claude, codex and agy "Computer needs an update" and said
+"Your computer's sparstrowgen is too old for this app, so nothing new can be sent. Update it in
+Settings → Updates. Everything already said stays readable."; the message box and Send message were
+both disabled, and the console had no errors. The test session and computer were deleted afterwards.
+Not seen as a screenshot: the browser pane would not draw, so page text and DOM state were read.
 
 ## U-11 — Settings → Updates shows its error card when the computers cannot be loaded
 
