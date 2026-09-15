@@ -38,8 +38,25 @@ email flows can be tested end-to-end without asking him for anything (closed
 [`docs/KnownGaps.md`](docs/KnownGaps.md) G-29). Use it freely for that.
 
 Its password is never written to the repo, chat, or a commit — the same rule as any other secret
-(§5, and the deploy runbook's daemon-token step). To sign in, use **Forgot your password?** and read
-the reset link straight from the mailbox; there is no need to remember or store a password at all.
+(§5, and the deploy runbook's daemon-token step). **The agent never types a password or creates an
+account**, not even this one and not when asked. When a test needs it signed in, ask him to sign it in
+once in the Browser pane; the session lasts a week. Verification and reset links are read straight
+from the mailbox.
+
+**Testing on production with it** (`app.sparstrow.com`), so a bug he reports gets reproduced there
+before it is fixed, and the fix is seen there after it deploys:
+
+- **Give it its own computer.** Build `cmd/daemon`, and run it with `SPARSTROWGEN_HOME` set to a
+  scratch folder, `SERVER_WS=wss://api.sparstrow.com/daemon` and `SERVER_API=https://api.sparstrow.com`.
+  Create the pairing from the signed-in pane (`POST /api/machines/pairings`), run
+  `pair -request <request>`, approve it (`POST /api/machines/pairings/{id}/approve`), then start it.
+  Without its own `SPARSTROWGEN_HOME` it reads his computer's credential, and a refusal deletes it.
+- **Never use his computer for a test.** Do not stop, restart or replace his installed daemon without
+  asking. A copy started from an agent's shell loses his Windows user environment (docs/Bugs.md B-28).
+- **Keep it small.** Conversations go in a scratch folder, and every turn spends his real agent quota,
+  so prompts stay short. To reproduce the old behaviour, build the daemon from `main` in a scratch copy.
+- **Clean up.** Disconnect the test computer (`DELETE /api/machines/{id}`) and stop its process when
+  done. Keep the account.
 
 ---
 
@@ -181,9 +198,10 @@ the owner completes its activation gate. Never edit a protected branch directly;
 checkout between two agents.
 
 **Commit and push your branch without asking** — this file is the standing authorization, and a
-commit that never leaves the checkout is as unrecoverable as one never made. That does *not* extend
-to pushing `main`, opening a PR, or merging. If a push is rejected, fetch and reconcile rather than
-forcing.
+commit that never leaves the checkout is as unrecoverable as one never made. **Opening a PR and
+squash-merging it into `main` is authorized too** (owner, 2026-09-14): once its checks are run and
+recorded in the PR, merge without asking. Pushing `main` directly is still never done. If a push is
+rejected, fetch and reconcile rather than forcing.
 
 Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `test`, `chore`.
 

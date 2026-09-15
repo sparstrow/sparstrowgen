@@ -199,8 +199,8 @@ func claudeError(result string, retries int) error {
 	if strings.Contains(result, "OAuth") || strings.Contains(result, "authenticate") {
 		return fmt.Errorf(
 			"claude is not authenticated (%d retries). Its stored token has expired and only the "+
-				"desktop app refreshes it. Run `claude setup-token`, set CLAUDE_CODE_OAUTH_TOKEN, "+
-				"and restart the daemon from a NEW terminal so it inherits the variable — "+
+				"desktop app refreshes it. Run `claude setup-token` and save the token with "+
+				"`setx CLAUDE_CODE_OAUTH_TOKEN`; the next turn uses it, no restart needed — "+
 				"see docs/runbooks/claude-headless-auth.md", retries)
 	}
 	if result != "" {

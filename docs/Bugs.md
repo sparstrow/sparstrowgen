@@ -509,7 +509,48 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
-## B-27 — Reinstalling on a connected computer tells the person to add it again
+## B-29 — A turn running in one conversation locked every conversation
+
+**Found:** 2026-09-14, by the owner, starting a long claude turn to try Update now
+**Status:** open
+
+**Repro:** Send a message in one conversation. While it runs, open another conversation or create a
+new one.
+**Expected / Actual:** the other conversation is usable, with any agent / it shows "working · Ns" and
+"claude is working — stop it to type", so nothing can be started anywhere until that turn ends.
+
+Chat kept one `inFlight` for the whole app (`apps/web/lib/store.ts`), and only the open conversation
+could clear it, so switching away while a turn ran left every conversation locked until the person came
+back to the one that started it. The server and daemon already run turns in different conversations
+side by side.
+
+Reproduced on production 2026-09-14 with agent@sparstrow.com and its own test computer: six seconds
+after "hi" was sent in a claude conversation, a second conversation (agy) in which nothing had been
+sent said "agy is working — stop it to type", with the composer disabled and "working · 7s".
+
+## B-28 — After the daemon was restarted from another program, every claude turn worked for three minutes and failed
+
+**Found:** 2026-09-14, by the owner, right after the agent returned his computer to 0.2.3 at the end of
+the U-8 rollback test
+**Status:** open
+
+**Repro:** Start the installed daemon from a process whose environment lacks the user-level
+`CLAUDE_CODE_OAUTH_TOKEN` — here, the agent's tool shell, a child of an app started before the token
+was set with `setx` — then send a claude message.
+**Expected / Actual:** an answer / "working" for about three minutes with nothing arriving, then
+"claude is not authenticated (10 retries)".
+
+The agent caused it: the daemon it restarted inherited its shell's environment. Without the token,
+claude falls back to the saved sign-in, which expired on 2026-07-18, gets 401 and retries ten times.
+Proved with the same `claude -p` from that shell: seven 401 retries in 60 s without the token, and "ok"
+in 1.7 s with the user's token added. The product flaw underneath is that the daemon only ever has the
+environment of whatever started it — sign-in, the copy it updated from, the browser that opened a
+pairing link — so a start from anything older than the `setx`, or a token replaced later, leaves
+claude unable to sign in until someone restarts it from a new terminal.
+
+Reproduced on production 2026-09-14 with agent@sparstrow.com: a daemon built from `main`, started
+with no token in its process, ran "hi" on claude from 22:31:00 and failed at 22:34:08 with "claude is
+not authenticated (10 retries)".
 
 **Found:** 2026-09-13, by the owner, reinstalling 0.1.2 over his connected computer
 **Status:** fixed 2026-09-13 (0.1.2)

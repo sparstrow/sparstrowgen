@@ -34,17 +34,13 @@ type ChatView = {
   pending: PendingSwitch | null;
   setPending: (p: PendingSwitch | null) => void;
 
-  /** Set while a turn is in flight, so the composer can lock and the working
-   *  indicator can tick. startedAt is stored rather than an elapsed count, so
-   *  the display is derived from the clock instead of accumulated by a timer
-   *  that has to be reset. */
-  inFlight: {
-    entryId: string;
-    provider: ProviderId;
-    model: Model;
-    startedAt: number;
-  } | null;
-  setInFlight: (t: ChatView["inFlight"]) => void;
+  /** The turn in flight in each conversation, keyed by conversation id, so that
+   *  conversation's composer can lock and its working indicator can tick. A turn
+   *  running in one conversation locks only that one (docs/Bugs.md B-29).
+   *  startedAt is stored rather than an elapsed count, so the display is derived
+   *  from the clock instead of accumulated by a timer that has to be reset. */
+  inFlight: Record<string, InFlightTurn>;
+  setInFlight: (conversationId: string, turn: InFlightTurn | null) => void;
 
   search: string;
   setSearch: (q: string) => void;
@@ -58,6 +54,13 @@ type ChatView = {
   /** Archived conversations are hidden behind a disclosure unless searching. */
   showArchived: boolean;
   toggleArchived: () => void;
+};
+
+export type InFlightTurn = {
+  entryId: string;
+  provider: ProviderId;
+  model: Model;
+  startedAt: number;
 };
 
 export const useChatView = create<ChatView>((set, get) => ({
@@ -79,8 +82,14 @@ export const useChatView = create<ChatView>((set, get) => ({
   pending: null,
   setPending: (pending) => set({ pending }),
 
-  inFlight: null,
-  setInFlight: (inFlight) => set({ inFlight }),
+  inFlight: {},
+  setInFlight: (conversationId, turn) =>
+    set((s) => {
+      const next = { ...s.inFlight };
+      if (turn) next[conversationId] = turn;
+      else delete next[conversationId];
+      return { inFlight: next };
+    }),
 
   search: "",
   setSearch: (search) => set({ search }),

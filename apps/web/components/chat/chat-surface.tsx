@@ -89,8 +89,12 @@ export function ChatSurface() {
   const search = useChatView((s) => s.search);
   const pending = useChatView((s) => s.pending);
   const setPending = useChatView((s) => s.setPending);
-  const inFlight = useChatView((s) => s.inFlight);
   const setInFlight = useChatView((s) => s.setInFlight);
+  // Only the open conversation's turn: one running elsewhere must not lock or
+  // show as working here (docs/Bugs.md B-29).
+  const inFlight = useChatView((s) =>
+    s.selectedId ? (s.inFlight[s.selectedId] ?? null) : null,
+  );
   const transcriptView = useChatView((s) => s.transcriptView);
   const setTranscriptView = useChatView((s) => s.setTranscriptView);
   const drafts = useChatView((s) => s.drafts);
@@ -168,7 +172,7 @@ export function ChatSurface() {
     if (!inFlight || !selected) return;
     const entry = selected.entries.find((e) => e.id === inFlight.entryId);
     if (!entry || entry.role !== "agent") return;
-    if (entry.stopped || entry.failure || entry.usage) setInFlight(null);
+    if (entry.stopped || entry.failure || entry.usage) setInFlight(selected.id, null);
   }, [selected, inFlight, setInFlight]);
 
   const activeProvider: ProviderId =
@@ -261,15 +265,18 @@ export function ChatSurface() {
     const text = draft.trim();
     const provider = pending?.to ?? selected.provider;
     const model = pending?.toModel ?? selected.model;
-    clearDraft(selected.id);
+    const conversationId = selected.id;
+    clearDraft(conversationId);
     setPending(null);
 
     try {
-      const { entry } = await send.mutateAsync({ id: selected.id, text, provider, model });
+      const { entry } = await send.mutateAsync({ id: conversationId, text, provider, model });
       setNow(Date.now());
-      setInFlight({ entryId: entry.id, provider, model, startedAt: Date.now() });
+      // Against the conversation it was sent from, which may no longer be the
+      // open one by the time the server answers.
+      setInFlight(conversationId, { entryId: entry.id, provider, model, startedAt: Date.now() });
     } catch (err) {
-      setDraft(selected.id, text); // give it back rather than losing what was typed
+      setDraft(conversationId, text); // give it back rather than losing what was typed
       toast.error("Message not sent", { description: (err as Error).message });
     }
   }
