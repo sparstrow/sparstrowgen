@@ -420,3 +420,20 @@ sign-in. Per-address spacing of emails is unaffected: it is keyed by recipient.
   try again in Ns" for a real person while someone else misbehaves.
 - **Clears when:** the proxy's forwarded address is trusted only from the proxy's own IP (Coolify's
   Traefik network), and both throttles key on that.
+
+## G-37 — With two computers on one account, Chat uses whichever connected last
+
+**Kind:** caveat
+**Raised:** 2026-09-14, writing the owner's check for a second Windows account (runbooks/owner-checks.md step 7)
+
+Chat has no choice of computer. `Hub.SendToDaemon`, `Providers` and the folder list all use the
+account's `primary` machine (`server/internal/hub/hub.go:263`), and a computer becomes primary each
+time it connects. So when a second computer is paired, every new turn, the provider list and the
+folder picker move to it, and move back if the first one reconnects later. A conversation whose folder
+is on the other computer then fails with B-30's message. Left alone because the approved spec has one
+computer doing the work per account; nothing in it asks to pick one.
+
+- **If wrong:** with one computer, which is today's only real use, nothing. With two, work silently
+  runs on the last one to reconnect, and a Coolify redeploy (which reconnects both) can swap them.
+- **Clears when:** conversations remember their computer and Chat sends to it, or an account is
+  limited to one working computer. Either is a product decision for the owner, not a fix.
