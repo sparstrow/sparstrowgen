@@ -56,14 +56,25 @@ computer shows Online with its providers and the message gets an answer.
 **How:** In Machines choose Add computer, let the computer answer, then choose **Not now**. Passing:
 the panel closes at once, Machines lists no new or waiting computer after a refresh, and the
 computer's log shows the pairing refused and the earlier connection, if any, still working.
-**Status:** open
+**Status:** open — everything but the panel verified 2026-09-14 on production with the testing account
+and test computers on this PC (CLAUDE.md §1). A fresh computer claimed a pairing and it was declined
+through the endpoint Not now calls (204). The pairing now reads `rejected`, Machines still listed only
+the two computers already paired, both still online, and the computer's log said "this pairing was
+declined or has expired; keeping any earlier pairing" before it exited with its pending credential
+removed. **Still to see:** the panel closing at once. Opening Add computer in the browser launches the
+installed copy through its link, which would re-pair the owner's PC, so only he can click it.
 
 ## U-4 — Add computer on an already connected computer changes nothing
 
 **From:** #12, 2026-09-13 · **Who can run it:** owner
 **How:** On the connected PC, choose Add computer. Passing: it says "This computer is already
 connected", Machines still lists exactly one entry for it, and it stays Online without reconnecting.
-**Status:** open
+**Status:** open — everything but the browser's wording verified 2026-09-14 on production with the
+testing account. A connected test computer claimed a new pairing and printed "this computer is already
+connected to that account; nothing changed", keeping its credential and writing no pending one. The
+pairing reads `approved` with that computer's existing id, Machines still listed exactly the same two
+entries, and its log gained no "connection lost" or second "connected" line. **Still to see:** the
+panel saying "This computer is already connected", for the same reason as U-3.
 
 ## U-5 — A disconnected computer is refused and needs approval to come back
 
@@ -72,7 +83,14 @@ pairs again)
 **How:** Open the computer in Machines and disconnect it. Passing: it leaves the list, its log shows
 it was disconnected and stopped, `machine-credential` is gone from `%LOCALAPPDATA%\sparstrowgen`,
 and only a new Add computer plus approval brings it back.
-**Status:** open
+**Status:** verified 2026-09-14 — on production with the testing account and two test computers on this
+PC, not the owner's. Disconnecting test computer 1 (204) left only test computer 2 listed. Computer 1's
+log said "this computer was disconnected from its account; forgetting its credential", its data folder
+was empty and its process had stopped; started again it exited with "no machine credential is
+available". Meanwhile computer 2 ran "Reply with exactly: ok" on claude to "ok" (22:50:54–22:50:57).
+Computer 1 then claimed a new pairing and, before approval, was refused every two seconds with "the
+server has not accepted this computer: it is waiting for approval in the browser"; approved at
+22:52:32, it connected at 22:52:33 with "this computer's pairing was approved".
 
 ## U-6 — The owner confirms Settings → Updates reads and behaves as he wants
 
@@ -80,7 +98,12 @@ and only a new Add computer plus approval brings it back.
 **How:** He chose the design by pointing at Multica's Updates page and approved building the rest
 without confirming it in the app first. Open Settings → Updates, try Check now and the automatic
 switch, and say what to change. Passing: no changes, or his changes recorded as feedback.
-**Status:** open
+**Status:** open — his judgement, which no test replaces. Seen 2026-09-14 on production with the testing
+account and two development-build test computers: each card said Online, Current version "Development
+build", Automatic updates "Available once this computer has a version that can update itself", and
+"This version cannot update itself. Download the installer and open it on this computer." with Download
+update. Check now and the switch only work on an installed release, and a second installed copy cannot
+run beside his under the same Windows user (they share `Local\sparstrowgen-daemon`).
 
 ## U-7 — An installed computer updates itself from a published release and stays connected
 
@@ -160,8 +183,13 @@ already running); agent on a later turn once no other session holds the `apps/we
 sits in its footer, opens the same dropdown (email, Change password, Sign out, Sign out everywhere)
 as before, and the chat header's Conversations panel no longer has it — check both expanded and
 icon-collapsed sidebar states.
-**Status:** open — `tsc --noEmit` and eslint pass on the changed files; not seen in a browser because
-another session's `next dev` held the directory lock on `apps/web` for the whole turn
+**Status:** verified 2026-09-14 — on production with the testing account, at 1440×900 (the Browser pane
+reports 0×0 when hidden, which renders the sidebar as the mobile sheet). Exactly one Account button,
+inside the sidebar footer and none outside the sidebar, so the Conversations header no longer has it.
+Expanded, it opened agent@sparstrow.com with Change password, Sign out and Sign out everywhere. Collapsed
+with Ctrl+B (the sidebar has no trigger button), the button stayed in the footer at 28×28 and opened the
+same three items; Ctrl+B expanded it again. Nothing in the menu was clicked, and the console showed no
+errors after a marker and a reload.
 
 ## U-13 — An installed computer moves off the signing key and then updates from a release GitHub built
 
@@ -181,3 +209,18 @@ executable's SHA-256 is 0.2.3's (`ac302635…480f`), one copy runs, no failure w
 09:19:18, the new copy connected at 09:19:19, and the updater logged `updated` 0.2.1 → 0.2.2 at
 09:19:24. The installed executable's SHA-256 is 0.2.2's (`12037d34…be77`), one copy runs, no failure
 was recorded.
+
+## U-14 — A second account cannot see the first account's work or send work to its computer
+
+**From:** phase 1 exit gate (docs/runbooks/release-workflow.md), D-031, 2026-09-14 · **Who can run it:**
+agent, with the testing account
+**How:** While the owner's computer is online on his account, sign in as another account. Passing: its
+Machines list and conversations contain nothing of his, and sending a message with no computer of its
+own is refused rather than delivered to his.
+**Status:** verified 2026-09-14 — on production with agent@sparstrow.com while the owner's PC was
+connected on his account (its log shows `connected` at 22:42:21). The testing account's `/api/machines`
+was empty before any test computer was paired, and afterwards listed only its own test computers.
+`/api/conversations` returned only its 3 test conversations, all in scratch folders on this PC. With
+its test computers disconnected, sending a message returned 503 "your machine is unreachable, so
+nothing new can be sent" instead of reaching the owner's computer. The isolation tests
+(`internal/api/isolation_test.go`) cover the same boundary for every endpoint.

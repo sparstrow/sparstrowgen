@@ -509,6 +509,21 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-30 — A conversation whose folder no longer exists fails with a raw system error
+
+**Found:** 2026-09-14, by the agent, testing U-5 on production with the testing account
+**Status:** open
+
+**Repro:** Create a conversation in a folder, delete that folder on the computer, then send a message.
+**Expected / Actual:** a failure saying the conversation's folder is missing on this computer and how
+to choose another / "fork/exec C:\Users\gsrih\.local\bin\claude.exe: The directory name is invalid."
+
+The daemon starts the agent CLI with the conversation's folder as its working directory, and Windows
+refuses before the CLI runs. The message names the executable, not the folder that is actually wrong,
+so it reads as a broken claude install. Nothing else goes wrong: the turn ends as failed and the next
+message works once the folder exists. Seen when the test folder of an earlier session had been cleaned
+up.
+
 ## B-29 — A turn running in one conversation locked every conversation
 
 **Found:** 2026-09-14, by the owner, starting a long claude turn to try Update now
