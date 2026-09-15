@@ -516,6 +516,32 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-33 — agy stops any turn that runs longer than five minutes
+
+**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** open — being
+fixed next
+**Repro:** Give agy a task that takes more than five minutes.
+**Expected / Actual:** it runs until done, bounded by the daemon's own 15-minute silence watchdog / agy
+gives up at five minutes. `agy --help` (1.2.3): `--print-timeout  Timeout for print mode wait (default
+5m0s)`, and `agyArgs` never passes it. Multica found the same and always passes a very long value
+(MUL-3570), because agy has no "off" setting and, when it times out, prints an error and exits 0,
+which reads as a finished turn. Not yet reproduced here with a real five-minute turn.
+
+## B-32 — A long prompt or a long catch-up after switching agent cannot start on Windows
+
+**Found:** 2026-09-14, by the agent, comparing agent handling with Multica **Status:** open — being
+fixed next
+**Repro:** In a conversation whose earlier turns total more than about 32,000 characters, switch to
+another agent and send a message. Or paste a message that long.
+**Expected / Actual:** the turn runs / it fails before the agent starts. Windows limits a whole
+command line to 32,767 characters (`where.exe` with a 40,000-character argument: "The filename or
+extension is too long."), and all three adapters pass the prompt as an argument (`claudeArgs`,
+`codexArgs`, `agyArgs`). `buildPrompt` puts every message the new agent has not seen into that
+prompt, uncapped, so long conversations are exactly the ones that break.
+
+Multica avoids it by writing claude's prompt to stdin (`--input-format stream-json`). codex `exec`
+reads a prompt of `-` from stdin, and agy has `--input-format stream-json` too.
+
 ## B-31 — With the server unreachable, error cards show the browser's "Failed to fetch"
 
 **Found:** 2026-09-14, by the agent, re-checking U-11 **Status:** fixed 2026-09-14 (#25)
