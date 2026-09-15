@@ -167,6 +167,7 @@ func detectAgy(ctx context.Context) protocol.Provider {
 		return missing("agy")
 	}
 	models := agyModels(ctx)
+	agyCatalog.put(models)
 	p := protocol.Provider{
 		ID:           "agy",
 		Label:        "agy",

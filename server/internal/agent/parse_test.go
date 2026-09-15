@@ -325,8 +325,8 @@ func contains(args []string, want string) bool {
 // spawned claude gets working MCP tool access to whatever the owner has
 // configured. See docs/Decisions.md D-016.
 func TestClaudeArgsAlwaysScoped(t *testing.T) {
-	args := claudeArgs("hello", ExecOptions{})
-	for _, want := range []string{"--strict-mcp-config", "--setting-sources", "--verbose"} {
+	args := claudeArgs(ExecOptions{})
+	for _, want := range []string{"--strict-mcp-config", "--setting-sources", "--verbose", "AskUserQuestion"} {
 		if !contains(args, want) {
 			t.Errorf("claude args missing %s: %v", want, args)
 		}
@@ -338,17 +338,18 @@ func TestClaudeArgsAlwaysScoped(t *testing.T) {
 }
 
 func TestCodexArgsAlwaysScoped(t *testing.T) {
-	if !contains(codexArgs("hello", ExecOptions{}), "--ignore-user-config") {
+	if !contains(codexArgs(ExecOptions{}), "--ignore-user-config") {
 		t.Error("codex must always pass --ignore-user-config")
 	}
 }
 
 // resume is positional for codex and a flag for the other two. Getting the
-// order wrong sends the thread id to the model as the prompt.
+// order wrong sends the thread id to the model as the prompt. The prompt itself
+// is "-", read from stdin (B-32).
 func TestCodexResumeIsPositional(t *testing.T) {
-	args := codexArgs("the prompt", ExecOptions{ResumeSessionID: "thread-1"})
+	args := codexArgs(ExecOptions{ResumeSessionID: "thread-1"})
 	last3 := args[len(args)-3:]
-	want := []string{"resume", "thread-1", "the prompt"}
+	want := []string{"resume", "thread-1", "-"}
 	for i := range want {
 		if last3[i] != want[i] {
 			t.Fatalf("resume args = %v, want %v", last3, want)
@@ -357,7 +358,7 @@ func TestCodexResumeIsPositional(t *testing.T) {
 }
 
 func TestAgyResumeUsesConversationFlag(t *testing.T) {
-	args := agyArgs("hello", ExecOptions{ResumeSessionID: "conv-1"})
+	args := agyArgs(ExecOptions{ResumeSessionID: "conv-1"}, "")
 	if !contains(args, "--conversation") || !contains(args, "conv-1") {
 		t.Errorf("agy resume args = %v", args)
 	}

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,9 +22,13 @@ type Claude struct{}
 
 func (Claude) ID() string { return "claude" }
 
-func claudeArgs(prompt string, opts ExecOptions) []string {
+func claudeArgs(opts ExecOptions) []string {
 	args := []string{
-		"-p", prompt,
+		"-p",
+		// The prompt goes to stdin, never the command line: Windows refuses a
+		// command line over 32,767 characters, and a catch-up after switching
+		// agent is easily longer (docs/Bugs.md B-32).
+		"--input-format", "stream-json",
 		"--output-format", "stream-json",
 		// --verbose is REQUIRED with stream-json in print mode. Its absence is
 		// not documented in --help and produces an unhelpful error.
@@ -33,6 +38,10 @@ func claudeArgs(prompt string, opts ExecOptions) []string {
 		"--include-partial-messages",
 		"--strict-mcp-config",
 		"--setting-sources", "project",
+		// Its question tool has nowhere to show the question here, so a call
+		// comes back unanswered and claude guesses silently. Multica found the
+		// same (its GitHub #2588).
+		"--disallowedTools", "AskUserQuestion",
 	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
@@ -43,15 +52,34 @@ func claudeArgs(prompt string, opts ExecOptions) []string {
 	return args
 }
 
+// claudeInput is the one stream-json user message a turn sends on stdin.
+func claudeInput(prompt string) ([]byte, error) {
+	data, err := json.Marshal(map[string]any{
+		"type": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": []map[string]string{{"type": "text", "text": prompt}},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode the prompt for claude: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
 func (c Claude) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
-	cmd := command(ctx, opts.Cwd, "claude", claudeArgs(prompt, opts)...)
+	input, err := claudeInput(prompt)
+	if err != nil {
+		return nil, err
+	}
+	cmd := command(ctx, opts.Cwd, "claude", claudeArgs(opts)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	// Print mode reads stdin even with the prompt as an argument; handing it a
-	// closed stdin is what stops it waiting forever.
-	cmd.Stdin = strings.NewReader("")
+	// One user message, then end of input: claude runs that turn and exits
+	// rather than waiting for another.
+	cmd.Stdin = bytes.NewReader(input)
 	// launch rather than cmd.Start: a stop has to take the tool subprocesses
 	// with it, not just the CLI (D-021).
 	proc, err := launch(ctx, cmd, stdout)

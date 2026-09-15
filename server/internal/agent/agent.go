@@ -110,6 +110,7 @@ func command(ctx context.Context, cwd, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = cwd
 	cmd.Env = scrubbedEnv()
+	hideConsole(cmd)
 	return cmd
 }
 

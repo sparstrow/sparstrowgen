@@ -279,7 +279,7 @@ put off.
 installing or signing in to an agent CLI it has not noticed — or when a desktop app is built, which
 would own starting and recovering the daemon the way Multica's does.
 
-## L-21 — May agy run tools without asking, so it can read and change the folder?
+## L-21 — May the agents run tools without asking, so they can read and change the folder?
 
 **Status:** question **Raised:** 2026-09-14 (B-11, moved here under the new rule 7)
 
@@ -300,6 +300,18 @@ turn with `--dangerously-skip-permissions --add-dir <folder> --print-timeout <lo
 (`server/pkg/agent/antigravity.go`), and runs claude with `--permission-mode bypassPermissions` too.
 Running agy with that flag was refused by this session's safety check, so it needs your yes first.
 
+**The same question for claude and codex (2026-09-14).** We start claude with no permission mode, so
+in print mode it can read but is refused edits and commands; Multica passes
+`--permission-mode bypassPermissions`. codex `exec` offers `--sandbox workspace-write` (edits inside
+the folder) or a full bypass, and which one to use is part of this decision. Not verified end to end
+here, because checking needs the permission itself. **Recommendation:** yes for all three, limited to
+the conversation's folder wherever the agent supports that (agy `--add-dir`, codex `workspace-write`).
+
+**Worth knowing when you decide:** [`Decisions.md`](Decisions.md) D-007 (2026-09-09) already chose
+"agents run auto-approved inside registered directories", and L-4 below is written as if that were
+built. It never was: no adapter passes an approve-all flag today. So a yes here builds D-007, and a no
+means D-007 changes.
+
 ## L-22 — With two computers on one account, which one runs Chat?
 
 **Status:** question **Raised:** 2026-09-14 (KnownGaps G-37)
@@ -311,3 +323,39 @@ starts on the computer you pick when choosing its folder. The alternative is one
 account. Either way it is a design round, because new conversations would show a computer choice.
 
 **Unblocks when:** you pick a direction, or a second computer is actually used.
+
+## L-23 — Live typing and a cleaner Stop for codex
+
+**Status:** question **Raised:** 2026-09-14, comparing agent handling with Multica
+
+We run `codex exec`, which shows nothing until the whole answer is ready. Multica runs
+`codex app-server`, which streams the reply as it is written and can interrupt a turn cleanly
+(`server/pkg/agent/codex.go`). It is a different way of driving codex, not a flag, and how codex's
+working state reads in Chat would change with it. **Recommendation:** adopt it after phase 2, with a
+quick design look at codex's typing and Stop.
+
+**Unblocks when:** you decide it is worth a design round, after phase 2.
+
+## L-24 — Choosing an effort level per message
+
+**Status:** question **Raised:** 2026-09-14, comparing agent handling with Multica
+
+claude and agy accept `--effort` (low, medium, high, and more on some claude models), and codex has
+its own levels. Multica reads which levels each installed agent accepts and offers them per message
+(`server/pkg/agent/thinking.go`); agy today bakes effort into its model names instead. It needs a place
+in the composer, so it is a design question. **Recommendation:** design it after phase 2, with the
+levels read from each CLI rather than a fixed list.
+
+**Unblocks when:** you want to pick effort per message, and a design round is scheduled.
+
+## L-25 — Letting agents use your own MCP servers and skills
+
+**Status:** question **Raised:** 2026-09-14, comparing agent handling with Multica
+
+We deliberately start claude with none of your MCP servers and only project skills, and codex without
+your own config (D-016). Multica lets an agent inherit yours unless one is configured for it. Turning
+it on hands agents your tools and whatever those tools can reach, and it needs a setting somewhere.
+**Recommendation:** keep today's scoping until you want a specific tool in sparstrowgen, then design a
+per-agent switch.
+
+**Unblocks when:** you name a tool or skill you want the agents here to use.
