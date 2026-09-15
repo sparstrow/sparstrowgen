@@ -518,7 +518,7 @@ first-request-wins. It now refuses to start instead.
 
 ## B-31 — With the server unreachable, error cards show the browser's "Failed to fetch"
 
-**Found:** 2026-09-14, by the agent, re-checking U-11 **Status:** fixed 2026-09-14
+**Found:** 2026-09-14, by the agent, re-checking U-11 **Status:** fixed 2026-09-14 (#25)
 **Repro:** Open Settings → Updates or Machines while the API cannot be reached.
 **Expected / Actual:** "The server could not be reached. Nothing on your computers has changed." /
 "Failed to fetch Nothing on your computers has changed." (Firefox words it differently again)
@@ -531,7 +531,7 @@ instead of "Failed to fetch".
 ## B-30 — A conversation whose folder no longer exists fails with a raw system error
 
 **Found:** 2026-09-14, by the agent, testing U-5 on production with the testing account
-**Status:** fixed 2026-09-14
+**Status:** fixed 2026-09-14 (#25)
 
 **Repro:** Create a conversation in a folder, delete that folder on the computer, then send a message.
 **Expected / Actual:** a failure saying the conversation's folder is missing on this computer and how
