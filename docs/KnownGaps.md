@@ -22,8 +22,8 @@ you noticed while doing something else.
 - Ticked a checklist item on weaker evidence than it asked for → say so where you ticked it, *and*
   open an `unproved` entry here. Each check that would settle it goes into
   [`Unverified.md`](Unverified.md), and the entry names its U-ids.
-- Noticed something odd and didn't act on it because it was out of scope → open a `caveat`. Going
-  back to fix it is a separate decision; recording it is not optional.
+- Noticed something odd and left it alone → open a `caveat`. If it is actually wrong behaviour, it is
+  a bug instead: fix it in the same turn unless the fix needs the owner (CLAUDE.md §4 rule 7).
 
 A caveat that lives only in a chat message does not exist. The next session does not read chat.
 
@@ -271,23 +271,6 @@ a time is the normal case and a per-process database would slow every run.
 - **If wrong:** a green or red result that means nothing, from a run that overlapped another.
 - **Clears when:** never run two suites of one package at once, or `testdb` adds a per-process suffix.
 
-## G-36 — With the API unreachable, Machines and Settings → Updates stay on their loading placeholders
-
-**Kind:** caveat
-**Raised:** 2026-09-13, verifying Settings → Updates in a browser (US3)
-
-With the local API stopped, both `/machines` and `/settings/updates` kept their skeleton placeholders
-for more than 15 seconds and never showed their error cards ("Machines could not be loaded",
-"Updates could not be loaded"). The browser logged `ERR_CONNECTION_REFUSED` at once,
-`navigator.onLine` was true, and queries retry only once (`apps/web/components/providers.tsx`), so a
-slow retry does not explain it. The cause was not found. Left alone because it predates US3 — the
-Machines page does the same — and needs its own investigation rather than a guess.
-
-- **If wrong:** while the server is down those pages look as if they are still loading, instead of
-  saying something failed and offering Try again.
-- **Clears when:** the cause is found and a stopped API shows each page's error card within a few
-  seconds (Unverified U-11).
-
 ## G-19 — How Coolify treats the one-shot migration container across redeploys is unverified
 
 **Noticed:** 2026-09-11, codex reviewing the deployment artifacts before the first deploy
@@ -436,4 +419,5 @@ computer doing the work per account; nothing in it asks to pick one.
 - **If wrong:** with one computer, which is today's only real use, nothing. With two, work silently
   runs on the last one to reconnect, and a Coolify redeploy (which reconnects both) can swap them.
 - **Clears when:** conversations remember their computer and Chat sends to it, or an account is
-  limited to one working computer. Either is a product decision for the owner, not a fix.
+  limited to one working computer. Either is a product decision for the owner, not a fix: asked in
+  [`Later.md`](Later.md) L-22.

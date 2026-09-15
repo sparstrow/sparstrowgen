@@ -153,9 +153,13 @@ the rule.
    confirms a design; the empty state is the one he'll see first on a feature he hasn't used.
 6. **Anything a browser can exercise gets verified in a browser** (`frontend-verify`). A green
    typecheck is not evidence a feature works.
-7. **Log a bug or a caveat in the turn it surfaces.** Wrong behaviour → [`docs/Bugs.md`](docs/Bugs.md).
-   Something fragile or surprising you deliberately left alone → [`docs/KnownGaps.md`](docs/KnownGaps.md).
-   Fixing it is a separate decision; recording it isn't optional.
+7. **A bug you find gets fixed in the turn it surfaces, and logged as fixed.** Wrong behaviour →
+   [`docs/Bugs.md`](docs/Bugs.md): what was wrong, what fixed it, and a one-line release note in plain
+   words, so the change log and release announcements are written from that file. **It stays open only
+   when fixing it needs the owner** — his decision, his access, his computer. Then log it, put the
+   question in [`docs/Later.md`](docs/Later.md) with your recommendation, and carry on with other
+   work; he answers there later. Something fragile or surprising you deliberately left alone →
+   [`docs/KnownGaps.md`](docs/KnownGaps.md). Recording is never optional (owner, 2026-09-14).
 8. **Shipping without proof is allowed. Shipping without saying so is not.** Name what you ran, and
    open a KnownGaps entry in the same change. Every check you could not run goes into
    [`docs/Unverified.md`](docs/Unverified.md) as a step someone can take, with who can run it.

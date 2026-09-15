@@ -5,13 +5,20 @@ surfaces, because a problem mentioned only in chat does not exist to the next se
 
 Entries are marked resolved in place, never deleted, so the record survives. Ids are never reused.
 
+**Fix it in the turn it is found** (CLAUDE.md §4 rule 7). It stays open only when the fix needs the
+owner, and then its question goes in [`Later.md`](Later.md). The change log and release
+announcements are written from the **Release note** lines.
+
 Format — keep it to this, no template needed:
 
 ```
 ## B-n — <what is wrong, in one line>
-**Found:** <YYYY-MM-DD>, <by whom / during what>   **Status:** open | fixed <date>
+**Found:** <YYYY-MM-DD>, <by whom / during what>   **Status:** open — needs owner, L-n | fixed <date> (#PR)
 **Repro:** <the shortest reliable path to see it>
 **Expected / Actual:** <one line each>
+**Fix:** <what changed, and how it was seen fixed>
+**Release note:** <one line in the words a user would read: "Fixed: …">
+
 **Security:** <only if it is a trust-boundary issue — auth bypass, data crossing users,
 a leaked credential. Never paste a live secret or a working exploit payload.>
 ```
@@ -349,7 +356,7 @@ It now says that only when there is something to mean.
 
 ## B-11 — `agy` cannot use any tool, so it cannot read the codebase it is pointed at
 
-**Found:** 2026-09-11, checking whether an agent can read a dropped file from disk **Status:** open
+**Found:** 2026-09-11, checking whether an agent can read a dropped file from disk **Status:** open — needs owner, [`Later.md`](Later.md) L-21
 **Repro:** In a folder containing `evidence.png`, run the adapter's own command line —
 `agy -p "Read the file evidence.png in this directory..." --output-format stream-json`. No flags
 beyond those in `server/internal/agent/agy.go`.
@@ -509,10 +516,22 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-31 — With the server unreachable, error cards show the browser's "Failed to fetch"
+
+**Found:** 2026-09-14, by the agent, re-checking U-11 **Status:** fixed 2026-09-14 (#25)
+**Repro:** Open Settings → Updates or Machines while the API cannot be reached.
+**Expected / Actual:** "The server could not be reached. Nothing on your computers has changed." /
+"Failed to fetch Nothing on your computers has changed." (Firefox words it differently again)
+**Fix:** `request()` in `apps/web/lib/api.ts` replaces a fetch that got no answer at all with "The
+server could not be reached.", keeping the original as its cause. It covers every call, including
+the sign-in page's "Can't reach the server" detail.
+**Release note:** Fixed: when sparstrowgen's server can't be reached, pages now say so in plain words
+instead of "Failed to fetch".
+
 ## B-30 — A conversation whose folder no longer exists fails with a raw system error
 
 **Found:** 2026-09-14, by the agent, testing U-5 on production with the testing account
-**Status:** open
+**Status:** fixed 2026-09-14 (#25)
 
 **Repro:** Create a conversation in a folder, delete that folder on the computer, then send a message.
 **Expected / Actual:** a failure saying the conversation's folder is missing on this computer and how
@@ -523,6 +542,15 @@ refuses before the CLI runs. The message names the executable, not the folder th
 so it reads as a broken claude install. Nothing else goes wrong: the turn ends as failed and the next
 message works once the folder exists. Seen when the test folder of an earlier session had been cleaned
 up.
+
+**Fix:** the daemon checks the folder before launching any agent (`server/cmd/daemon/folder.go`) and
+fails the turn naming it: missing, a file now, or unreadable. Tested with a fake agent that must never
+be launched. Seen on production the same day: a test computer built from the fix, on the testing
+account, got a message for a conversation in a deleted folder and answered in 550 ms with "this
+conversation's folder, C:\…\gate\work, no longer exists on this computer. Put the folder back, or
+start a new conversation in another folder." Installed computers get it with the next daemon release.
+**Release note:** Fixed: a conversation whose folder was deleted or moved now says which folder is
+missing, instead of an error that looked like the agent was broken.
 
 ## B-29 — A turn running in one conversation locked every conversation
 

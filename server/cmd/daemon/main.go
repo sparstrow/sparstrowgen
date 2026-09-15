@@ -465,6 +465,13 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		})
 		return
 	}
+	// Windows refuses to start a process in a missing folder, and says so by
+	// naming the executable (B-30), which reads as a broken agent install.
+	if problem := folderProblem(t.Cwd); problem != "" {
+		log.Info("turn refused: conversation folder unusable", "cwd", t.Cwd)
+		_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: problem})
+		return
+	}
 
 	// Per-turn cancellation, so stopping one turn leaves the others alone. The
 	// connection context stays the parent: losing the socket still stops
