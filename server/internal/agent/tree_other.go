@@ -31,6 +31,9 @@ func prepare(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
+// hideConsole is Windows-only: nothing here opens a window for a child.
+func hideConsole(*exec.Cmd) {}
+
 type processTree struct{ pgid int }
 
 // own records the group. Membership was already granted by prepare, so this

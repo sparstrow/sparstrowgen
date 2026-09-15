@@ -377,15 +377,15 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 		}
 		d.mu.Unlock()
 	}()
-	if err := d.send(protocol.DaemonMessage{
-		Type: protocol.DaemonHello, Machine: hostname(), Providers: providers,
-		Version: version, Protocol: protocol.DaemonProtocol, SelfUpdates: d.updates != nil,
-	}); err != nil {
+	if err := d.hello(providers); err != nil {
 		return err
 	}
 	if d.updates != nil {
 		d.updates.connected()
 	}
+	// An agent installed, removed or updated while connected is reported
+	// without waiting for the next connection.
+	go d.watchProviders(ctx, finished, detect, providers)
 
 	for {
 		_, payload, err := conn.ReadMessage()

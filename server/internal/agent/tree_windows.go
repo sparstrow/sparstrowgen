@@ -15,9 +15,9 @@ import (
 /* Owning an agent's whole process tree on Windows, via a Job Object.
 
 Adapted from Multica's server/pkg/agent/proc_windows.go, which drives these same
-CLIs on this same machine. Trimmed to what stopping a turn needs: the console
-handling there solves a popup problem we do not have, since our daemon runs in a
-terminal its children inherit.
+CLIs on this same machine. Trimmed to what stopping a turn needs, plus its
+console handling (hideConsole), which the installed daemon does need: it runs
+detached, with no console for its children to inherit.
 
 The load-bearing part is the ORDER, and it is not obvious: the child is created
 suspended, assigned to the job, and only then resumed. Windows grants job
@@ -42,6 +42,25 @@ func prepare(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.CreationFlags |= createSuspended
+}
+
+// createNewConsole gives the child a console of its own, which HideWindow keeps
+// off-screen.
+const createNewConsole = 0x00000010
+
+// hideConsole keeps an agent, and the tools it runs, from opening console
+// windows. The installed daemon runs detached with no console, so each console
+// program it starts would otherwise be given a window of its own. A hidden
+// console is what the agent's tool subprocesses then inherit: CREATE_NO_WINDOW
+// would leave them none, and each would open a visible one (Multica's #1521).
+// Pipes still work, because handles set for stdin and stdout take precedence
+// over the new console.
+func hideConsole(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+	cmd.SysProcAttr.CreationFlags |= createNewConsole
 }
 
 // own takes ownership of a started-but-suspended child. A non-nil error means

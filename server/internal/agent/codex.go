@@ -23,28 +23,28 @@ type Codex struct{}
 
 func (Codex) ID() string { return "codex" }
 
-func codexArgs(prompt string, opts ExecOptions) []string {
+func codexArgs(opts ExecOptions) []string {
 	args := []string{"exec", "--json", "--ignore-user-config", "--skip-git-repo-check"}
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)
 	}
-	// `resume` takes the thread id and the prompt positionally; a fresh run
-	// takes the prompt alone.
+	// A prompt of "-" is read from stdin, so its length is never limited by the
+	// Windows command line (docs/Bugs.md B-32). `resume` takes the thread id
+	// before it.
 	if opts.ResumeSessionID != "" {
-		return append(args, "resume", opts.ResumeSessionID, prompt)
+		return append(args, "resume", opts.ResumeSessionID, "-")
 	}
-	return append(args, prompt)
+	return append(args, "-")
 }
 
 func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
-	cmd := command(ctx, opts.Cwd, "codex", codexArgs(prompt, opts)...)
+	cmd := command(ctx, opts.Cwd, "codex", codexArgs(opts)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	// codex prints "Reading additional input from stdin..." and waits unless
-	// stdin is already closed.
-	cmd.Stdin = strings.NewReader("")
+	// The prompt, then end of input: codex reads to the end before starting.
+	cmd.Stdin = strings.NewReader(prompt)
 	// launch rather than cmd.Start: a stop has to take the tool subprocesses
 	// with it, not just the CLI (D-021).
 	proc, err := launch(ctx, cmd, stdout)

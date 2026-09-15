@@ -2,11 +2,19 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"regexp"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 )
 
 // Agy drives the `agy` CLI (Antigravity).
@@ -16,12 +24,34 @@ import (
 // returns Gemini, Claude and GPT-OSS models behind one CLI, with the reasoning
 // effort baked into the model id (gemini-3.1-pro-high vs -low) rather than
 // offered as a separate setting.
+//
+// Several of its quirks were found first by Multica, which drives the same CLI
+// (Reference/multica-main/server/pkg/agent/antigravity.go): the five-minute
+// print timeout, the silent no-op on an unknown model, and failures that exit 0.
 type Agy struct{}
 
 func (Agy) ID() string { return "agy" }
 
-func agyArgs(prompt string, opts ExecOptions) []string {
-	args := []string{"-p", prompt, "--output-format", "stream-json"}
+// agyPrintTimeout replaces agy's own five-minute limit, which has no "off"
+// value (docs/Bugs.md B-33). It is deliberately far past the daemon's silence
+// watchdog, which is what decides that a turn is stuck.
+const agyPrintTimeout = 24 * time.Hour
+
+func agyArgs(opts ExecOptions, logPath string) []string {
+	args := []string{
+		// The prompt arrives on stdin as one stream-json message, never on the
+		// command line, which Windows caps at 32,767 characters (B-32). agy still
+		// wants -p, with its value attached: a bare -p takes the next flag as the
+		// prompt.
+		"-p=",
+		"--input-format", "stream-json",
+		"--output-format", "stream-json",
+		"--print-timeout", agyPrintTimeout.String(),
+	}
+	if logPath != "" {
+		// Some failures appear only here, with exit code 0 (agyLogFailure).
+		args = append(args, "--log-file", logPath)
+	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
@@ -31,17 +61,50 @@ func agyArgs(prompt string, opts ExecOptions) []string {
 	return args
 }
 
+// agyInput is the one stream-json message a turn sends on stdin. Verified
+// against agy 1.2.3: it keys on "event" like its output does.
+func agyInput(prompt string) ([]byte, error) {
+	data, err := json.Marshal(map[string]any{
+		"event":   "user",
+		"message": map[string]any{"role": "user", "content": prompt},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode the prompt for agy: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
 func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {
-	cmd := command(ctx, opts.Cwd, "agy", agyArgs(prompt, opts)...)
-	stdout, err := cmd.StdoutPipe()
+	if err := agyModelError(opts.Model, agyCatalog.get(ctx)); err != nil {
+		return nil, err
+	}
+	input, err := agyInput(prompt)
 	if err != nil {
 		return nil, err
 	}
-	cmd.Stdin = strings.NewReader("")
+	logPath := ""
+	if f, err := os.CreateTemp("", "sparstrowgen-agy-*.log"); err == nil {
+		logPath = f.Name()
+		_ = f.Close()
+	}
+	removeLog := func() {
+		if logPath != "" {
+			_ = os.Remove(logPath)
+		}
+	}
+
+	cmd := command(ctx, opts.Cwd, "agy", agyArgs(opts, logPath)...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		removeLog()
+		return nil, err
+	}
+	cmd.Stdin = bytes.NewReader(input)
 	// launch rather than cmd.Start: a stop has to take the tool subprocesses
 	// with it, not just the CLI (D-021).
 	proc, err := launch(ctx, cmd, stdout)
 	if err != nil {
+		removeLog()
 		return nil, err
 	}
 
@@ -50,12 +113,18 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 
 	go func() {
 		defer close(result)
+		defer removeLog()
 		p := parseAgy(stdout, messages)
 		close(messages)
 
 		waitErr := proc.Wait()
-		if p.Err != nil {
+		switch {
+		case p.Err != nil:
 			waitErr = p.Err
+		case p.Text == "" && ctx.Err() == nil:
+			// agy can end a turn with nothing to show and still report success.
+			// A blank "done" reads as the app losing the answer.
+			waitErr = agyQuietFailure(readSmall(logPath), waitErr)
 		}
 		result <- Result{
 			Text:      p.Text,
@@ -69,12 +138,117 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 	return &Session{Messages: messages, Result: result}, nil
 }
 
+// ---------------------------------------------------------------------------
+// the model catalogue
+// ---------------------------------------------------------------------------
+
+// agyCatalogTTL bounds how stale a remembered `agy models` answer may be. The
+// command takes about two seconds, too slow to run before every turn.
+const agyCatalogTTL = 10 * time.Minute
+
+type agyCatalogCache struct {
+	mu     sync.Mutex
+	at     time.Time
+	models []protocol.Model
+}
+
+var agyCatalog = &agyCatalogCache{}
+
+func (c *agyCatalogCache) put(models []protocol.Model) {
+	if len(models) == 0 {
+		return // a failed listing must not erase a good one
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.at, c.models = time.Now(), models
+}
+
+func (c *agyCatalogCache) get(ctx context.Context) []protocol.Model {
+	c.mu.Lock()
+	fresh := !c.at.IsZero() && time.Since(c.at) < agyCatalogTTL
+	models := c.models
+	c.mu.Unlock()
+	if fresh {
+		return models
+	}
+	if listed := agyModels(ctx); len(listed) > 0 {
+		c.put(listed)
+		return listed
+	}
+	return models
+}
+
+// agyModelError refuses a model this agy does not list. agy itself exits 0 with
+// no output on an unknown model, which would show as an empty answer. With no
+// catalogue at all it lets agy decide, so a listing hiccup never blocks a turn.
+func agyModelError(model string, catalog []protocol.Model) error {
+	if model == "" || len(catalog) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(catalog))
+	for _, m := range catalog {
+		if m.ID == model {
+			return nil
+		}
+		names = append(names, m.ID)
+	}
+	return fmt.Errorf("agy on this computer does not offer the model %q. Choose another agy model: %s",
+		model, strings.Join(names, ", "))
+}
+
+// ---------------------------------------------------------------------------
+// failures that exit 0
+// ---------------------------------------------------------------------------
+
+var (
+	// Written when agy's own print timeout elapses, after which it prints an
+	// error and exits 0 (Multica MUL-3570).
+	agyTimedOutRe = regexp.MustCompile(`Print mode: timed out after \d+ polls`)
+	// Written for a model or provider failure agy does not otherwise report.
+	agyExecutorErrorRe = regexp.MustCompile(`agent executor error:\s*(.+)`)
+)
+
+// agyQuietFailure explains a turn that produced no answer, from agy's log.
+func agyQuietFailure(log string, waitErr error) error {
+	if m := agyExecutorErrorRe.FindAllStringSubmatch(log, -1); len(m) > 0 {
+		return fmt.Errorf("agy failed: %s", strings.TrimSpace(m[len(m)-1][1]))
+	}
+	if agyTimedOutRe.MatchString(log) {
+		return errors.New("agy gave up waiting for its own answer")
+	}
+	if waitErr != nil {
+		return fmt.Errorf("agy exited without answering: %w", waitErr)
+	}
+	return errors.New("agy finished without writing an answer")
+}
+
+// readSmall reads a log for failure markers, keeping only its last megabyte.
+func readSmall(path string) string {
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	if len(data) > 1<<20 {
+		data = data[len(data)-1<<20:]
+	}
+	return string(data)
+}
+
+// ---------------------------------------------------------------------------
+// the stream
+// ---------------------------------------------------------------------------
+
 func parseAgy(r io.Reader, out chan<- Message) parsed {
 	var (
 		p        parsed
 		streamed strings.Builder
 		final    string
 		status   string
+		failure  string
+		denied   []string
 	)
 
 	scanner := bufio.NewScanner(r)
@@ -97,12 +271,20 @@ func parseAgy(r io.Reader, out chan<- Message) parsed {
 			}
 		case "result":
 			status = ev.Result.Status
+			failure = ev.Result.Error
 			p.Tokens = ev.Result.Usage.total()
 			// result.response is authoritative: it is the whole answer, whether
 			// or not deltas arrived.
 			final = ev.Result.Response
 			if ev.Result.ConversationID != "" {
 				p.SessionID = ev.Result.ConversationID
+			}
+			for _, d := range ev.Result.DeniedActions {
+				if d.DisplayName != "" {
+					denied = append(denied, d.DisplayName)
+				} else if d.Action != "" {
+					denied = append(denied, d.Action)
+				}
 			}
 		}
 	}
@@ -111,8 +293,18 @@ func parseAgy(r io.Reader, out chan<- Message) parsed {
 	if p.Text == "" {
 		p.Text = streamed.String()
 	}
-	if status != "" && status != "SUCCESS" {
-		p.Err = fmt.Errorf("agy finished with status %s", status)
+	switch {
+	case status != "" && status != "SUCCESS":
+		if failure != "" {
+			p.Err = fmt.Errorf("agy failed: %s", failure)
+		} else {
+			p.Err = fmt.Errorf("agy finished with status %s", status)
+		}
+	case p.Text == "" && len(denied) > 0:
+		// Seen 2026-09-14 on agy 1.2.3: status SUCCESS, an empty response, and
+		// the tool it was refused. Without this it is a blank answer.
+		p.Err = fmt.Errorf("agy stopped without answering: it needed permission to use %s, which sparstrowgen does not give agy yet",
+			strings.Join(denied, ", "))
 	}
 	return p
 }
@@ -128,7 +320,12 @@ type agyEvent struct {
 		ConversationID string   `json:"conversation_id"`
 		Status         string   `json:"status"`
 		Response       string   `json:"response"`
+		Error          string   `json:"error"`
 		Usage          agyUsage `json:"usage"`
+		DeniedActions  []struct {
+			Action      string `json:"action"`
+			DisplayName string `json:"display_name"`
+		} `json:"denied_actions"`
 	} `json:"result"`
 }
 
