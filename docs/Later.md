@@ -293,6 +293,13 @@ chat-only and say so on its provider chip.
 
 **Unblocks when:** you say yes to the sandbox check, or pick one of the two routes.
 
+**Re-checked 2026-09-14, after you signed agy in.** Signing in was not the cause: agy 1.2.3 with our
+exact command line still denied `run_command`, and it searched `C:\Users\gsrih` rather than the
+conversation's folder, because agy's workspace is only what `--add-dir` names. Multica runs every agy
+turn with `--dangerously-skip-permissions --add-dir <folder> --print-timeout <long>`
+(`server/pkg/agent/antigravity.go`), and runs claude with `--permission-mode bypassPermissions` too.
+Running agy with that flag was refused by this session's safety check, so it needs your yes first.
+
 ## L-22 — With two computers on one account, which one runs Chat?
 
 **Status:** question **Raised:** 2026-09-14 (KnownGaps G-37)
