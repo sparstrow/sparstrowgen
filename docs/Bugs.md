@@ -533,7 +533,8 @@ different places would each have been shown the same wrong time.
 `toLocaleTimeString` in whatever timezone it is actually in — the four places that show one
 (`message-list.tsx` twice, `raw-transcript.tsx` twice) go through one `clockTime` helper, which
 renders nothing at all for a value it cannot parse rather than "Invalid Date". Seen on production
-after it deployed: the conversation that read 21:54 / 21:55 read 17:54 / 17:55, matching the clock.
+after it deployed: the same conversation that had read 21:54 / 21:55 read 05:54 PM / 05:55 PM, in
+both the rendered and the raw view, matching the clock of the browser reading it.
 **Release note:** Fixed: message times now show in your own timezone instead of the server's.
 
 ## B-36 — Every agy turn waits about ninety seconds before the model is asked anything
@@ -593,7 +594,9 @@ the transcript shows that when it is set. Both times are kept rather than overwr
 when a turn started and when it answered are different facts. A turn still running, and every entry
 written before the column existed, still shows when it started. `TestAnAgentTurnIsShownWhenItAnswered`
 opens an entry nine minutes in the past, finishes it, and proves the transcript moves to the time it
-answered — in the row returned and on re-reading the conversation.
+answered — in the row returned and on re-reading the conversation. Seen on production with the
+testing account: a real agy turn asked at 21:54:22Z was answered at 21:55:49Z, and the transcript
+showed the two a minute apart instead of both at 21:54.
 **Release note:** Fixed: a slow agent's reply now shows the time its answer arrived, instead of the
 time you sent the message.
 
