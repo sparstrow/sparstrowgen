@@ -1,7 +1,7 @@
 "use client";
 
 import type { Entry } from "@/lib/chat-types";
-import { providerStyle, formatTokens, formatUsd } from "./provider-meta";
+import { providerStyle, formatTokens, formatUsd, clockTime } from "./provider-meta";
 
 /* The transcript with nothing done to it.
  *
@@ -44,7 +44,7 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
             <div key={e.id}>
               <Line>
                 <span className="text-foreground">you</span>
-                <span>{e.at}</span>
+                <span>{clockTime(e.at)}</span>
               </Line>
               <Body text={e.text} />
             </div>
@@ -68,7 +68,7 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
             <Line>
               <span className={providerStyle(e.provider).text}>{e.provider}</span>
               <span>{e.model.label}</span>
-              <span>{e.at}</span>
+              <span>{clockTime(e.at)}</span>
               {e.usage && (
                 <span>
                   · {formatTokens(e.usage.tokens)} tokens

@@ -516,6 +516,26 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-37 — Every message was timestamped in the server's timezone, not the reader's
+
+**Found:** 2026-09-16, by the agent, verifying B-35 on production — the owner's own screenshots show
+it too, and it is why they read 21:28 and 21:33 for messages he sent late in his afternoon
+**Status:** fixed 2026-09-16
+**Repro:** Send a message from anywhere that is not UTC. Compare the time under it with the clock.
+**Expected / Actual:** the time you sent it, by your clock / four hours later in Toronto — 21:54 for
+a message sent at 17:54, seen on production with the testing account.
+
+The server formatted the time of day itself (`entryTime(e).Local().Format("15:04")`) and sent the
+finished string. `Local` is the *server's* local time, and the production server runs in UTC, so
+every transcript was stamped in a timezone nobody reading it is in. Two people on one account in
+different places would each have been shown the same wrong time.
+**Fix:** entries carry the instant instead, RFC 3339 in UTC, and the browser renders it with
+`toLocaleTimeString` in whatever timezone it is actually in — the four places that show one
+(`message-list.tsx` twice, `raw-transcript.tsx` twice) go through one `clockTime` helper, which
+renders nothing at all for a value it cannot parse rather than "Invalid Date". Seen on production
+after it deployed: the conversation that read 21:54 / 21:55 read 17:54 / 17:55, matching the clock.
+**Release note:** Fixed: message times now show in your own timezone instead of the server's.
+
 ## B-36 — Every agy turn waits about ninety seconds before the model is asked anything
 
 **Found:** 2026-09-16, owner-reported: "I just said Hi to a fastest model in gemini and taking so

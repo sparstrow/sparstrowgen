@@ -138,7 +138,7 @@ func toEntry(e db.Entry) protocol.Entry {
 		ID:   uuidToString(e.ID),
 		Role: e.Role,
 		Seq:  e.Seq,
-		At:   entryTime(e).Local().Format("15:04"),
+		At:   entryTime(e).UTC().Format(time.RFC3339),
 	}
 	model := &protocol.Model{ID: str(e.ModelID), Label: str(e.ModelLabel)}
 	switch e.Role {
