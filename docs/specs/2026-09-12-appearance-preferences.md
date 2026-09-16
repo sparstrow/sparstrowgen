@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Approved 2026-09-16** — the owner chose the whole spec as one delivery |
+| **Status** | **Approved 2026-09-16**, and delivered the same day (#29, #30, #31). Verified on production with the testing account: every mode, surface and accent applied without a reload; the choice survived a reload and reached a browser whose local copy was cleared; a failed save said so and went back; a second tab holding the live connection converged unprompted. The one check left is [`Unverified.md`](../Unverified.md) U-15 |
 | **Created** | 2026-09-12 |
 | **Trigger** | "for the theme and user wide setting refer to this old app's setting I have added the colour theme, dark and light mode etc" |
 | **Design** | Settings → Appearance, built in the existing settings pattern at the owner's direction (2026-09-16) rather than through rendered directions: one more screen in an established pattern |

@@ -234,3 +234,17 @@ was empty before any test computer was paired, and afterwards listed only its ow
 its test computers disconnected, sending a message returned 503 "your machine is unreachable, so
 nothing new can be sent" instead of reaching the owner's computer. The isolation tests
 (`internal/api/isolation_test.go`) cover the same boundary for every endpoint.
+
+## U-15 — A tab with no live connection picks up an appearance change when it is looked at again
+
+**From:** appearance (#29, #31), 2026-09-16 · **Who can run it:** owner, or an agent in a browser that
+can hold real focus
+**How:** Sign in, open two tabs — one on Machines (which holds no live connection), one on
+Settings → Appearance. Change the accent in the second, then click back to the Machines tab. Passing:
+it takes the new accent within a second of being looked at, without a reload.
+**Status:** open — the same convergence was verified 2026-09-16 on production through the live
+connection (a second tab on Settings → Updates followed a change within ~1.5 s, unprompted). The
+focus path could not be run here: the Browser pane reports `document.visibilityState` "hidden" and
+`hasFocus()` false even when a tab is fronted, and the refresh it triggers is exactly what a hidden
+page suppresses (the same harness limit that produced G-36). The code path is
+`refetchOnWindowFocus: "always"` on the session and appearance queries.
