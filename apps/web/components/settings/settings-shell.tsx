@@ -3,18 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ComponentType, ReactNode } from "react";
-import { ChevronRight, Download, KeyRound } from "lucide-react";
+import { ChevronRight, Download, KeyRound, Palette } from "lucide-react";
 import { cn } from "cn";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ProductSidebar } from "@/components/product-sidebar";
 
-export type SettingsPageId = "password" | "updates";
+export type SettingsPageId = "password" | "appearance" | "updates";
 
 type Entry = { id: SettingsPageId; label: string; href: string; icon: ComponentType<{ className?: string }> };
 
 // Only what is built. A group earns a place here when it has a page (DESIGN.md §9).
 const groups: { label: string; entries: Entry[] }[] = [
-  { label: "Account", entries: [{ id: "password", label: "Password", href: "/settings", icon: KeyRound }] },
+  { label: "Account", entries: [
+    { id: "password", label: "Password", href: "/settings", icon: KeyRound },
+    { id: "appearance", label: "Appearance", href: "/settings/appearance", icon: Palette },
+  ] },
   { label: "Computers", entries: [{ id: "updates", label: "Updates", href: "/settings/updates", icon: Download }] },
 ];
 

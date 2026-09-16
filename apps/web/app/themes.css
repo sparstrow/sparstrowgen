@@ -1,0 +1,194 @@
+/* Surfaces and accents — the appearance a person chooses for their account
+   (spec docs/specs/2026-09-12-appearance-preferences.md).
+
+   Restored from the previous app, whose theming contract is data in
+   `packages/shared/src/theme/tokens.ts` there: surface sets the hue and chroma
+   of the neutral ramp, and the ramp's lightnesses are fixed. Values are copied
+   from that table rather than re-invented, so the two products look like the
+   same product.
+
+   Surface  hue / chroma        Accent  hue / chroma / light lightness
+   paper     85 / 0.01          amber    70 / 0.15 / 0.528
+   slate    250 / 0.011         violet  285 / 0.18 / 0.538
+   soft     280 / 0.007         blue    250 / 0.16 / 0.520
+   mono       0 / 0             teal    190 / 0.12 / 0.496
+                                rose     15 / 0.16 / 0.542
+
+   Three things here are load-bearing, and each was a measured decision there:
+
+   - Light-mode `--card` carries no surface chroma. It is pure white in every
+     surface, so a card reads as lifted rather than tinted.
+   - `soft` uses its own ramp: it lifts the dark backgrounds and lowers the
+     light ones. That difference is the whole point of the surface.
+   - Accents use one lightness in dark (0.78) and a per-hue lightness in light,
+     because equal OKLCH lightness is not equal contrast — green dominates
+     relative luminance, so a single light value fails some hues.
+
+   Selectors are `html[data-...]` rather than `:root[data-...]` deliberately:
+   the extra element in the selector outranks the plain `:root` defaults in
+   globals.css whatever order the files are imported in.
+
+   Status, provider and code colours are not here. They keep their meaning in
+   every appearance (spec: out of scope), so nothing below touches them. */
+
+/* ---------------------------------------------------------------- surfaces */
+
+html[data-surface="paper"] {
+  --background: oklch(0.985 0.01 85);
+  --card: oklch(1 0 0);
+  --popover: oklch(1 0 0);
+  --muted: oklch(0.955 0.01 85);
+  --secondary: oklch(0.955 0.01 85);
+  --accent: oklch(0.955 0.01 85);
+  --mine: oklch(0.93 0.02 85);
+}
+html.dark[data-surface="paper"] {
+  --background: oklch(0.145 0.01 85);
+  --card: oklch(0.195 0.01 85);
+  --popover: oklch(0.245 0.01 85);
+  --muted: oklch(0.245 0.01 85);
+  --secondary: oklch(0.245 0.01 85);
+  --accent: oklch(0.245 0.01 85);
+  --mine: oklch(0.3 0.024 85);
+}
+
+html[data-surface="slate"] {
+  --background: oklch(0.985 0.011 250);
+  --card: oklch(1 0 0);
+  --popover: oklch(1 0 0);
+  --muted: oklch(0.955 0.011 250);
+  --secondary: oklch(0.955 0.011 250);
+  --accent: oklch(0.955 0.011 250);
+  --mine: oklch(0.93 0.022 250);
+}
+html.dark[data-surface="slate"] {
+  --background: oklch(0.145 0.011 250);
+  --card: oklch(0.195 0.011 250);
+  --popover: oklch(0.245 0.011 250);
+  --muted: oklch(0.245 0.011 250);
+  --secondary: oklch(0.245 0.011 250);
+  --accent: oklch(0.245 0.011 250);
+  --mine: oklch(0.3 0.026 250);
+}
+
+/* soft is the documented exception: its own, lifted ramp in both modes. */
+html[data-surface="soft"] {
+  --background: oklch(0.965 0.007 280);
+  --card: oklch(0.995 0 0);
+  --popover: oklch(0.995 0 0);
+  --muted: oklch(0.935 0.007 280);
+  --secondary: oklch(0.935 0.007 280);
+  --accent: oklch(0.935 0.007 280);
+  --mine: oklch(0.915 0.016 280);
+}
+html.dark[data-surface="soft"] {
+  --background: oklch(0.19 0.007 280);
+  --card: oklch(0.228 0.007 280);
+  --popover: oklch(0.268 0.007 280);
+  --muted: oklch(0.268 0.007 280);
+  --secondary: oklch(0.268 0.007 280);
+  --accent: oklch(0.268 0.007 280);
+  --mine: oklch(0.33 0.02 280);
+}
+
+html[data-surface="mono"] {
+  --background: oklch(0.985 0 0);
+  --card: oklch(1 0 0);
+  --popover: oklch(1 0 0);
+  --muted: oklch(0.955 0 0);
+  --secondary: oklch(0.955 0 0);
+  --accent: oklch(0.955 0 0);
+  --mine: oklch(0.93 0 0);
+}
+html.dark[data-surface="mono"] {
+  --background: oklch(0.145 0 0);
+  --card: oklch(0.195 0 0);
+  --popover: oklch(0.245 0 0);
+  --muted: oklch(0.245 0 0);
+  --secondary: oklch(0.245 0 0);
+  --accent: oklch(0.245 0 0);
+  --mine: oklch(0.3 0 0);
+}
+
+/* The neutrals that do not take surface chroma: text, borders, and the two
+   foregrounds that sit on a surface. One rule per mode covers every surface. */
+html[data-surface] {
+  --foreground: oklch(0.19 0 0);
+  --card-foreground: oklch(0.19 0 0);
+  --popover-foreground: oklch(0.19 0 0);
+  --secondary-foreground: oklch(0.19 0 0);
+  --accent-foreground: oklch(0.19 0 0);
+  --muted-foreground: oklch(0.48 0 0);
+  --mine-foreground: oklch(0.19 0 0);
+  --border: oklch(0.2 0 0 / 12%);
+  --input: oklch(0.2 0 0 / 16%);
+}
+html.dark[data-surface] {
+  --foreground: oklch(0.97 0 0);
+  --card-foreground: oklch(0.97 0 0);
+  --popover-foreground: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --mine-foreground: oklch(0.97 0 0);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+}
+
+/* ----------------------------------------------------------------- accents */
+
+/* The accent is interactive emphasis: primary buttons and the focus ring. The
+   foreground on a solid accent flips with the mode, because a light-mode accent
+   sits near L 0.52 and a dark-mode one near L 0.78 — one foreground cannot read
+   on both. */
+html[data-accent] {
+  --primary-foreground: oklch(0.985 0 0);
+}
+html.dark[data-accent] {
+  --primary-foreground: oklch(0.16 0 0);
+}
+
+html[data-accent="amber"] {
+  --primary: oklch(0.528 0.15 70);
+  --ring: oklch(0.528 0.15 70);
+}
+html.dark[data-accent="amber"] {
+  --primary: oklch(0.78 0.15 70);
+  --ring: oklch(0.78 0.15 70);
+}
+
+html[data-accent="violet"] {
+  --primary: oklch(0.538 0.18 285);
+  --ring: oklch(0.538 0.18 285);
+}
+html.dark[data-accent="violet"] {
+  --primary: oklch(0.78 0.18 285);
+  --ring: oklch(0.78 0.18 285);
+}
+
+html[data-accent="blue"] {
+  --primary: oklch(0.52 0.16 250);
+  --ring: oklch(0.52 0.16 250);
+}
+html.dark[data-accent="blue"] {
+  --primary: oklch(0.78 0.16 250);
+  --ring: oklch(0.78 0.16 250);
+}
+
+html[data-accent="teal"] {
+  --primary: oklch(0.496 0.12 190);
+  --ring: oklch(0.496 0.12 190);
+}
+html.dark[data-accent="teal"] {
+  --primary: oklch(0.78 0.12 190);
+  --ring: oklch(0.78 0.12 190);
+}
+
+html[data-accent="rose"] {
+  --primary: oklch(0.542 0.16 15);
+  --ring: oklch(0.542 0.16 15);
+}
+html.dark[data-accent="rose"] {
+  --primary: oklch(0.78 0.16 15);
+  --ring: oklch(0.78 0.16 15);
+}

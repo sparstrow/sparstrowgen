@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — later scope; not part of the approved first usable release** |
+| **Status** | **Approved 2026-09-16** — the owner chose the whole spec as one delivery |
 | **Created** | 2026-09-12 |
 | **Trigger** | "for the theme and user wide setting refer to this old app's setting I have added the colour theme, dark and light mode etc" |
-| **Design** | not designed yet |
+| **Design** | Settings → Appearance, built in the existing settings pattern at the owner's direction (2026-09-16) rather than through rendered directions: one more screen in an established pattern |
 | **Open questions** | none; the old app establishes the choices and account-wide scope |
 
 > The previous app at `D:\Sparstrow\Sparstrowgen` is a read-only product reference. It confirms the

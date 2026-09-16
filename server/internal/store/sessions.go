@@ -83,7 +83,7 @@ func (s *Store) SessionUser(ctx context.Context, token string) (User, bool, erro
 	if err != nil {
 		return User{}, false, err
 	}
-	return User{ID: uuidToString(user.ID), Email: user.Email}, true, nil
+	return User{ID: uuidToString(user.ID), Email: user.Email, Appearance: appearanceOf(user.AppearanceMode, user.AppearanceSurface, user.AppearanceAccent)}, true, nil
 }
 
 // EndSession signs one session out. Signing out a token that is already gone is

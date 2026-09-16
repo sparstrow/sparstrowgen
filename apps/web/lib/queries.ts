@@ -16,6 +16,7 @@ import {
   type ServerEvent,
   type Session,
 } from "./api";
+import type { Appearance } from "./api";
 import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-types";
 
 /* Every read of server state goes through here, and every realtime event
@@ -23,6 +24,7 @@ import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-ty
 
 export const keys = {
   session: ["session"] as const,
+  appearance: ["appearance"] as const,
   providers: ["providers"] as const,
   conversations: (q: string) => ["conversations", q] as const,
   conversation: (id: string) => ["conversation", id] as const,
@@ -41,6 +43,56 @@ export function useSession() {
     queryFn: api.session,
     staleTime: Infinity,
     retry: false,
+  });
+}
+
+/** How this account wants the app to look.
+ *
+ *  The session already carried it, so the settings screen opens on the real
+ *  choice rather than a skeleton; this query is what re-reads it afterwards and
+ *  what another tab converges on. */
+export function useAppearance() {
+  const session = useSession();
+  const signedIn = session.data?.signedIn ?? false;
+  return useQuery({
+    queryKey: keys.appearance,
+    queryFn: api.appearance,
+    initialData: signedIn ? session.data?.appearance : undefined,
+    enabled: signedIn,
+  });
+}
+
+/** Saves all three choices together.
+ *
+ *  Optimistic, which is the right call here by AGENTS.md §3's test: the outcome
+ *  is predictable, nothing navigates, and undoing it is putting back the values
+ *  we already hold. The session copy is updated too, because that is what the
+ *  provider paints from — so the change is seen at once rather than after a
+ *  round trip. A failure puts both back and says so. */
+export function useSaveAppearance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (next: Appearance) => api.saveAppearance(next),
+    onMutate: async (next) => {
+      await qc.cancelQueries({ queryKey: keys.appearance });
+      const previous = qc.getQueryData<Appearance>(keys.appearance);
+      const previousSession = qc.getQueryData<Session>(keys.session);
+      qc.setQueryData(keys.appearance, next);
+      if (previousSession?.signedIn) {
+        qc.setQueryData<Session>(keys.session, { ...previousSession, appearance: next });
+      }
+      return { previous, previousSession };
+    },
+    onError: (error, _next, context) => {
+      if (context?.previous) qc.setQueryData(keys.appearance, context.previous);
+      if (context?.previousSession) qc.setQueryData(keys.session, context.previousSession);
+      toast.error("Appearance was not saved", { description: (error as Error).message });
+    },
+    onSuccess: (saved) => {
+      qc.setQueryData(keys.appearance, saved);
+      const session = qc.getQueryData<Session>(keys.session);
+      if (session?.signedIn) qc.setQueryData<Session>(keys.session, { ...session, appearance: saved });
+    },
   });
 }
 

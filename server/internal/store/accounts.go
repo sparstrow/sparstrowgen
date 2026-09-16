@@ -165,7 +165,7 @@ func (s *Store) CompleteRegistration(ctx context.Context, token, password, userA
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, "", time.Time{}, err
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, session, expires, nil
+	return User{ID: uuidToString(row.ID), Email: row.Email, Appearance: appearanceOf(row.AppearanceMode, row.AppearanceSurface, row.AppearanceAccent)}, session, expires, nil
 }
 
 // ResetPassword spends a reset link, replaces the password, ends every session
@@ -217,7 +217,7 @@ func (s *Store) ResetPassword(ctx context.Context, token, password, userAgent, i
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, "", time.Time{}, err
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, session, expires, nil
+	return User{ID: uuidToString(row.ID), Email: row.Email, Appearance: appearanceOf(row.AppearanceMode, row.AppearanceSurface, row.AppearanceAccent)}, session, expires, nil
 }
 
 // RecordAccessRequest notes that an uninvited address asked for an account, and

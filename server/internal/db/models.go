@@ -101,9 +101,12 @@ type Session struct {
 }
 
 type User struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                pgtype.UUID        `json:"id"`
+	Email             string             `json:"email"`
+	PasswordHash      string             `json:"password_hash"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	AppearanceMode    string             `json:"appearance_mode"`
+	AppearanceSurface string             `json:"appearance_surface"`
+	AppearanceAccent  string             `json:"appearance_accent"`
 }

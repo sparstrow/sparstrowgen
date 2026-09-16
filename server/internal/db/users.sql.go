@@ -27,7 +27,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, created_at, updated_at
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
 `
 
 type CreateUserParams struct {
@@ -47,6 +47,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
@@ -116,7 +119,7 @@ func (q *Queries) DeleteEveryUser(ctx context.Context) (int64, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, password_hash, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -128,12 +131,15 @@ func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -145,12 +151,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
 
 const getUserByEmailForChange = `-- name: GetUserByEmailForChange :one
-SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = $1 FOR UPDATE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1 FOR UPDATE
 `
 
 // Resetting a forgotten password: the same lock as GetUserForChange, found by
@@ -164,12 +173,15 @@ func (q *Queries) GetUserByEmailForChange(ctx context.Context, email string) (Us
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
 
 const getUserByEmailForSignIn = `-- name: GetUserByEmailForSignIn :one
-SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = $1 FOR SHARE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1 FOR SHARE
 `
 
 // Signing in, holding the row against a password change.
@@ -189,12 +201,15 @@ func (q *Queries) GetUserByEmailForSignIn(ctx context.Context, email string) (Us
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
 
 const getUserForChange = `-- name: GetUserForChange :one
-SELECT id, email, password_hash, created_at, updated_at FROM users WHERE id = $1 FOR UPDATE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE id = $1 FOR UPDATE
 `
 
 // Changing the password, excluding everything else on this row.
@@ -212,6 +227,46 @@ func (q *Queries) GetUserForChange(ctx context.Context, id pgtype.UUID) (User, e
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
+	)
+	return i, err
+}
+
+const setUserAppearance = `-- name: SetUserAppearance :one
+UPDATE users
+SET appearance_mode = $2, appearance_surface = $3, appearance_accent = $4, updated_at = now()
+WHERE id = $1
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
+`
+
+type SetUserAppearanceParams struct {
+	ID                pgtype.UUID `json:"id"`
+	AppearanceMode    string      `json:"appearance_mode"`
+	AppearanceSurface string      `json:"appearance_surface"`
+	AppearanceAccent  string      `json:"appearance_accent"`
+}
+
+// The whole appearance in one statement: a save always carries all three, so a
+// tab holding stale values cannot merge half of them into the account.
+func (q *Queries) SetUserAppearance(ctx context.Context, arg SetUserAppearanceParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserAppearance,
+		arg.ID,
+		arg.AppearanceMode,
+		arg.AppearanceSurface,
+		arg.AppearanceAccent,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
@@ -219,7 +274,7 @@ func (q *Queries) GetUserForChange(ctx context.Context, id pgtype.UUID) (User, e
 const setUserEmail = `-- name: SetUserEmail :one
 UPDATE users SET email = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, email, password_hash, created_at, updated_at
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
 `
 
 type SetUserEmailParams struct {
@@ -236,6 +291,9 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
@@ -243,7 +301,7 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 const setUserPassword = `-- name: SetUserPassword :one
 UPDATE users SET password_hash = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, email, password_hash, created_at, updated_at
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
 `
 
 type SetUserPasswordParams struct {
@@ -260,6 +318,9 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
 	)
 	return i, err
 }
