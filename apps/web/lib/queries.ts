@@ -43,6 +43,12 @@ export function useSession() {
     queryFn: api.session,
     staleTime: Infinity,
     retry: false,
+    // Asked again whenever this tab is looked at. The live connection announces
+    // an appearance change to the pages that hold one (Chat, Settings →
+    // Updates); every other page has none, and without this a tab left open on
+    // Machines would keep the look it was loaded with. "always" rather than
+    // true, because staleTime above means it is never stale.
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -59,6 +65,9 @@ export function useAppearance() {
     queryFn: api.appearance,
     initialData: signedIn ? session.data?.appearance : undefined,
     enabled: signedIn,
+    // Same reason as the session above: a settings screen left open in another
+    // tab shows the account's real choice as soon as it is looked at.
+    refetchOnWindowFocus: "always",
   });
 }
 
