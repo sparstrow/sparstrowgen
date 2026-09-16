@@ -418,6 +418,14 @@ export function useRealtime(onDaemon: (online: boolean, tooOld?: boolean) => voi
           void qc.invalidateQueries({ queryKey: ["machines"] });
           break;
 
+        case "appearance":
+          // Both, because the provider paints from the session's copy and the
+          // settings screen reads the other. Re-read rather than carry the
+          // values on the event: the account is the one source of truth.
+          void qc.invalidateQueries({ queryKey: keys.appearance });
+          void qc.invalidateQueries({ queryKey: keys.session });
+          break;
+
         case "conversation":
           qc.setQueryData<Conversation>(
             keys.conversation(ev.conversation.id),

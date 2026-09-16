@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
@@ -48,5 +49,8 @@ func (a *API) setAppearance(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errors.New("your appearance could not be saved"), http.StatusServiceUnavailable)
 		return
 	}
+	// Told to this account's other open tabs and devices, so they converge on
+	// the choice instead of keeping the look they were loaded with.
+	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{Type: protocol.EventAppearance})
 	writeJSON(w, saved)
 }

@@ -337,6 +337,10 @@ const (
 	// already said stays readable when it is not; only sending is impossible.
 	EventDaemon   = "daemon"
 	EventMachines = "machines"
+	// EventAppearance says this account's saved appearance changed, so every
+	// other browser it is signed in to converges on it rather than keeping the
+	// look it happened to load with.
+	EventAppearance = "appearance"
 )
 
 type ClientEvent struct {

@@ -394,6 +394,8 @@ export type ServerEvent =
   | { type: "providers"; providers: Provider[] }
   | { type: "daemon"; online: boolean; tooOld?: boolean }
   | { type: "machines" }
+  // This account's appearance changed in another tab or on another device.
+  | { type: "appearance" }
   | { type: "conversation"; conversation: Conversation }
   | { type: "entry_added"; conversationId: string; entry: Entry }
   | { type: "entry_delta"; conversationId: string; entryId: string; text: string }
