@@ -120,12 +120,25 @@ func toConversation(c db.Conversation) protocol.Conversation {
 	}
 }
 
+// entryTime is the moment a transcript entry shows. For an agent turn that is
+// when its answer arrived, not when the turn was launched: the entry is opened
+// empty at the start so a mid-turn refresh shows what has streamed in, which
+// made a ninety-second answer appear to have been given in the same minute the
+// question was asked (docs/Bugs.md B-35). A turn still running, and every entry
+// written before finished_at existed, falls back to when it was created.
+func entryTime(e db.Entry) time.Time {
+	if e.FinishedAt.Valid {
+		return e.FinishedAt.Time
+	}
+	return e.CreatedAt.Time
+}
+
 func toEntry(e db.Entry) protocol.Entry {
 	out := protocol.Entry{
 		ID:   uuidToString(e.ID),
 		Role: e.Role,
 		Seq:  e.Seq,
-		At:   e.CreatedAt.Time.Local().Format("15:04"),
+		At:   entryTime(e).Local().Format("15:04"),
 	}
 	model := &protocol.Model{ID: str(e.ModelID), Label: str(e.ModelLabel)}
 	switch e.Role {

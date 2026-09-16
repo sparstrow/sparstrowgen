@@ -21,7 +21,7 @@ INSERT INTO entries (
     (SELECT COALESCE(MAX(seq), 0) + 1 FROM entries WHERE conversation_id = $1),
     $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped, finished_at
 `
 
 type AppendEntryParams struct {
@@ -68,6 +68,7 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Entry
 		&i.Failure,
 		&i.MessagesReplayed,
 		&i.Stopped,
+		&i.FinishedAt,
 	)
 	return i, err
 }
@@ -76,7 +77,7 @@ const appendEntryBody = `-- name: AppendEntryBody :one
 UPDATE entries
 SET body = body || $2::text
 WHERE id = $1
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped, finished_at
 `
 
 type AppendEntryBodyParams struct {
@@ -104,6 +105,7 @@ func (q *Queries) AppendEntryBody(ctx context.Context, arg AppendEntryBodyParams
 		&i.Failure,
 		&i.MessagesReplayed,
 		&i.Stopped,
+		&i.FinishedAt,
 	)
 	return i, err
 }
@@ -121,9 +123,10 @@ func (q *Queries) CountEntries(ctx context.Context, conversationID pgtype.UUID) 
 
 const finishAgentEntry = `-- name: FinishAgentEntry :one
 UPDATE entries
-SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6
+SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6,
+    finished_at = now()
 WHERE id = $1
-RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped
+RETURNING id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped, finished_at
 `
 
 type FinishAgentEntryParams struct {
@@ -135,6 +138,9 @@ type FinishAgentEntryParams struct {
 	Stopped    bool        `json:"stopped"`
 }
 
+// finished_at is stamped here rather than left as created_at, which is when the
+// empty entry was opened for the turn to stream into. The transcript shows when
+// the answer arrived (docs/Bugs.md B-35).
 func (q *Queries) FinishAgentEntry(ctx context.Context, arg FinishAgentEntryParams) (Entry, error) {
 	row := q.db.QueryRow(ctx, finishAgentEntry,
 		arg.ID,
@@ -160,12 +166,13 @@ func (q *Queries) FinishAgentEntry(ctx context.Context, arg FinishAgentEntryPara
 		&i.Failure,
 		&i.MessagesReplayed,
 		&i.Stopped,
+		&i.FinishedAt,
 	)
 	return i, err
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped FROM entries
+SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped, finished_at FROM entries
 WHERE conversation_id = $1
 ORDER BY seq
 `
@@ -194,6 +201,7 @@ func (q *Queries) ListEntries(ctx context.Context, conversationID pgtype.UUID) (
 			&i.Failure,
 			&i.MessagesReplayed,
 			&i.Stopped,
+			&i.FinishedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -206,7 +214,7 @@ func (q *Queries) ListEntries(ctx context.Context, conversationID pgtype.UUID) (
 }
 
 const listEntriesFrom = `-- name: ListEntriesFrom :many
-SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped FROM entries
+SELECT id, conversation_id, seq, role, body, created_at, provider, model_id, model_label, tokens, spend_ticks, failure, messages_replayed, stopped, finished_at FROM entries
 WHERE conversation_id = $1 AND seq > $2
 ORDER BY seq
 `
@@ -241,6 +249,7 @@ func (q *Queries) ListEntriesFrom(ctx context.Context, arg ListEntriesFromParams
 			&i.Failure,
 			&i.MessagesReplayed,
 			&i.Stopped,
+			&i.FinishedAt,
 		); err != nil {
 			return nil, err
 		}
