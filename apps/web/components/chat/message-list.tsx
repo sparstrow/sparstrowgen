@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ArrowRightLeft, CircleSlash } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
-import { providerStyle, formatTokens, formatUsd } from "./provider-meta";
+import { providerStyle, formatTokens, formatUsd, clockTime } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Markdown } from "./markdown";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,7 +20,7 @@ function UserBubble({ text, at }: { text: string; at: string }) {
           {text}
         </div>
         <div className="mt-1 pr-1 text-right text-xs text-muted-foreground">
-          {at}
+          {clockTime(at)}
         </div>
       </div>
     </div>
@@ -53,7 +53,7 @@ function AgentTurn({
         <ProviderIcon provider={provider} className={`size-4 ${c.text}`} />
         <span className={`text-sm font-medium ${c.text}`}>{provider}</span>
         <span className="text-xs text-muted-foreground">{model.label}</span>
-        <span className="text-xs text-muted-foreground">· {at}</span>
+        <span className="text-xs text-muted-foreground">· {clockTime(at)}</span>
       </div>
 
       {/* Rendered as markdown, because that is what every provider actually

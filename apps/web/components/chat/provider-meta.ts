@@ -60,3 +60,21 @@ export function formatTokens(n: number): string {
 export function formatUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
+
+/** The time of day to show for a transcript entry.
+ *
+ *  Entries carry an instant in UTC, because the server doing the formatting and
+ *  the person doing the reading are in different places — the server runs in
+ *  UTC, and formatting the clock there showed 21:33 to somebody in Toronto who
+ *  had sent the message at 17:33 (docs/Bugs.md B-37). Converting here uses the
+ *  timezone of the browser actually displaying it.
+ *
+ *  Anything unparseable renders as nothing rather than "Invalid Date": an older
+ *  server sending a value this build does not understand should cost a
+ *  timestamp, not the readability of the message it sits under.
+ */
+export function clockTime(at: string): string {
+  const t = new Date(at);
+  if (Number.isNaN(t.getTime())) return "";
+  return t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}

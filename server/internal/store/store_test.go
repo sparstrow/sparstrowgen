@@ -253,12 +253,14 @@ func TestAnAgentTurnIsShownWhenItAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().Local().Format("15:04")
-	if done.At != now {
-		t.Errorf("finished turn shown at %q, want the time it answered (%q)", done.At, now)
+	if within := time.Since(mustParse(t, done.At)); within < 0 || within > time.Minute {
+		t.Errorf("finished turn carries %q, want the time it answered (%s ago)", done.At, within)
 	}
 	if done.At == beforeFinishing {
-		t.Errorf("finished turn still shown at %q, the time the turn started", beforeFinishing)
+		t.Errorf("finished turn still carries %q, the time the turn started", beforeFinishing)
+	}
+	if gap := mustParse(t, done.At).Sub(mustParse(t, beforeFinishing)); gap < 8*time.Minute {
+		t.Errorf("the turn moved forward by %s, want about the nine minutes it took", gap)
 	}
 
 	// And it stays that way when the conversation is read back, not only in the
@@ -267,9 +269,39 @@ func TestAnAgentTurnIsShownWhenItAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if last := after.Entries[len(after.Entries)-1]; last.At != now {
-		t.Errorf("re-read shows %q, want %q", last.At, now)
+	if last := after.Entries[len(after.Entries)-1]; last.At != done.At {
+		t.Errorf("re-read carries %q, want %q", last.At, done.At)
 	}
+}
+
+// The transcript carries an instant, not a time of day. The server formats it
+// and somebody in another timezone reads it: the server runs in UTC, so a clock
+// time formatted there was four hours off for the owner (docs/Bugs.md B-37).
+func TestAnEntryCarriesAnInstantNotAClockTime(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendUser(ctx, c.ID, "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := mustParse(t, e.At)
+	if within := time.Since(at); within < 0 || within > time.Minute {
+		t.Errorf("At = %q, want the moment it was written", e.At)
+	}
+	if _, offset := at.Zone(); offset != 0 {
+		t.Errorf("At = %q, want UTC so the browser can convert it", e.At)
+	}
+}
+
+func mustParse(t *testing.T, at string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		t.Fatalf("At = %q, want an RFC 3339 instant: %v", at, err)
+	}
+	return parsed
 }
 
 // A turn still running has nothing to show but when it started, and neither has
@@ -283,8 +315,8 @@ func TestATurnStillRunningIsShownFromWhenItStarted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.At != time.Now().Local().Format("15:04") {
-		t.Errorf("running turn shown at %q, want the time it started", e.At)
+	if within := time.Since(mustParse(t, e.At)); within < 0 || within > time.Minute {
+		t.Errorf("running turn carries %q, want the time it started", e.At)
 	}
 }
 

@@ -103,7 +103,14 @@ type Entry struct {
 	ID   string `json:"id"`
 	Role string `json:"role"` // user | agent | replay
 	Seq  int32  `json:"seq"`
-	At   string `json:"at"`
+	// The instant this entry belongs to, as RFC 3339 in UTC — for an agent turn
+	// that is when its answer arrived, not when the turn was launched. It is an
+	// instant rather than a time of day because the server that formats it and
+	// the person reading it are in different places: the server runs in UTC, so
+	// a clock time formatted there showed the owner in Toronto 21:33 for a
+	// message he sent at 17:33 (docs/Bugs.md B-37). The browser renders it in
+	// whatever timezone the reader is actually in.
+	At string `json:"at"`
 
 	// user + agent
 	Text string `json:"text,omitempty"`
