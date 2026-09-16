@@ -516,6 +516,67 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-36 — Every agy turn waits about ninety seconds before the model is asked anything
+
+**Found:** 2026-09-16, owner-reported: "I just said Hi to a fastest model in gemini and taking so
+long get the reply back."   **Status:** open — needs owner, [L-26](Later.md)
+**Repro:** Send any message to agy. Measured three times from the command line, outside
+sparstrowgen, in an empty folder: 1m28s, 1m28s, 1m26s.
+**Expected / Actual:** a one-word question is answered in seconds / it takes a minute and a half,
+and the reasoning effort makes no difference — Gemini 3.8 Flash (Low) took 1m28s for "hi", the same
+as (High) to within a third of a second. A wall that does not move when the model's work changes is
+a wait, not thinking.
+
+**Cause — not sparstrowgen, and not Gemini.** agy's own log (`--log-file`) accounts for the time:
+
+```
+17:39:21.8  Print mode: conversation=…, sending message
+17:39:49.4  MCP: 1 server(s) still connecting after 30s: blender
+17:40:19.4  MCP: 1 server(s) still connecting after 1m0s: blender
+17:40:46.9  …streamGenerateContent…   ← the answer
+```
+
+agy assembles its tool list before it will run a turn, so it waits for every MCP server configured
+for the Antigravity CLI in `~/.gemini/config/mcp_config.json`. `blender` (`uvx blender-mcp`) never
+connects unless Blender is running with its add-on, and agy waits roughly ninety seconds for it
+before giving up and carrying on. `shadcn` (`npx -y shadcn@latest mcp`) is fetched from the network
+each time it starts. Five servers are configured: blender, clockify, shadcn, square, supabase.
+
+Two things make this worse in sparstrowgen than in a terminal. Every message is a fresh `agy`
+process in print mode, so the wait is paid per turn rather than once per session. And claude and
+codex are both isolated from the owner's own configuration on purpose (`--strict-mcp-config`,
+`--ignore-user-config`), while agy 1.2.4 offers no equivalent flag — `agy --help` has none, `agy
+mcp` has no config-path option, and the `CASCADE_ENABLE_MCP_TOOLS` string in the binary is a
+server-side experiment name that changed nothing when set (measured: 1m26s).
+
+**Needs the owner** because the fix is a change to his own agy configuration, on his computer:
+`agy mcp disable blender` alone should remove most of the wait. Nothing was changed — the
+measurements above only read his config. The question, with the recommendation, is
+[L-26](Later.md).
+
+## B-35 — An agent's reply was timestamped when the turn started, not when it answered
+
+**Found:** 2026-09-16, owner-reported, from the same agy conversation as B-36: "the time that I sent
+and the time reply came back shows same"   **Status:** fixed 2026-09-16
+**Repro:** Send a message to an agent that takes more than a minute to answer. Compare the time
+under the message with the time beside the reply.
+**Expected / Actual:** the reply carries the time it arrived / both showed 21:33, although the
+answer came back around 21:35.
+
+An agent entry is created empty when the turn starts, so a refresh mid-turn shows the text that has
+already streamed in rather than an empty screen (`AppendAgentPlaceholder`). The transcript rendered
+`created_at`, which is therefore the moment the turn was launched. On claude and codex that is
+usually within the same minute and the bug is invisible; on a turn like agy's ninety seconds it
+reads as though the agent answered before it was asked.
+**Fix:** entries carry a `finished_at`, stamped by `FinishAgentEntry` when the turn closes out, and
+the transcript shows that when it is set. Both times are kept rather than overwriting `created_at`:
+when a turn started and when it answered are different facts. A turn still running, and every entry
+written before the column existed, still shows when it started. `TestAnAgentTurnIsShownWhenItAnswered`
+opens an entry nine minutes in the past, finishes it, and proves the transcript moves to the time it
+answered — in the row returned and on re-reading the conversation.
+**Release note:** Fixed: a slow agent's reply now shows the time its answer arrived, instead of the
+time you sent the message.
+
 ## B-34 — agy could end a turn with a blank answer and call it done
 
 **Found:** 2026-09-14, by the agent, re-checking B-11 after the owner signed agy in

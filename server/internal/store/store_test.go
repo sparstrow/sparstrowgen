@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
 	"github.com/sparstrow/sparstrowgen/server/internal/testdb"
@@ -221,6 +222,72 @@ func TestAgentUsageOmittedUntilReported(t *testing.T) {
 
 // A partial answer is kept when a turn dies. Deleting it would hide what went
 // wrong and throw away text the owner may still want.
+// The transcript shows an agent's answer at the time it ARRIVED. The entry is
+// created empty when the turn starts, so before finished_at existed a turn that
+// took a minute and a half was shown at the same minute as the question that
+// prompted it — which is what the owner saw with agy (docs/Bugs.md B-35).
+func TestAnAgentTurnIsShownWhenItAnswered(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "agy", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stand in for a slow turn: the entry was opened nine minutes ago, and the
+	// answer is arriving now.
+	if _, err := s.pool.Exec(ctx,
+		"UPDATE entries SET created_at = now() - interval '9 minutes' WHERE id = $1", e.ID); err != nil {
+		t.Fatal(err)
+	}
+	started, err := s.Get(ctx, storeOwner(t, s).ID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFinishing := started.Entries[len(started.Entries)-1].At
+
+	done, err := s.FinishTurn(ctx, TurnResult{
+		ConversationID: c.ID, EntryID: e.ID, Provider: "agy", Text: "Hey! How can I assist you today?",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Local().Format("15:04")
+	if done.At != now {
+		t.Errorf("finished turn shown at %q, want the time it answered (%q)", done.At, now)
+	}
+	if done.At == beforeFinishing {
+		t.Errorf("finished turn still shown at %q, the time the turn started", beforeFinishing)
+	}
+
+	// And it stays that way when the conversation is read back, not only in the
+	// row FinishTurn happens to return.
+	after, err := s.Get(ctx, storeOwner(t, s).ID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := after.Entries[len(after.Entries)-1]; last.At != now {
+		t.Errorf("re-read shows %q, want %q", last.At, now)
+	}
+}
+
+// A turn still running has nothing to show but when it started, and neither has
+// any entry written before finished_at existed.
+func TestATurnStillRunningIsShownFromWhenItStarted(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+
+	e, err := s.AppendAgentPlaceholder(ctx, c.ID, "agy", protocol.Model{ID: "m", Label: "M"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.At != time.Now().Local().Format("15:04") {
+		t.Errorf("running turn shown at %q, want the time it started", e.At)
+	}
+}
+
 func TestFailedTurnKeepsItsPartialText(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

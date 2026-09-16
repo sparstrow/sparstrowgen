@@ -359,3 +359,29 @@ it on hands agents your tools and whatever those tools can reach, and it needs a
 per-agent switch.
 
 **Unblocks when:** you name a tool or skill you want the agents here to use.
+
+## L-26 — agy waits a minute and a half for your own MCP servers on every message
+
+**Status:** question **Raised:** 2026-09-16, diagnosing [`Bugs.md`](Bugs.md) B-36
+
+Saying "hi" to agy takes about ninety seconds, and the reasoning effort makes no difference: agy
+will not start a turn until it has connected to every MCP server configured for the Antigravity CLI
+on this computer, and `blender` never connects unless Blender is running. Measured three times
+outside sparstrowgen, so this is agy's behaviour and not ours — but we make it worse, because every
+message is a fresh agy process and pays the wait again.
+
+Two parts, and only the first is yours:
+
+1. **Your agy configuration.** `agy mcp disable blender` should remove most of the wait; `shadcn` is
+   re-fetched from the network on each start and is the next-worst. The five configured are blender,
+   clockify, shadcn, square, supabase. This also slows agy in your terminal, not just here.
+   **Recommendation:** disable the ones you do not use from agy, starting with blender. Nothing was
+   changed for you — your configuration was only read.
+2. **Whether sparstrowgen should isolate agy from it at all.** claude and codex are started with
+   your own configuration ignored on purpose (D-016), so a turn here is the same on any computer.
+   agy 1.2.4 offers no equivalent flag, so today it inherits yours. **Recommendation:** leave it,
+   and revisit with [L-25](#l-25--letting-agents-use-your-own-mcp-servers-and-skills) — that
+   question is whether agents here should use your tools, and this is the price of the answer being
+   an accidental yes for agy only.
+
+**Unblocks when:** you try disabling one and say whether agy got quicker, or agy gains a flag for it.

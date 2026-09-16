@@ -55,6 +55,7 @@ type Entry struct {
 	Failure          *string            `json:"failure"`
 	MessagesReplayed *int32             `json:"messages_replayed"`
 	Stopped          bool               `json:"stopped"`
+	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
 }
 
 type Machine struct {

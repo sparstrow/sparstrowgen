@@ -27,8 +27,12 @@ INSERT INTO entries (
 RETURNING *;
 
 -- name: FinishAgentEntry :one
+-- finished_at is stamped here rather than left as created_at, which is when the
+-- empty entry was opened for the turn to stream into. The transcript shows when
+-- the answer arrived (docs/Bugs.md B-35).
 UPDATE entries
-SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6
+SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6,
+    finished_at = now()
 WHERE id = $1
 RETURNING *;
 
