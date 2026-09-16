@@ -5,16 +5,19 @@ import (
 	"testing"
 )
 
-// A new account starts on the first-release defaults, and what it saves is what
-// it reads back — including in the session, which is what the app paints from.
+// What an account saves is what it reads back — including in the session, which
+// is what the app paints from. (That a NEW account starts on the defaults is in
+// the API tests, whose accounts are created fresh; this store account is shared
+// between runs, so it is put back as it was instead.)
 func TestAnAccountKeepsTheAppearanceItChose(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	user := storeOwner(t, s)
-
-	if got, err := s.Appearance(ctx, user.ID); err != nil || got != DefaultAppearance {
-		t.Fatalf("a new account = %+v, %v; want %+v", got, err, DefaultAppearance)
+	before, err := s.Appearance(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("read: %v", err)
 	}
+	t.Cleanup(func() { _, _ = s.SetAppearance(context.Background(), user.ID, before) })
 
 	want := Appearance{Mode: "dark", Surface: "slate", Accent: "teal"}
 	saved, err := s.SetAppearance(ctx, user.ID, want)
