@@ -100,6 +100,15 @@ Signing out closes the Claude app too, so do this near the end.
    the Windows account is up to you. The test conversation stays, but its folder is on the removed
    computer, so leave it be.
 
+## 8 — Two tabs agree on your appearance (U-15) · 2 min
+
+Nothing to install, so this one fits anywhere.
+
+1. Open sparstrowgen in **two tabs**: one on **Machines**, one on **Settings → Appearance**.
+2. In the Appearance tab, choose a different **accent**.
+3. Click back to the **Machines** tab.
+4. **Passing:** it takes the new accent within a second of being looked at, with no reload.
+
 ---
 
 ## For the agent running this
