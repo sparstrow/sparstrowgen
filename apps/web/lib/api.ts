@@ -89,9 +89,20 @@ async function json<T>(res: Response): Promise<T> {
  *  `email` is present only when signed in, which is why it is optional rather
  *  than an empty string — an empty string would render as a blank account menu
  *  instead of an obviously missing one. */
+/** How this account wants the app to look. Saved on the account, so the same
+ *  choice follows a person to every browser they sign in to. */
+export type Appearance = {
+  mode: "light" | "dark" | "system";
+  surface: "paper" | "slate" | "soft" | "mono";
+  accent: "amber" | "violet" | "blue" | "teal" | "rose";
+};
+
 export type Session = {
   signedIn: boolean;
   email?: string;
+  /** Carried with the session so the app paints the right theme as soon as it
+   *  knows who this is. Absent when signed out. */
+  appearance?: Appearance;
 };
 
 /* Account access (US1). Served by server/internal/api/accounts.go; the data
@@ -169,6 +180,19 @@ export const api = {
     const res = await request(`${BASE}/api/auth/session`, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.json() as Promise<Session>;
+  },
+
+  /** This account's saved appearance. The session already carries it for the
+   *  first paint; this is what the settings screen re-reads. */
+  async appearance(): Promise<Appearance> {
+    return json(await request(`${BASE}/api/appearance`, { cache: "no-store" }));
+  },
+
+  /** Saves all three choices together. Sending the whole appearance is what
+   *  stops a tab holding stale values from merging half of them into the
+   *  account later. */
+  async saveAppearance(appearance: Appearance): Promise<Appearance> {
+    return post(`${BASE}/api/appearance`, appearance);
   },
 
   /** Exchanges an email and password for a session cookie. The cookie is

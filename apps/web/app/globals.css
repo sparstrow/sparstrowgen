@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The chosen surface and accent. Its selectors outrank the defaults below
+   whatever the import order, so it is imported here with the others. */
+@import "./themes.css";
 
 @custom-variant dark (&:is(.dark *));
 

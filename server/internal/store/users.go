@@ -18,6 +18,9 @@ import (
 type User struct {
 	ID    string
 	Email string
+	// Appearance travels with the account, so the app can paint a person's
+	// own theme as soon as it knows who they are.
+	Appearance Appearance
 }
 
 // ErrEmailTaken is the unique constraint on users.email, named.
@@ -44,7 +47,7 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, bool, erro
 	if err != nil {
 		return User{}, false, err
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, true, nil
+	return User{ID: uuidToString(row.ID), Email: row.Email, Appearance: appearanceOf(row.AppearanceMode, row.AppearanceSurface, row.AppearanceAccent)}, true, nil
 }
 
 // CreateUser makes an account directly. People create accounts through a
@@ -65,7 +68,7 @@ func (s *Store) CreateUser(ctx context.Context, email, password string) (User, e
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, nil
+	return User{ID: uuidToString(row.ID), Email: row.Email, Appearance: appearanceOf(row.AppearanceMode, row.AppearanceSurface, row.AppearanceAccent)}, nil
 }
 
 func isUniqueViolation(err error) bool {
@@ -120,7 +123,7 @@ func (s *Store) SignIn(ctx context.Context, email, password, userAgent, ip strin
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, "", time.Time{}, err
 	}
-	return User{ID: uuidToString(row.ID), Email: row.Email}, token, expires, nil
+	return User{ID: uuidToString(row.ID), Email: row.Email, Appearance: appearanceOf(row.AppearanceMode, row.AppearanceSurface, row.AppearanceAccent)}, token, expires, nil
 }
 
 // decoyHash is a real argon2id hash of a value nobody knows, used only to spend

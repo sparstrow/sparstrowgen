@@ -76,3 +76,11 @@ DELETE FROM conversations;
 
 -- name: DeleteEveryUser :execrows
 DELETE FROM users;
+
+-- name: SetUserAppearance :one
+-- The whole appearance in one statement: a save always carries all three, so a
+-- tab holding stale values cannot merge half of them into the account.
+UPDATE users
+SET appearance_mode = $2, appearance_surface = $3, appearance_accent = $4, updated_at = now()
+WHERE id = $1
+RETURNING *;

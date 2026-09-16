@@ -257,6 +257,9 @@ func (a *API) session(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			out["signedIn"] = true
 			out["email"] = user.Email
+			// Carried here so the app can paint this person's own theme as soon
+			// as it knows who they are, rather than after a second request.
+			out["appearance"] = user.Appearance
 		}
 	}
 	writeJSON(w, out)

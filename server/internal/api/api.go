@@ -188,6 +188,8 @@ func (a *API) Routes() http.Handler {
 		r.Post("/api/turns/{turnId}/stop", a.stopTurn)
 
 		r.Post("/api/auth/password", a.changePassword)
+		r.Get("/api/appearance", a.getAppearance)
+		r.Post("/api/appearance", a.setAppearance)
 
 		r.Get("/ws", a.browserSocket)
 	})
