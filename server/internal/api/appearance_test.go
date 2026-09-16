@@ -61,6 +61,25 @@ func TestTheSessionCarriesTheAppearanceSoTheFirstPaintIsRight(t *testing.T) {
 	}
 }
 
+// A second tab must not keep the look it was loaded with: it is told, so it can
+// re-read and converge (the spec's two-tabs edge case).
+func TestEveryTabIsToldWhenTheAppearanceChanges(t *testing.T) {
+	r := newRig(t)
+	otherTab := r.watch()
+
+	if res := r.post("/api/appearance", store.Appearance{Mode: "dark", Surface: "soft", Accent: "rose"}); res.StatusCode != http.StatusOK {
+		t.Fatalf("save: %s", res.Status)
+	}
+	otherTab.awaitEvent(t, "appearance")
+
+	// And the account is what it re-reads.
+	var read store.Appearance
+	decodeInto(t, r.get("/api/appearance"), &read)
+	if read.Accent != "rose" || read.Surface != "soft" {
+		t.Errorf("read back = %+v", read)
+	}
+}
+
 // The only writer is this app's own settings screen, so a name it does not
 // offer is a bug rather than a preference — and a refused save must leave the
 // account exactly as it was.
