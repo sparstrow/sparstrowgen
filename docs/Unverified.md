@@ -249,10 +249,12 @@ publication needs his go-ahead because it puts a public prerelease on the reposi
 3. The owner runs **Promote a daemon candidate**. Passing: `daemon-v<x.y.z>` appears as latest with
    the SAME SHA-256 as the candidate, its manifest names the new URL, and a stable computer updates
    to it and stays on the stable channel afterwards.
-**Status:** open — the parts that can be checked without publishing were: the packaging builds a
-candidate whose manifest names the candidate tag, both stream URLs are in the executable (found in
-the built binary), the channel is read per computer (`cmd/daemon` channel tests), and both workflow
-files parse. What has not run is a real publication and promotion.
+**Status:** step 1 verified 2026-09-17 — `daemon-candidate-v0.3.0` was published by the workflow as
+a **Pre-release**, the moving `daemon-candidate` release was created, and its manifest names that
+prerelease's installer (`version 0.3.0`). `releases/latest/…` still serves `0.2.3`, so no installed
+computer sees anything. Steps 2 and 3 are open: a candidate computer updating needs a daemon running
+from an installed location, which on this machine means the owner's own installed copy or a clean
+Windows account (the U-7 and U-13 constraint), and the promotion is the owner's gate.
 
 ## U-16 — Two worktrees' stacks run side by side without touching each other
 
@@ -262,9 +264,12 @@ running, which it was not when this shipped
 containers under different Compose projects on different host ports, two servers, two web apps, two
 daemon homes; `docker volume ls` shows a volume per project; stopping one leaves the other running;
 and the main checkout is still on 5433/8080/3000 with the database it already had.
-**Status:** open — the allocator itself is covered by `internal/devstack`'s tests, and the
-environment it hands out was applied for real in PowerShell (slot 1: 5434/8081/3001). What has not
-run is Compose and two live stacks at once.
+**Status:** verified 2026-09-17 — two Postgres containers ran at once under different Compose
+projects, `sparstrowgen-1-db-1` on 5434 and a second on 5433, each with its own volume and the
+owner's existing `sparstrowgen_db-data` untouched. `scripts\dev.ps1` then brought this worktree's
+whole stack up on its own ports: migrations applied to the 5434 database, `/api/health` answered 200
+on **8081**, nothing was listening on 8080, and the daemon used
+`%LOCALAPPDATA%\sparstrowgen-dev-1`. It also found B-38.
 
 ## U-17 — The Makefile picks up the assigned stack
 
@@ -273,10 +278,10 @@ neither this machine nor Git Bash, so it needs the Linux container (and therefor
 **How:** `make stack` prints this worktree's ports; `make db` starts Postgres on the assigned port;
 `make test-linux` runs against that port rather than 5433. Passing: each command uses the values in
 `.stack.env`, and `make` regenerates that file when it is missing.
-**How it could fail:** the Makefile reads the file with `-include` and relies on make remaking a
-missing included file and restarting itself. That is documented GNU make behaviour, but it has not
-been executed here.
-**Status:** open
+**Status:** verified 2026-09-17 — in `golang:1.27` with the worktree mounted, `make help` created
+`.stack.env` through the `-include` rule, restarted itself and printed this worktree's own ports
+(`make server` on :8081, `make web` on :3001). `make -n test-linux` showed
+`TEST_DATABASE_URL=…host.docker.internal:5434/sparstrowgen_test…` — its own database, not 5433.
 
 ## U-15 — A tab with no live connection picks up an appearance change when it is looked at again
 
