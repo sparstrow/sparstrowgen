@@ -516,6 +516,29 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-38 — `scripts\dev.ps1` could not start the server, and offered a setup code that no longer exists
+
+**Found:** 2026-09-17, by the agent, running it for the first time since D-036 to verify the local
+stacks   **Status:** fixed 2026-09-17
+**Repro:** Run `scripts\dev.ps1` on a machine with no `OWNER_EMAIL` in its environment.
+**Expected / Actual:** the stack comes up / "the server did not answer", and its log says
+`refusing to start without its configuration — OWNER_EMAIL`.
+
+Two pieces of drift, both from the day registration became invitation-only (#18, 2026-09-12). The
+server has required `OWNER_EMAIL` and mail settings since then — deliberately, so there is no
+"authentication off" mode that could reach production — and the Makefile was given them while this
+script was not. And its last step still hunted the log for a `setup_code=`, the way in before
+accounts existed; nothing has written one since, so a successful run ended by printing `setup code:`
+with nothing after it.
+
+The script is what actually runs on the owner's machine (`make` is installed nowhere here), so this
+was the only way in, broken, for five days.
+**Fix:** it sets `OWNER_EMAIL` (overridable with `SPARSTROWGEN_OWNER_EMAIL`) and `MAIL_TRANSPORT=log`,
+and its last step now says to register that address and where to find the confirmation link the log
+transport writes. Seen working: the stack came up on this worktree's own ports, `/api/health`
+answered 200 on 8081, and nothing was listening on 8080.
+**Release note:** none — a development script, not part of the product.
+
 ## B-37 — Every message was timestamped in the server's timezone, not the reader's
 
 **Found:** 2026-09-16, by the agent, verifying B-35 on production — the owner's own screenshots show

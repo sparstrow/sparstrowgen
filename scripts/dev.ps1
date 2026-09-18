@@ -44,6 +44,11 @@ Write-Host 'reserving this worktree''s stack...'
 if ($LASTEXITCODE -ne 0) { throw 'devstack build failed' }
 & "$repo\bin\devstack.exe" env -dir $repo -format powershell | ForEach-Object { Invoke-Expression $_ }
 
+# The rest of what the server refuses to start without. It has no
+# "authentication off" or "mail off" mode, deliberately, so a development run
+# needs the same settings as production — with mail written to the log instead
+# of sent, and the confirmation link printed there (docs/Bugs.md B-38).
+$env:OWNER_EMAIL    = if ($env:SPARSTROWGEN_OWNER_EMAIL) { $env:SPARSTROWGEN_OWNER_EMAIL } else { 'owner@localhost.test' }
 $env:MAIL_TRANSPORT = 'log'
 
 function Stop-Sparstrowgen {
@@ -107,9 +112,11 @@ if (-not $NoWeb) {
 Write-Host "slot    : $env:SPARSTROWGEN_SLOT  (database :$env:SPARSTROWGEN_DB_PORT, daemon home $env:SPARSTROWGEN_HOME)"
 Write-Host ''
 
-# The first run on an empty database has no account, and the way in is the setup
-# code the server prints at startup. It goes to the log file rather than a
-# console here, so without this you would have to know to go and read it.
+# The first run on an empty database has no account. Registration is by
+# invitation and confirmed by email, exactly as in production — there is no
+# setup code any more, and this used to print an empty one (docs/Bugs.md B-38).
+# With MAIL_TRANSPORT=log the confirmation link is written to the server's log
+# instead of being sent.
 $session = $null
 foreach ($attempt in 1..20) {
     try {
@@ -123,13 +130,10 @@ foreach ($attempt in 1..20) {
 if ($null -eq $session) {
     Write-Host 'the server did not answer — check ' -NoNewline
     Write-Host "$env:TEMP\sg-server.log"
-} elseif ($session.claimed) {
-    Write-Host "sign in at $env:WEB_ORIGIN with the account you created"
+} elseif ($session.signedIn) {
+    Write-Host "signed in as $($session.email) at $env:WEB_ORIGIN"
 } else {
-    $code = Select-String -Path "$env:TEMP\sg-server.log" -Pattern 'setup_code=(\S+)' |
-        Select-Object -Last 1 |
-        ForEach-Object { $_.Matches[0].Groups[1].Value }
-    Write-Host "no account yet. Open $env:WEB_ORIGIN and create one."
-    Write-Host 'setup code: ' -NoNewline
-    Write-Host $code
+    Write-Host "sign in at $env:WEB_ORIGIN, or register $env:OWNER_EMAIL there if this database is new."
+    Write-Host 'the confirmation link is in the server log, under "email NOT sent (MAIL_TRANSPORT=log)":'
+    Write-Host "  Select-String -Path `"$env:TEMP\sg-server.log`" -Pattern 'http.*token='"
 }
