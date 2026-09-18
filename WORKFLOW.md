@@ -12,9 +12,11 @@ The repository is deliberately still on the current delivery path:
 agent worktree → feature branch → pull request → main → production
 ```
 
-Do not create or route work through long-lived `develop` or `staging` branches
-yet. Do not configure staging auto-deployments yet. The owner will activate
-Phase 2 only after the managed daemon exit gate in
+The `develop` and `staging` branches now EXIST (created from main on 2026-09-17, so the
+staging deployment has something to deploy), but Phase 2 is not active: keep
+routing work through feature branch -> PR -> `main`. Do not open pull requests
+against `develop` or `staging`, and do not promote between them, until the owner
+activates Phase 2 — which he does only after the managed daemon exit gate in
 [`docs/runbooks/release-workflow.md`](docs/runbooks/release-workflow.md) passes.
 
 ### Phase 1 agent rules
