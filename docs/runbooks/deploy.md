@@ -63,26 +63,18 @@ domains are attached in step 5.
 
 ---
 
-## 1. Generate and save the daemon token
+## 1. There is no deployment secret to generate
 
-The daemon token proves that the program on a computer is allowed to connect to
-this server. It is **not** the browser account password.
+Nothing to do here — the step that used to be here is gone, and this heading is
+kept so the numbering below still matches what people have followed before.
 
-On Windows PowerShell, generate one with:
-
-```powershell
-$bytes = New-Object byte[] 48
-$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($bytes)
-$rng.Dispose()
-[Convert]::ToBase64String($bytes)
-```
-
-Save the output in a password manager. Do not paste it into chat, source code or
-a screenshot. The same value is entered in Coolify in step 4 and on the PC in
-step 7. The server rejects values shorter than 32 characters.
-
-**After this step:** one saved secret exists, but nothing is connected yet.
+A deployment used to need a shared `DAEMON_TOKEN` that every computer presented.
+It does not any more (docs/Decisions.md D-038): a computer is paired through the
+browser and gets its own credential, and a deployed server ignores the shared
+token entirely. **If an existing deployment still has a `DAEMON_TOKEN` variable,
+delete it** — the server logs that it is being ignored, and a secret nothing
+uses is only a secret somebody can steal. It remains a development setting,
+where `scripts/dev.ps1` and the Makefile set it for a daemon run from source.
 
 ---
 
@@ -173,7 +165,6 @@ shown below.
 | Variable | Value | Literal | Build time | Runtime |
 |---|---|---:|---:|---:|
 | `DATABASE_URL` | internal URL copied in step 2 | Yes | Off | On |
-| `DAEMON_TOKEN` | saved token from step 1 | Yes | Off | On |
 | `WEB_ORIGIN` | `https://app.sparstrow.com` | No | Off | On |
 | `API_ORIGIN` | `https://api.sparstrow.com` | No | **On** | **On** |
 | `OWNER_EMAIL` | the address you will sign in with | No | Off | On |
@@ -206,8 +197,7 @@ needed: the first browser account is created in step 6.
   API address is compiled into the Next.js bundle, so changing `API_ORIGIN`
   requires a rebuild.
 - **Runtime** supplies a value while Compose evaluates and starts the deployed
-  services. The server needs its database URL, daemon token and allowed browser
-  origin then.
+  services. The server needs its database URL and allowed browser origin then.
 
 Although `API_ORIGIN` is used as a build argument, Coolify v4.3.18 also needs
 its Runtime switch on. Coolify runs `docker compose pull` with the runtime
@@ -335,9 +325,9 @@ On the Windows computer that has the agent CLIs and project files, open
 It starts again whenever you sign in to Windows, with no window. Its log is
 `%LOCALAPPDATA%\sparstrowgen\logs\daemon.log`; read that first if a computer stays offline.
 
-**The shared `DAEMON_TOKEN` route still exists** for running the daemon from source during
-development (`go run ./cmd/daemon` with `SERVER_WS` and `DAEMON_TOKEN` set), and it works for the
-`OWNER_EMAIL` account. An installed copy never uses it.
+**The shared `DAEMON_TOKEN` route is development-only** (D-038): `go run ./cmd/daemon` against a
+local server with `SERVER_WS` and `DAEMON_TOKEN` set, where it works for the `OWNER_EMAIL` account.
+An installed copy never used it, and a deployed server no longer accepts it at all.
 
 **After this step:** the hosted UI can send work through the hosted server to the coding-agent CLIs on
 this computer, while the computer still accepts no inbound connection.
@@ -366,7 +356,7 @@ production steps above; anything not listed is the same.
    | Variable | Staging value |
    |---|---|
    | `DATABASE_URL` | the **staging** Postgres resource's internal URL |
-   | `DAEMON_TOKEN` | a **different** token from production's — generate a new one as in step 1 |
+   | ~~`DAEMON_TOKEN`~~ | not needed on a deployment any more (D-038) — a staging computer pairs through the browser like any other |
    | `WEB_ORIGIN` | `https://app.staging.sparstrow.com` |
    | `API_ORIGIN` | `https://api.staging.sparstrow.com` (Build time **and** Runtime, as in production) |
    | `MAIL_FROM` | `sparstrowgen (staging) <agent@sparstrow.com>` — so a staging email is never mistaken for a real one |
