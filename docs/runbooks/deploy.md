@@ -344,6 +344,54 @@ this computer, while the computer still accepts no inbound connection.
 
 ---
 
+## The staging deployment (phase 2)
+
+Staging is this same Compose application a second time, from the `staging` branch, against its own
+Postgres — the `sparstrowgen-postgres-staging` resource. Everything below is the difference from the
+production steps above; anything not listed is the same.
+
+**Do this once, when Phase 2 is activated.** Until then there is no `staging` branch to point it at.
+
+1. **DNS.** Two records at the domain registrar, pointing at the same server as production:
+   `app.staging` and `api.staging`. Wait until both resolve before attaching them in Coolify, or the
+   certificate cannot be issued.
+2. **The application.** New Resource → Docker Compose, same repository, **Branch: `staging`**, same
+   `docker-compose.yaml`. Put it in the `staging` environment beside the Postgres resource, and
+   connect it to that resource's predefined network exactly as in step 2 above.
+3. **Auto-deploy.** On, so a promotion into `staging` deploys itself. Production's application stays
+   on `main` — check that first, because pointing the wrong one at a branch is the mistake that
+   deploys an untested candidate to real users.
+4. **The variables**, which differ from production in these rows:
+
+   | Variable | Staging value |
+   |---|---|
+   | `DATABASE_URL` | the **staging** Postgres resource's internal URL |
+   | `DAEMON_TOKEN` | a **different** token from production's — generate a new one as in step 1 |
+   | `WEB_ORIGIN` | `https://app.staging.sparstrow.com` |
+   | `API_ORIGIN` | `https://api.staging.sparstrow.com` (Build time **and** Runtime, as in production) |
+   | `MAIL_FROM` | `sparstrowgen (staging) <agent@sparstrow.com>` — so a staging email is never mistaken for a real one |
+   | `OWNER_EMAIL`, `ALLOWED_EMAILS` | your address and `agent@sparstrow.com`; nobody else is invited to staging |
+
+   The SMTP rows are the same mailbox as production. Its links point at the staging domains because
+   they are built from `WEB_ORIGIN`.
+5. **Accounts are not shared.** Staging has its own database, so register the owner account there
+   once (step 6), and pair a computer to it (step 7). A computer can be paired to production or to
+   staging, not both at once — which is why staging testing uses a computer with its own
+   `SPARSTROWGEN_HOME`.
+6. **The daemon on a staging computer follows the candidate channel:**
+
+   ```powershell
+   sparstrowgen-setup.exe install -channel candidate
+   ```
+
+   It then updates from release candidates, which no production computer sees
+   ([`daemon-release.md`](daemon-release.md), D-037).
+
+**What staging is for**, beyond looking at a change before real users get it: the two checks that
+have never had a safe home. Raising `MinDaemonProtocol` to see an old computer's compatibility
+message (`Unverified.md` U-10), and publishing a deliberately broken update to watch it roll back
+(U-8). Both are unsafe on production and safe here.
+
 ## When something is wrong
 
 | Symptom | What the observed evidence means |
