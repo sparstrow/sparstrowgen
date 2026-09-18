@@ -421,3 +421,24 @@ computer doing the work per account; nothing in it asks to pick one.
 - **Clears when:** conversations remember their computer and Chat sends to it, or an account is
   limited to one working computer. Either is a product decision for the owner, not a fix: asked in
   [`Later.md`](Later.md) L-22.
+
+## G-38 — A DAEMON_TOKEN is set as a user environment variable on the owner's PC
+
+**Kind:** caveat
+**Raised:** 2026-09-17, by a test that failed because of it (D-038)
+
+A 64-character `DAEMON_TOKEN` is set in the **User** scope of the owner's Windows account, so every
+process he starts inherits it — each agent CLI, each browser, anything else. It was found because a
+new test asserting that a server starts *without* a daemon token was handed one by the environment
+and failed; the test now builds its own environment, and `serverEnv` in `cmd/server/main_test.go`
+says why.
+
+Whether it matches the value in Coolify is not something this repository can see, and nobody should
+put it here to find out.
+
+- **If wrong:** if it is the production token, any program the owner runs can read it, and before
+  D-038 that token was a working way into the production server as his machine. After D-038 a
+  deployed server ignores it, so what remains is an unused secret in a place secrets should not sit.
+- **Clears when:** the owner deletes the variable (Settings → Edit environment variables for your
+  account) and removes the `DAEMON_TOKEN` row from both Coolify applications. Nothing needs it: local
+  development sets its own per worktree (D-036), and deployments no longer accept one.

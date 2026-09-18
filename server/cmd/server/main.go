@@ -143,8 +143,7 @@ cost of the strictness is one line in a file, not a branch in the program.
 */
 func serverConfig(log *slog.Logger) api.Config {
 	cfg := api.Config{
-		DaemonToken: os.Getenv("DAEMON_TOKEN"),
-		Origin:      os.Getenv("WEB_ORIGIN"),
+		Origin: os.Getenv("WEB_ORIGIN"),
 		// Secure unless explicitly turned off, so forgetting it is the safe
 		// mistake: a cookie that will not travel over http://localhost is an
 		// obvious local annoyance, while one sent in the clear over the internet
@@ -154,9 +153,22 @@ func serverConfig(log *slog.Logger) api.Config {
 		Invited:      splitList(os.Getenv("ALLOWED_EMAILS")),
 	}
 
+	// The shared daemon token is a development thing now (D-038). An installed
+	// computer authenticates with the credential it was paired with and never
+	// presents this, so on a deployment it would be a standing shared secret
+	// that only somebody who should not have it would ever use. Ignored there,
+	// rather than refused, so that setting it does not take a running
+	// deployment down — the warning and the runbook say to remove it.
+	token := os.Getenv("DAEMON_TOKEN")
+	if !cfg.SecureCookie {
+		cfg.DaemonToken = token
+	} else if token != "" {
+		log.Warn("DAEMON_TOKEN is set but ignored: a deployed server accepts only the credential a computer was paired with. Remove the variable.")
+	}
+
 	var missing []string
-	if cfg.DaemonToken == "" {
-		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses)")
+	if !cfg.SecureCookie && cfg.DaemonToken == "" {
+		missing = append(missing, "DAEMON_TOKEN (any long random string, the same one the daemon uses; development only)")
 	}
 	if cfg.Origin == "" {
 		missing = append(missing, "WEB_ORIGIN (the exact origin the web app is served from, e.g. https://app.sparstrow.com)")
@@ -172,7 +184,7 @@ func serverConfig(log *slog.Logger) api.Config {
 		refuse(log, missing...)
 	}
 
-	if len(cfg.DaemonToken) < 32 {
+	if cfg.DaemonToken != "" && len(cfg.DaemonToken) < 32 {
 		log.Error("DAEMON_TOKEN is too short to be a secret", "length", len(cfg.DaemonToken), "want_at_least", 32)
 		os.Exit(1)
 	}

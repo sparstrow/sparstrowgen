@@ -26,7 +26,9 @@ import (
 // value of any of them that means "no authentication", because the one mistake
 // this app cannot afford is being reachable without it.
 type Config struct {
-	// DaemonToken is the shared secret the owner's machine presents, until
+	// DaemonToken is the shared secret the owner's machine presents on a
+	// DEVELOPMENT server. Empty on anything deployed, which turns that way in
+	// off entirely (D-038). Kept until
 	// computers are paired individually (US2).
 	DaemonToken string
 	// Origin is the exact browser origin allowed to call this API, e.g.
