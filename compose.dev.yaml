@@ -1,17 +1,24 @@
 # Local Postgres for development. Production runs in Coolify (blueprint.yaml).
 # pgvector image rather than plain postgres so the embeddings work later needs
 # no container swap — the extension is not enabled until a migration asks for it.
+# Nothing here is fixed to one value any more: two worktrees run this file at
+# once, and a fixed container name or host port is what made the second one fail
+# or quietly join the first one's database (WORKFLOW.md, Local isolation). The
+# values come from `devstack env`, and the defaults below are slot 0 — so a bare
+# `docker compose -f compose.dev.yaml up -d` in the main checkout behaves exactly
+# as it always has.
 services:
   db:
     image: pgvector/pgvector:pg17
-    container_name: sparstrowgen-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: sparstrowgen
       POSTGRES_PASSWORD: sparstrowgen
       POSTGRES_DB: sparstrowgen
     ports:
-      - "5433:5432" # 5433 on the host: a local Postgres on 5432 is common
+      # 5433 on the host: a local Postgres on 5432 is common. Each further
+      # worktree gets 5434, 5435, … from the allocator.
+      - "${SPARSTROWGEN_DB_PORT:-5433}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:

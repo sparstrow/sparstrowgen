@@ -36,7 +36,20 @@ import (
 //
 // The name here is a BASE. Each package gets its own database derived from it
 // — see Pool.
-const DefaultDSN = "postgres://sparstrowgen:sparstrowgen@localhost:5433/sparstrowgen_test?sslmode=disable"
+//
+// The port is this worktree's, not a fixed 5433: every worktree runs its own
+// Postgres (WORKFLOW.md, Local isolation), and a test suite that always dialled
+// 5433 would run against whichever checkout happened to own that port — usually
+// somebody else's, racing them row by row. SPARSTROWGEN_DB_PORT comes from
+// `.stack.env`, which `make test` exports; with nothing set this is slot 0,
+// which is what it has always been.
+func DefaultDSN() string {
+	port := os.Getenv("SPARSTROWGEN_DB_PORT")
+	if port == "" {
+		port = "5433"
+	}
+	return fmt.Sprintf("postgres://sparstrowgen:sparstrowgen@localhost:%s/sparstrowgen_test?sslmode=disable", port)
+}
 
 // prepared guards the create-and-migrate, which every package's tests would
 // otherwise race each other to do.
@@ -57,7 +70,7 @@ func Pool(t *testing.T) *pgxpool.Pool {
 
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
-		dsn = DefaultDSN
+		dsn = DefaultDSN()
 	}
 	// One database PER PACKAGE, not one for the suite. `go test ./...` runs
 	// packages concurrently in separate processes, and several of these tests

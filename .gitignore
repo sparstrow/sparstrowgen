@@ -1,5 +1,9 @@
 Reference/
 
+# This worktree's assigned ports and daemon home (make stack). Local to one
+# checkout by definition, and regenerated on demand.
+.stack.env
+
 # design-shots generation logs — transient
 design-system/shots/**/.[A-Z].log
 
