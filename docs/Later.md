@@ -253,6 +253,12 @@ requests, emails the owner, and approval means allowing the address in hosting c
 more than twice, or before sparstrowgen is offered to anyone he does not know personally —
 whichever comes first. Build it on the phase 2 workflow, not before activation.
 
+The data half already exists: every uninvited attempt is a row in `access_requests`, collapsed to
+one per address regardless of how many times it's retried. What this item removes is the last
+manual step — approving still means adding the address to `ALLOWED_EMAILS` in Coolify and
+redeploying. The screen this item builds reads `access_requests` and writes approval somewhere a
+redeploy isn't required for, rather than inventing new storage.
+
 ## L-19 — Machine profile folder and connection details
 
 **Status:** parked **Raised:** 2026-09-13, owner, reviewing the US2 machine profile
