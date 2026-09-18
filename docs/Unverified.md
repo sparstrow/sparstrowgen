@@ -235,6 +235,30 @@ its test computers disconnected, sending a message returned 503 "your machine is
 nothing new can be sent" instead of reaching the owner's computer. The isolation tests
 (`internal/api/isolation_test.go`) cover the same boundary for every endpoint.
 
+## U-16 — Two worktrees' stacks run side by side without touching each other
+
+**From:** D-036 local isolation, 2026-09-17 · **Who can run it:** agent — needs Docker Desktop
+running, which it was not when this shipped
+**How:** In two checkouts, run `scripts\dev.ps1` (or `make db && make server`). Passing: two Postgres
+containers under different Compose projects on different host ports, two servers, two web apps, two
+daemon homes; `docker volume ls` shows a volume per project; stopping one leaves the other running;
+and the main checkout is still on 5433/8080/3000 with the database it already had.
+**Status:** open — the allocator itself is covered by `internal/devstack`'s tests, and the
+environment it hands out was applied for real in PowerShell (slot 1: 5434/8081/3001). What has not
+run is Compose and two live stacks at once.
+
+## U-17 — The Makefile picks up the assigned stack
+
+**From:** D-036 local isolation, 2026-09-17 · **Who can run it:** agent — needs `make`, which is on
+neither this machine nor Git Bash, so it needs the Linux container (and therefore Docker)
+**How:** `make stack` prints this worktree's ports; `make db` starts Postgres on the assigned port;
+`make test-linux` runs against that port rather than 5433. Passing: each command uses the values in
+`.stack.env`, and `make` regenerates that file when it is missing.
+**How it could fail:** the Makefile reads the file with `-include` and relies on make remaking a
+missing included file and restarting itself. That is documented GNU make behaviour, but it has not
+been executed here.
+**Status:** open
+
 ## U-15 — A tab with no live connection picks up an appearance change when it is looked at again
 
 **From:** appearance (#29, #31), 2026-09-16 · **Who can run it:** owner, or an agent in a browser that

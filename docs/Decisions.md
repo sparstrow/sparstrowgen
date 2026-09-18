@@ -797,3 +797,36 @@ updates now is two-factor sign-in on every account with write access to the repo
 `.sig` made by the old key ([runbook](runbooks/daemon-release.md)); releases after it carry none, and the
 key is deleted once no computer needs it. A computer still on 0.2.0 or 0.2.1 after that reports that
 it could not check, and needs the installer opened once. It keeps its pairing.
+
+## D-036 — Each worktree is assigned its own local stack, from a registry outside the checkout
+
+**2026-09-17, agent, building the Phase 2 prerequisites.** WORKFLOW.md requires isolated local
+environments before `develop` opens to parallel work, and said only that an allocator must exist.
+This is it.
+
+**What was actually shared.** One Compose file with a fixed `container_name` and host port 5433, one
+`.env`-free Makefile naming 5433/8080/3000, and — the dangerous one — one daemon home: a development
+build keeps its credential in `sparstrowgen-dev`, so two worktrees were **one computer** as far as
+the server was concerned, and a refused pairing in either deleted the credential both used.
+`testdb` dialled 5433 too, so one agent's `go test` ran against whichever checkout owned that port.
+
+**Assigned, not derived.** `devstack` gives a worktree the lowest free slot and records it in
+`stacks.json` in the user's data directory. A derived value — hash the path, take a port — needs no
+registry but cannot notice that something else on the machine already holds the port, and 5433 was
+itself chosen to dodge a local Postgres on 5432. So each candidate port is probed before it is
+handed out, and what was handed out is written down.
+
+**The registry is outside the checkout** because its whole job is to stop two checkouts colliding,
+which a file inside one of them could not do. It is not shared between machines and is not a secret:
+it holds paths and port numbers.
+
+**Slot 0 is held for the main checkout**, detected by `.git` being a directory rather than the file
+a linked worktree has. Any other rule lets an agent's worktree take 5433/8080/3000 first, after
+which the owner's next `make db` starts an empty database on another port — which from his side is
+indistinguishable from his local data being deleted.
+
+Rejected: Compose profiles (they separate services, not host ports); one shared Postgres with a
+database per worktree (the port is only one of the collisions, and the daemon credential is the one
+that actually broke things); telling agents to set the variables by hand (WORKFLOW.md already says
+manually reusing defaults is not isolation, and a rule nobody can forget beats one everybody must
+remember).

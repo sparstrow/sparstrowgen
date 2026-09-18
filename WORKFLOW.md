@@ -85,9 +85,15 @@ isolated feature worktree → PR to develop → promotion PR to staging
 
 Each agent worktree owns a unique local environment. Never share a running
 Compose project, Postgres volume, host port, daemon process, daemon credential
-or browser origin between worktrees. An allocator or registry must assign these
-values before Phase 2 is activated; manually reusing the repository defaults is
+or browser origin between worktrees. Manually reusing the repository defaults is
 not isolation.
+
+The allocator this requires exists (`server/internal/devstack`, D-036). Every
+worktree runs `devstack env` — `scripts/dev.ps1` and the Makefile both start
+with it — and is given its own database port and volume, server and web ports,
+daemon home and daemon token, recorded in a registry outside the checkout. The
+main checkout keeps 5433/8080/3000. Nothing in this repository names a port any
+more, and `make stack` shows what this worktree was given.
 
 Development daemons use development builds and never auto-update. Tests must not
 resolve or spend quota through a real agent CLI unless the repository's existing
