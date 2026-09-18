@@ -1,0 +1,111 @@
+name: Promote a daemon candidate
+
+# Turns a tested release candidate into the stable release, WITHOUT rebuilding:
+# it republishes the very executable that was tested, checked against the
+# SHA-256 the candidate was published with. Rebuilding from the same source
+# would produce different bytes and a different candidate, which
+# docs/runbooks/release-workflow.md forbids after approval.
+#
+# This is an owner gate. An agent may prepare a candidate and the evidence for
+# it; only the owner runs this. Give the `production` environment below a
+# required reviewer in the repository's settings to enforce that rather than
+# just state it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The candidate version to promote, x.y.z (its tag is daemon-candidate-vx.y.z)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daemon-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      # Nothing is checked out here — the point is to touch no source at all —
+      # so gh is told which repository it is acting on.
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Take the candidate's own bytes
+        run: |
+          set -euo pipefail
+          case "$VERSION" in
+            v*) echo "Give the version as x.y.z, without the v." >&2; exit 1 ;;
+          esac
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Give the version as x.y.z; got '$VERSION'." >&2; exit 1
+          fi
+          candidate="daemon-candidate-v$VERSION"
+          stable="daemon-v$VERSION"
+          if gh release view "$stable" >/dev/null 2>&1; then
+            echo "$stable already exists. A version is published once; build a new candidate instead." >&2
+            exit 1
+          fi
+          mkdir -p promote && cd promote
+          gh release download "$candidate" \
+            --pattern 'sparstrowgen-setup.exe' \
+            --pattern 'sparstrowgen-setup.exe.sha256' \
+            --pattern 'sparstrowgen-update.json'
+          echo "commit=$(gh release view "$candidate" --json targetCommitish --jq .targetCommitish)" >> "$GITHUB_ENV"
+
+      - name: Check they are the bytes that were tested
+        run: |
+          set -euo pipefail
+          cd promote
+          # Both records of what was tested have to agree with the file itself:
+          # the checksum published beside it, and the one inside the manifest
+          # the candidate computers verified their download against.
+          sha256sum -c sparstrowgen-setup.exe.sha256
+          actual=$(sha256sum sparstrowgen-setup.exe | cut -d' ' -f1)
+          stated=$(jq -r .sha256 sparstrowgen-update.json)
+          if [ "$actual" != "$stated" ]; then
+            echo "The installer does not match the manifest it was published with ($actual vs $stated)." >&2
+            exit 1
+          fi
+          if [ "$(jq -r .version sparstrowgen-update.json)" != "$VERSION" ]; then
+            echo "The candidate's manifest is not version $VERSION." >&2
+            exit 1
+          fi
+          echo "sha256=$actual" >> "$GITHUB_ENV"
+
+      - name: Publish it as the stable release
+        run: |
+          set -euo pipefail
+          cd promote
+          stable="daemon-v$VERSION"
+          # The manifest is metadata, not the artifact: it is rewritten to name
+          # the installer at its stable URL. The installer itself is byte for
+          # byte the file checked above.
+          jq --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${stable}/sparstrowgen-setup.exe" \
+            '.url = $url' sparstrowgen-update.json > stable-manifest.json
+          mv stable-manifest.json sparstrowgen-update.json
+
+          changes=$(gh release view "daemon-candidate-v$VERSION" --json body --jq .body | sed -n 's/^\*\*What changed:\*\* //p')
+          [ -n "$changes" ] || changes="See the commits since the previous release."
+          cat > notes.md <<EOF
+          The component that connects a Windows computer to sparstrowgen.
+
+          **What changed:** $changes
+
+          **Updating:** installed computers install this by themselves within the hour, once no agent work is running. Check it in **Settings → Updates**.
+
+          **Unsigned.** Windows will say it protected your PC. Choose **More info**, then **Run anyway**. Signing is tracked in KnownGaps G-32.
+
+          SHA-256 \`$sha256\`
+
+          Promoted from [daemon-candidate-v$VERSION](https://github.com/${GITHUB_REPOSITORY}/releases/tag/daemon-candidate-v$VERSION) — the same executable, not a rebuild. Built from $commit.
+          EOF
+          gh release create "$stable" sparstrowgen-setup.exe sparstrowgen-setup.exe.sha256 sparstrowgen-update.json \
+            --target "$commit" --latest --title "sparstrowgen for Windows $VERSION" --notes-file notes.md
+          echo "Promoted $VERSION. SHA-256 $sha256" >> "$GITHUB_STEP_SUMMARY"

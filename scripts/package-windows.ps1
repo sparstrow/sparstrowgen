@@ -12,7 +12,16 @@ param(
   [Parameter(Mandatory = $true)][string]$Version,
   [string]$ServerAPI = 'https://api.sparstrow.com',
   [string]$ServerWS = 'wss://api.sparstrow.com/daemon',
+  # Both streams are built into every copy, and which one a computer reads is
+  # decided on that computer at run time (cmd/daemon/channel.go). That is what
+  # lets a candidate be promoted to stable as the SAME executable: if the
+  # channel were compiled in, the promoted copy would carry the candidate's
+  # update URL and put every production computer on the candidate stream.
   [string]$UpdateURL = 'https://github.com/sparstrow/sparstrowgen/releases/latest/download/sparstrowgen-update.json',
+  [string]$CandidateURL = 'https://github.com/sparstrow/sparstrowgen/releases/download/daemon-candidate/sparstrowgen-update.json',
+  # Which release tag these files will be published at, so the manifest names
+  # the installer where it will actually be.
+  [ValidateSet('stable', 'candidate')][string]$Channel = 'stable',
   [string]$Output = "$PSScriptRoot\..\dist\windows"
 )
 $ErrorActionPreference = 'Stop'
@@ -29,7 +38,7 @@ if ($LASTEXITCODE -ne 0) { throw 'building releasetool failed' }
 
 $env:GOOS = 'windows'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
 try {
-  $flags = "-s -w -H=windowsgui -X main.version=$Version -X main.releaseAPI=$ServerAPI -X main.releaseWS=$ServerWS -X main.releaseUpdateURL=$UpdateURL"
+  $flags = "-s -w -H=windowsgui -X main.version=$Version -X main.releaseAPI=$ServerAPI -X main.releaseWS=$ServerWS -X main.releaseUpdateURL=$UpdateURL -X main.releaseCandidateURL=$CandidateURL"
   & go build -C "$repo\server" -trimpath -ldflags $flags -o $exe ./cmd/daemon
   if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 } finally {
@@ -38,11 +47,12 @@ try {
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLower()
 "$hash  sparstrowgen-setup.exe" | Set-Content -LiteralPath "$exe.sha256" -Encoding ascii
 
-$installerURL = "https://github.com/sparstrow/sparstrowgen/releases/download/daemon-v$Version/sparstrowgen-setup.exe"
+$tag = if ($Channel -eq 'candidate') { "daemon-candidate-v$Version" } else { "daemon-v$Version" }
+$installerURL = "https://github.com/sparstrow/sparstrowgen/releases/download/$tag/sparstrowgen-setup.exe"
 & $tool manifest -exe $exe -version $Version -url $installerURL -out $bundle | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'writing the update manifest failed' }
 Remove-Item -LiteralPath $tool
 
-Write-Host "Built $exe (v$Version)"
+Write-Host "Built $exe (v$Version, $Channel)"
 Write-Host "SHA-256 $hash"
 Write-Host "Wrote $(Join-Path $bundle 'sparstrowgen-update.json') for $installerURL"

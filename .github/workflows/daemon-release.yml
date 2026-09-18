@@ -1,14 +1,27 @@
 name: Daemon release
 
-# Pushing a tag daemon-vX.Y.Z builds and publishes that version of the Windows
-# daemon as the latest release. Every installed computer with automatic updates
-# on installs it within the hour, once no agent work is running.
-# docs/runbooks/daemon-release.md, docs/Decisions.md D-035.
+# Two streams, and a tag decides which one (docs/runbooks/daemon-release.md,
+# docs/Decisions.md D-035 and D-037):
+#
+#   daemon-vX.Y.Z             stable. Published as the latest release, so every
+#                             installed computer with automatic updates on
+#                             installs it within the hour, once no agent work is
+#                             running.
+#   daemon-candidate-vX.Y.Z   a release candidate. Published as a prerelease,
+#                             never marked latest, and the moving
+#                             `daemon-candidate` pointer is aimed at it. Only a
+#                             computer on the candidate channel reads that
+#                             pointer; no production computer does.
+#
+# The Promote workflow turns a candidate into the stable release WITHOUT
+# rebuilding: it republishes the very bytes that were tested, checked against
+# their SHA-256.
 
 on:
   push:
     tags:
       - "daemon-v*.*.*"
+      - "daemon-candidate-v*.*.*"
 
 permissions:
   contents: write
@@ -33,18 +46,28 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          if ($env:TAG -notmatch '^daemon-v(\d+\.\d+\.\d+)$') { throw "Release tags must be daemon-vX.Y.Z; got '$env:TAG'." }
+          if ($env:TAG -match '^daemon-candidate-v(\d+\.\d+\.\d+)$') {
+            $channel = 'candidate'
+          } elseif ($env:TAG -match '^daemon-v(\d+\.\d+\.\d+)$') {
+            $channel = 'stable'
+          } else {
+            throw "Release tags must be daemon-vX.Y.Z or daemon-candidate-vX.Y.Z; got '$env:TAG'."
+          }
           $version = $Matches[1]
           # checkout turns an annotated tag into a lightweight one; fetch it again for its message.
           git fetch --force origin "refs/tags/$($env:TAG):refs/tags/$($env:TAG)"
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
           if ($LASTEXITCODE -ne 0) { throw "$env:TAG is not on main. Only merged commits are released." }
+          # Higher than the latest STABLE release, whichever stream this is: a
+          # candidate that is not higher could never be promoted, and finding
+          # that out at promotion time is finding out too late.
           $latest = gh release view --json tagName --jq .tagName 2>$null
           if ($LASTEXITCODE -eq 0 -and $latest -match '^daemon-v(\d+\.\d+\.\d+)$') {
             if ([version]$version -le [version]$Matches[1]) { throw "$version is not higher than the latest release, $latest. Never reuse or go back." }
           }
           $global:LASTEXITCODE = 0
           "version=$version" >> $env:GITHUB_OUTPUT
+          "channel=$channel" >> $env:GITHUB_OUTPUT
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -60,12 +83,14 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ steps.meta.outputs.version }}
-        run: ./scripts/package-windows.ps1 -Version $env:VERSION
+          CHANNEL: ${{ steps.meta.outputs.channel }}
+        run: ./scripts/package-windows.ps1 -Version $env:VERSION -Channel $env:CHANNEL
 
       - name: Publish
         shell: pwsh
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+          CHANNEL: ${{ steps.meta.outputs.channel }}
         run: |
           $hash = ((Get-Content -LiteralPath dist/windows/sparstrowgen-setup.exe.sha256) -split '\s+')[0]
           $changes = (git tag -l --format='%(contents)' $env:TAG | Out-String).Trim()
@@ -85,5 +110,32 @@ jobs:
           Built from {SHA} by [this run]({RUN}).
           '@
           $notes = $notes.Replace('{CHANGES}', $changes).Replace('{HASH}', $hash).Replace('{SHA}', $env:GITHUB_SHA).Replace('{RUN}', $run)
+          if ($env:CHANNEL -eq 'candidate') {
+            $notes = @'
+          A release candidate of the component that connects a Windows computer to sparstrowgen. **Not for installed computers** — it is published for testing on the staging lane, and no computer on the stable channel sees it.
+
+          **What changed:** {CHANGES}
+
+          SHA-256 `{HASH}`
+
+          Built from {SHA} by [this run]({RUN}). Promoting it to stable republishes these exact bytes, checked against that SHA-256.
+          '@
+            $notes = $notes.Replace('{CHANGES}', $changes).Replace('{HASH}', $hash).Replace('{SHA}', $env:GITHUB_SHA).Replace('{RUN}', $run)
+          }
           Set-Content -LiteralPath release-notes.md -Value $notes -Encoding utf8
-          gh release create $env:TAG dist/windows/sparstrowgen-setup.exe dist/windows/sparstrowgen-setup.exe.sha256 dist/windows/sparstrowgen-update.json --verify-tag --latest --title "sparstrowgen for Windows $env:VERSION" --notes-file release-notes.md
+
+          if ($env:CHANNEL -eq 'candidate') {
+            gh release create $env:TAG dist/windows/sparstrowgen-setup.exe dist/windows/sparstrowgen-setup.exe.sha256 dist/windows/sparstrowgen-update.json --verify-tag --prerelease --title "sparstrowgen for Windows $env:VERSION (release candidate)" --notes-file release-notes.md
+            # Aim the moving pointer at this candidate. Candidate computers read
+            # only this URL, so publishing the release above changes nothing for
+            # anyone until this step runs.
+            gh release view daemon-candidate 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              $global:LASTEXITCODE = 0
+              gh release create daemon-candidate --target $env:GITHUB_SHA --prerelease --title "Release candidate channel" --notes "The manifest computers on the candidate channel read. Its contents move with each candidate; the releases themselves are the daemon-candidate-vX.Y.Z prereleases."
+            }
+            $global:LASTEXITCODE = 0
+            gh release upload daemon-candidate dist/windows/sparstrowgen-update.json --clobber
+          } else {
+            gh release create $env:TAG dist/windows/sparstrowgen-setup.exe dist/windows/sparstrowgen-setup.exe.sha256 dist/windows/sparstrowgen-update.json --verify-tag --latest --title "sparstrowgen for Windows $env:VERSION" --notes-file release-notes.md
+          }

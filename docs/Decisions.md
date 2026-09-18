@@ -830,3 +830,43 @@ database per worktree (the port is only one of the collisions, and the daemon cr
 that actually broke things); telling agents to set the variables by hand (WORKFLOW.md already says
 manually reusing defaults is not isolation, and a rule nobody can forget beats one everybody must
 remember).
+
+## D-037 — Two release streams, and the channel is read on the computer rather than built into it
+
+**2026-09-17, agent, building the Phase 2 prerequisites.** `release-workflow.md` gives staging the
+candidate daemon channel and production the stable one, and requires that the main promotion reuse
+the exact bytes staging approved. Neither existed: every tag published as latest, so the only stream
+was the one every installed computer follows. It is also why `Unverified.md` U-8 and U-10 had to be
+proved on improvised setups.
+
+**Stable** stays what it is: the release marked latest, read through
+`releases/latest/download/sparstrowgen-update.json`. **Candidate** is a prerelease at
+`daemon-candidate-vX.Y.Z`, plus one moving pointer — a release at the fixed tag `daemon-candidate`
+holding nothing but a manifest, replaced with each candidate. A moving pointer is needed because a
+computer has to have one URL it can keep checking; the releases it names stay immutable, so what was
+tested can still be identified afterwards.
+
+**The channel is resolved at run time**, from a file beside the machine credential, and this is the
+load-bearing part. Both stream URLs are built into every copy, and the computer picks. Had the
+channel been compiled in — the obvious way, one build per stream — promoting a candidate could not
+reuse its bytes: the promoted executable would carry the candidate's own update URL, and every
+production computer that installed it would quietly move to the candidate stream. The alternative
+was rebuilding for stable after approval, which is exactly what the protocol forbids, because a
+rebuild is a different artifact from the one that was tested.
+
+Anything unrecognised in that file reads as stable, since an installed daemon will one day be older
+than whatever wrote it, and the safe reading of an unknown channel is the stream everybody is on.
+
+**Promotion is a separate workflow, with no source checkout at all**
+(`.github/workflows/daemon-promote.yml`): it downloads the candidate's installer, checks it against
+both the checksum published beside it and the one inside the manifest the candidate computers
+verified against, and republishes the same file as the stable release. It runs in a `production`
+environment so the owner can require a reviewer, because publishing a stable artifact is an owner
+gate the protocol does not let an agent pass.
+
+Rejected: one release per channel built separately (see above); serving the manifest from our own
+API (`internal/release` requires the installer to be on the site the manifest came from, so we would
+have to host installers too, losing GitHub's own integrity story for no gain); an `-rc` suffix in
+the version (the daemon orders versions as x.y.z, so rc2 would not replace rc1 on a test computer —
+candidates get real version numbers instead, and a rejected one's number is simply never published
+as stable).

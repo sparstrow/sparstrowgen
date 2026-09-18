@@ -4,6 +4,12 @@ Installed computers update from the GitHub release marked **latest**. GitHub Act
 publishes it when a version tag is pushed: there is no key to keep and nothing to run on anyone's PC
 (docs/Decisions.md D-035).
 
+There are two streams (D-037). **Stable** is that latest release, which every installed computer
+reads. **Candidate** is a release the owner is testing, published as a prerelease and never marked
+latest; only a computer explicitly put on the candidate channel sees it. Which stream a computer
+follows is decided on that computer, not built into the executable — which is what lets a candidate
+become the stable release without being rebuilt.
+
 ## Each release
 
 1. Merge the change to `main`.
@@ -26,6 +32,43 @@ publishes it when a version tag is pushed: there is no key to keep and nothing t
    running. **Check now** in Settings → Updates shows it at once.
 
 Trying a build without publishing: `.\scripts\package-windows.ps1 -Version x.y.z -Output <folder>`.
+
+## A release candidate (phase 2)
+
+Same steps, with `daemon-candidate-v` in place of `daemon-v`:
+
+```powershell
+git tag -a daemon-candidate-v0.3.0 <commit on main> -m "What changed, for the release notes."
+git push origin daemon-candidate-v0.3.0
+```
+
+The workflow publishes it as a **prerelease**, never latest, and then aims the moving
+`daemon-candidate` pointer at it — the only URL candidate computers read. The version still has to be
+higher than the latest stable release: a candidate that could not be promoted is not worth testing.
+
+**Putting a computer on the candidate channel** — the staging computer, not a real one:
+
+```powershell
+sparstrowgen-setup.exe install -channel candidate
+```
+
+It is written in that computer's own data directory, so it survives updates, and it is deliberately
+not offered anywhere in the product. An agent's test daemon can use `SPARSTROWGEN_CHANNEL=candidate`
+instead of installing. Set it back with `install -channel stable`.
+
+## Promoting a candidate to stable — the owner's gate
+
+After the owner has tested the candidate on staging, he runs the **Promote a daemon candidate**
+workflow (Actions tab) with the version. It **does not rebuild**: it downloads the candidate's own
+`sparstrowgen-setup.exe`, checks it against both its published `.sha256` and the `sha256` inside the
+manifest candidate computers verified their download against, and republishes those exact bytes as
+`daemon-vx.y.z` marked latest. Only the manifest is rewritten, to name the installer at its new URL.
+
+A rebuild from the same commit would produce a different file, which is a different candidate from
+the one that was tested — `release-workflow.md` forbids it, and this is how that rule is kept rather
+than remembered. Agents may prepare a candidate and its evidence; running the promotion is the
+owner's. Adding a required reviewer to the `production` environment in the repository's settings
+turns that from a sentence here into something GitHub enforces.
 
 ## When something goes wrong
 
@@ -72,6 +115,8 @@ key file and its folder were deleted the same morning. There is no key anywhere 
 
 ## Never
 
-- Mark a test or pre-release build as latest: every installed computer would install it.
+- Mark a test or pre-release build as latest: every installed computer would install it. Publish it
+  as a candidate instead — that is what the channel is for.
+- Rebuild a candidate to promote it. Promote the bytes that were tested, or test the new bytes.
 - Publish a manifest on a release other than the one holding the installer it names.
 - Raise `MinDaemonProtocol` before a release those computers can update to has been published.

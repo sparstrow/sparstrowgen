@@ -235,6 +235,25 @@ its test computers disconnected, sending a message returned 503 "your machine is
 nothing new can be sent" instead of reaching the owner's computer. The isolation tests
 (`internal/api/isolation_test.go`) cover the same boundary for every endpoint.
 
+## U-18 — A candidate is published, tested and promoted without being rebuilt
+
+**From:** D-037 release channels, 2026-09-17 · **Who can run it:** agent for the first two steps,
+**owner for the promotion** — publishing a stable artifact is his gate, and the first candidate
+publication needs his go-ahead because it puts a public prerelease on the repository
+**How:**
+1. Tag `daemon-candidate-v<x.y.z>` on main. Passing: the workflow publishes a prerelease that is NOT
+   marked latest, and `releases/download/daemon-candidate/sparstrowgen-update.json` names that
+   release's installer. `releases/latest/...` is unchanged, so no installed computer sees anything.
+2. A test computer with `SPARSTROWGEN_CHANNEL=candidate` (or installed with `-channel candidate`)
+   finds it in **Check now** and updates; a computer on stable does not offer it.
+3. The owner runs **Promote a daemon candidate**. Passing: `daemon-v<x.y.z>` appears as latest with
+   the SAME SHA-256 as the candidate, its manifest names the new URL, and a stable computer updates
+   to it and stays on the stable channel afterwards.
+**Status:** open — the parts that can be checked without publishing were: the packaging builds a
+candidate whose manifest names the candidate tag, both stream URLs are in the executable (found in
+the built binary), the channel is read per computer (`cmd/daemon` channel tests), and both workflow
+files parse. What has not run is a real publication and promotion.
+
 ## U-16 — Two worktrees' stacks run side by side without touching each other
 
 **From:** D-036 local isolation, 2026-09-17 · **Who can run it:** agent — needs Docker Desktop
