@@ -357,9 +357,18 @@ func tooMany(w http.ResponseWriter, wait time.Duration, a *API) {
 // things: a password is a person proving who they are, this is one machine
 // proving it is the one that was installed (docs/Decisions.md D-028).
 //
+// DEVELOPMENT ONLY since D-038. A deployed server has no daemon token at all,
+// and this answers false to everything — installed computers authenticate with
+// the credential they were paired with, and never present this. An empty token
+// must therefore refuse rather than compare: it is not a secret anybody has to
+// guess, it is the absence of a way in.
+//
 // Compared in constant time. This is a fixed secret compared on every reconnect,
 // which is exactly the shape a timing attack likes.
 func (a *API) daemonAuthorised(r *http.Request) bool {
+	if a.cfg.DaemonToken == "" {
+		return false
+	}
 	presented := r.Header.Get("Authorization")
 	const prefix = "Bearer "
 	if len(presented) <= len(prefix) || presented[:len(prefix)] != prefix {

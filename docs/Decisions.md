@@ -870,3 +870,32 @@ have to host installers too, losing GitHub's own integrity story for no gain); a
 the version (the daemon orders versions as x.y.z, so rc2 would not replace rc1 on a test computer —
 candidates get real version numbers instead, and a rejected one's number is simply never published
 as stable).
+
+## D-038 — The shared daemon token is development-only; deployments accept paired credentials alone
+
+**2026-09-17, owner's question, agent's reading.** He asked why a staging deployment needed a
+`DAEMON_TOKEN` when we had moved off tokens. Two different secrets — D-035 retired the update
+*signing key* — but the question found something real.
+
+**Nothing legitimate was using it.** `machineToken` in the daemon returns the pairing credential,
+and for a release build returns nothing at all if there is none; only a development build falls back
+to `DAEMON_TOKEN`. So on a deployment the token was a standing shared secret with no user: the only
+party who would ever present it is one who should not have it. WORKFLOW.md rule 2 had kept it
+"until installed clients are proven", and they are (U-5, U-7, U-13, and the owner's own paired
+computer).
+
+**A deployment is a server with secure cookies on.** That is the same test the codebase already uses
+to refuse `MAIL_TRANSPORT=log`, and it needs no new variable to say which kind of server this is. On
+such a server the token is read, ignored, and warned about; `daemonAuthorised` answers false to
+everything, so the route does not exist rather than being a secret nobody knows. The empty token is
+the case the test pins: a comparison against `""` is one somebody can satisfy.
+
+**Ignored rather than refused**, unlike `MAIL_TRANSPORT=log`. Refusing would take down every running
+deployment the moment this version reached it, over a variable that is merely unnecessary — an
+upgrade should not need a configuration change made first. The warning and the runbook say to remove
+it.
+
+Rejected: a new `ALLOW_SHARED_TOKEN` switch (a switch that can be turned on is one that can reach
+production); removing the route outright (a daemon run from source has no pairing, so local
+development would have to pair before it could be started, which is a real cost for no gain);
+keeping it and rotating it (rotation manages a secret whose value is that it does not exist).

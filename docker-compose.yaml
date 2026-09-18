@@ -47,10 +47,15 @@ services:
       - "8080"
     environment:
       - DATABASE_URL=${DATABASE_URL:?}
-      # Both are required and the server refuses to start without them
-      # (docs/Decisions.md D-027). The `:?` makes the deploy fail here, with the
-      # variable named, rather than in a container restart loop.
-      - DAEMON_TOKEN=${DAEMON_TOKEN:?}
+      # Required, and the server refuses to start without it (docs/Decisions.md
+      # D-027). The `:?` makes the deploy fail here, with the variable named,
+      # rather than in a container restart loop.
+      #
+      # DAEMON_TOKEN used to sit beside it. It is gone from deployments (D-038):
+      # a computer authenticates with the credential it was paired with, so the
+      # shared token had no legitimate user here — only somebody who should not
+      # have had it. It lives on for development, where the Makefile and
+      # scripts/dev.ps1 set it.
       # The exact origin the browser loads the app from. Anything else is
       # refused CORS and refused a websocket.
       - WEB_ORIGIN=${WEB_ORIGIN:?}

@@ -210,6 +210,34 @@ func TestTheDaemonSocketRefusesAnythingWithoutTheToken(t *testing.T) {
 	}
 }
 
+// A deployed server has no daemon token at all, and then the shared-token route
+// does not exist: not "a secret nobody knows", but nothing to present. The
+// empty string is the case that matters, because a comparison against it would
+// otherwise be a comparison somebody can satisfy (D-038).
+func TestWithNoDaemonTokenTheSharedRouteIsGone(t *testing.T) {
+	r := newRig(t)
+	r.api.cfg.DaemonToken = "" // what serverConfig produces on a deployment
+
+	for _, header := range []http.Header{
+		nil,
+		{"Authorization": []string{"Bearer "}},
+		{"Authorization": []string{"Bearer " + testDaemonToken}}, // the token that used to work
+		{"Authorization": []string{"Bearer "}},
+	} {
+		conn, res, err := websocket.DefaultDialer.Dial(r.ws("/daemon"), header)
+		if err == nil {
+			conn.Close()
+			t.Fatalf("a daemon connection was accepted with %v and no configured token", header)
+		}
+		if res == nil || res.StatusCode != http.StatusUnauthorized {
+			t.Errorf("header %v was refused with %v, want a 401", header, res)
+		}
+	}
+	if r.api.hub.DaemonOnline(r.userID) {
+		t.Error("a refused connection still registered as the owner's machine")
+	}
+}
+
 // A websocket is not covered by the same-origin policy, so without an explicit
 // check any page the owner visited could open one, be authenticated by his own
 // cookie, and read every conversation. The cookie here is genuine — the origin
