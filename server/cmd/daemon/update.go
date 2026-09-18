@@ -34,7 +34,8 @@ new executable in place and starts it, and puts this version back if the new
 one has not reached the server within two minutes. */
 
 // Set by the release build. A development build is "dev" with no update source,
-// and never updates itself.
+// and never updates itself. releaseCandidateURL, the other stream, is in
+// channel.go beside the code that decides which of the two this computer reads.
 var (
 	version          = "dev"
 	releaseUpdateURL string
@@ -105,7 +106,7 @@ func newUpdater(log *slog.Logger, turns *runningTurns, send func(protocol.Daemon
 	}
 	u := &updater{
 		log: log, turns: turns, client: &http.Client{Timeout: updateTimeout},
-		source: releaseUpdateURL, current: version, dir: dir,
+		source: updateSource(), current: version, dir: dir,
 		start: startUpdate, exit: exit, send: send, poll: 2 * time.Second,
 		// On until the server says otherwise, which it does on every connect.
 		automatic: true,

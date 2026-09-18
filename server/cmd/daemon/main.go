@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,8 +35,7 @@ func main() {
 	case len(args) == 1 && isPairingLink(args[0]):
 		os.Exit(report(activate(args[0]), ""))
 	case len(args) > 0 && args[0] == "install":
-		err := install()
-		os.Exit(report(err, installedNotice()))
+		os.Exit(installCommand(args[1:]))
 	case len(args) > 0 && args[0] == "pair":
 		os.Exit(pairCommand(args[1:]))
 	case len(args) > 0 && args[0] == "run":
@@ -50,9 +50,29 @@ func main() {
 	case len(args) == 0:
 		runForeground()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: daemon [run | install | pair -request <id> | sparstrowgen://pair?request=<id>]")
+		fmt.Fprintln(os.Stderr, "usage: daemon [run | install [-channel stable|candidate] | pair -request <id> | sparstrowgen://pair?request=<id>]")
 		os.Exit(2)
 	}
+}
+
+// installCommand installs this copy, optionally putting the computer on the
+// candidate channel.
+//
+// The flag exists for the one computer that tests release candidates before the
+// owner approves them (WORKFLOW.md phase 2). It is deliberately not offered in
+// the product: choosing a release channel is not something a person using
+// sparstrowgen should have to think about, and getting it wrong would put their
+// working computer on untested builds.
+func installCommand(args []string) int {
+	fs := flag.NewFlagSet("install", flag.ContinueOnError)
+	name := fs.String("channel", channelStable, "which releases this computer follows: stable or candidate")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if err := setChannel(*name); err != nil {
+		return report(err, "")
+	}
+	return report(install(), installedNotice())
 }
 
 // installedNotice is what a finished install says. A computer that is already
