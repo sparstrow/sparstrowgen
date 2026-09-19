@@ -8,7 +8,8 @@
    same product.
 
    Surface  hue / chroma        Accent  hue / chroma / light lightness
-   paper     85 / 0.01          amber    70 / 0.15 / 0.528
+   paper     85 / 0.01          neutral   0 / 0    / 0.205  (the default: no hue)
+                                amber    70 / 0.15 / 0.528
    slate    250 / 0.011         violet  285 / 0.18 / 0.538
    soft     280 / 0.007         blue    250 / 0.16 / 0.520
    mono       0 / 0             teal    190 / 0.12 / 0.496
@@ -182,6 +183,19 @@ html[data-accent="teal"] {
 html.dark[data-accent="teal"] {
   --primary: oklch(0.78 0.12 190);
   --ring: oklch(0.78 0.12 190);
+}
+
+/* The default. No hue at all: buttons and the focus ring are the neutral ramp,
+   near-black in light and near-white in dark, so colour is left to mean something
+   (status, provider) instead of decorating. The ring is mid-grey so it holds 3:1
+   on every surface in both modes. */
+html[data-accent="neutral"] {
+  --primary: oklch(0.205 0 0);
+  --ring: oklch(0.55 0 0);
+}
+html.dark[data-accent="neutral"] {
+  --primary: oklch(0.92 0 0);
+  --ring: oklch(0.6 0 0);
 }
 
 html[data-accent="rose"] {

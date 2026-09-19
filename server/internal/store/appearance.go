@@ -24,14 +24,14 @@ type Appearance struct {
 
 // DefaultAppearance is what a new account starts with, and what an unreadable
 // saved choice falls back to.
-var DefaultAppearance = Appearance{Mode: "system", Surface: "paper", Accent: "amber"}
+var DefaultAppearance = Appearance{Mode: "system", Surface: "mono", Accent: "neutral"}
 
 // The names this version understands. A newer version may save one this one has
 // never heard of, which is why reading falls back instead of failing.
 var (
 	AppearanceModes    = []string{"light", "dark", "system"}
 	AppearanceSurfaces = []string{"paper", "slate", "soft", "mono"}
-	AppearanceAccents  = []string{"amber", "violet", "blue", "teal", "rose"}
+	AppearanceAccents  = []string{"neutral", "amber", "violet", "blue", "teal", "rose"}
 )
 
 // ErrUnknownAppearance is a save naming something this version does not offer.

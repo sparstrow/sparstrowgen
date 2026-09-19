@@ -70,7 +70,7 @@ function ComputerCard({ machine }: { machine: Machine }) {
 
   return <SettingsSection
     title={<span className="flex min-w-0 items-center gap-2"><MonitorSmartphone className="size-4 shrink-0" aria-hidden="true"/><span className="truncate">{machine.name}</span></span>}
-    aside={<span className="flex items-center gap-1.5 text-xs text-muted-foreground">{machine.online ? <Wifi className="size-3.5" aria-hidden="true"/> : <WifiOff className="size-3.5" aria-hidden="true"/>}{machine.online ? "Online" : "Offline"}</span>}>
+    aside={<span className="flex items-center gap-1.5 text-xs text-muted-foreground">{machine.online ? <Wifi className="size-3.5 text-success" aria-hidden="true"/> : <WifiOff className="size-3.5" aria-hidden="true"/>}<span className={machine.online ? "text-success-text" : undefined}>{machine.online ? "Online" : "Offline"}</span></span>}>
     <SettingsCard>
       <SettingsRow label="Current version" description={machine.tooOld
         ? <span className="inline-flex items-center gap-1.5 text-destructive"><AlertCircle className="size-3.5 shrink-0" aria-hidden="true"/>Too old for sparstrowgen. This computer cannot run agent work until it is updated.</span>
@@ -98,12 +98,12 @@ function StatusLine({ machine }: { machine: Machine }) {
   const status = machine.update;
   const line = (icon: React.ReactNode, text: string, tone?: "destructive") =>
     <p role="status" className={cn("mt-2 inline-flex items-start gap-1.5", tone === "destructive" ? "text-destructive" : "text-foreground")}>{icon}<span>{text}</span></p>;
-  if (!machine.online) return line(<WifiOff className="mt-0.5 size-3.5 shrink-0" aria-hidden="true"/>, "This computer is offline. It checks for updates when it reconnects.");
+  if (!machine.online) return line(<WifiOff className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true"/>, "This computer is offline. It checks for updates when it reconnects.");
   switch (status.kind) {
-    case "current": return line(<Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true"/>, "You're on the latest version.");
-    case "available": return line(<ArrowDownToLine className="mt-0.5 size-3.5 shrink-0" aria-hidden="true"/>, `v${status.version} is available.`);
-    case "waiting": return line(<Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true"/>, `v${status.version} is ready. It installs after the ${status.activeTasks === 1 ? "agent task" : `${status.activeTasks} agent tasks`} running on this computer ${status.activeTasks === 1 ? "finishes" : "finish"}.`);
-    case "updating": return line(<Loader2 className="mt-0.5 size-3.5 shrink-0 motion-safe:animate-spin" aria-hidden="true"/>, `Installing v${status.version}. This computer reconnects in a few seconds.`);
+    case "current": return line(<Check className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true"/>, "You're on the latest version.");
+    case "available": return line(<ArrowDownToLine className="mt-0.5 size-3.5 shrink-0 text-info" aria-hidden="true"/>, `v${status.version} is available.`);
+    case "waiting": return line(<Clock className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true"/>, `v${status.version} is ready. It installs after the ${status.activeTasks === 1 ? "agent task" : `${status.activeTasks} agent tasks`} running on this computer ${status.activeTasks === 1 ? "finishes" : "finish"}.`);
+    case "updating": return line(<Loader2 className="mt-0.5 size-3.5 shrink-0 text-info motion-safe:animate-spin" aria-hidden="true"/>, `Installing v${status.version}. This computer reconnects in a few seconds.`);
     case "failed": return line(<AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true"/>, status.message, "destructive");
     default: return null;
   }

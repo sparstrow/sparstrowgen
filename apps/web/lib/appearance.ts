@@ -8,7 +8,7 @@ import type { Appearance } from "./api";
    The copy in this browser exists only so the first paint is not the wrong
    theme; it is overwritten by the account's answer as soon as that arrives. */
 
-export const DEFAULT_APPEARANCE: Appearance = { mode: "system", surface: "paper", accent: "amber" };
+export const DEFAULT_APPEARANCE: Appearance = { mode: "system", surface: "mono", accent: "neutral" };
 
 export const MODES: { id: Appearance["mode"]; label: string; description: string }[] = [
   { id: "light", label: "Light", description: "Always the light expression." },
@@ -26,6 +26,7 @@ export const SURFACES: { id: Appearance["surface"]; label: string; description: 
 /** The swatch colours are the accent's own dark-mode value, so the row of
  *  choices reads as the colours themselves rather than as five grey chips. */
 export const ACCENTS: { id: Appearance["accent"]; label: string; swatch: string }[] = [
+  { id: "neutral", label: "Neutral", swatch: "oklch(0.5 0 0)" },
   { id: "amber", label: "Amber", swatch: "oklch(0.78 0.15 70)" },
   { id: "violet", label: "Violet", swatch: "oklch(0.78 0.18 285)" },
   { id: "blue", label: "Blue", swatch: "oklch(0.78 0.16 250)" },
@@ -89,7 +90,7 @@ export function cachedAppearance(): Appearance {
  *  built-in defaults in place, which are readable. */
 export const FIRST_PAINT_SCRIPT = `(function(){try{
 var a=JSON.parse(localStorage.getItem(${JSON.stringify(APPEARANCE_KEY)})||"null")||{};
-var s=["paper","slate","soft","mono"].indexOf(a.surface)>=0?a.surface:"paper";
-var c=["amber","violet","blue","teal","rose"].indexOf(a.accent)>=0?a.accent:"amber";
+var s=["paper","slate","soft","mono"].indexOf(a.surface)>=0?a.surface:"mono";
+var c=["neutral","amber","violet","blue","teal","rose"].indexOf(a.accent)>=0?a.accent:"neutral";
 document.documentElement.dataset.surface=s;document.documentElement.dataset.accent=c;
-}catch(e){document.documentElement.dataset.surface="paper";document.documentElement.dataset.accent="amber";}})();`;
+}catch(e){document.documentElement.dataset.surface="mono";document.documentElement.dataset.accent="neutral";}})();`;

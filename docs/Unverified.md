@@ -296,3 +296,30 @@ focus path could not be run here: the Browser pane reports `document.visibilityS
 `hasFocus()` false even when a tab is fronted, and the refresh it triggers is exactly what a hidden
 page suppresses (the same harness limit that produced G-36). The code path is
 `refetchOnWindowFocus: "always"` on the session and appearance queries.
+
+## U-19 — The signed-in screens show the monochrome default and the status colours
+
+**From:** D-039 (appearance and status colour), 2026-09-19 · **Who can run it:** owner, or the agent once
+he has signed the testing account in the Browser pane (CLAUDE.md §1)
+**How:** After a deploy, or against a local stack, sign in and check: (1) a brand-new account opens
+monochrome and Settings → Appearance lists Neutral first; (2) Machines shows an online computer with a
+green icon and the word Online in green, an offline one muted; (3) a computer's profile shows a green
+check for an available provider and an alert icon for one that is not (B-39); (4) Settings → Updates
+shows a green check for "latest version", a blue arrow for "available", an amber clock for "waiting",
+and a blue spinner while installing; (5) a success, info, warning and error toast each carry their
+coloured icon; (6) an existing account still shows what it chose. Passing: all six, in light and dark.
+**Status:** open. What was seen 2026-09-19: the compiled stylesheet of the dev server, in a signed-out
+browser, with the default resolving to Mono and Neutral, all eight mode and surface combinations and
+four accents resolving to the right `--primary`, `--ring` and status colours, and every status
+utility present. The screens above need a signed-in session and a backend, which that run did not have.
+
+## U-20 — The database-backed appearance tests pass with the new default
+
+**From:** D-039, migration 00014, 2026-09-19 · **Who can run it:** agent, with the local stack running
+**How:** With the local Postgres up, run the store and API tests: `go test ./internal/store
+./internal/api -run Appearance -count=1 -v` from `server/`. Passing: none skipped, and
+`TestTheSessionCarriesTheAppearanceSoTheFirstPaintIsRight` sees a new account on `DefaultAppearance`
+(Mono, Neutral). Also that migration 00014 applies and rolls back.
+**Status:** open. Seen 2026-09-19: the new database-free test
+`TestTheDefaultAppearanceIsMonochromeAndIsOffered` passes; the seven that need Postgres skipped
+because none was running.

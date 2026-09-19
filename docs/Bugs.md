@@ -913,3 +913,19 @@ Fixed by logging the connection error without attaching the connection string. T
 identifies resolution, refusal and authentication failures without printing the password.
 `TestPostgresFailureDoesNotLogDatabasePassword` starts the server against an unreachable dummy
 database and proves its distinctive dummy password is absent from the captured output.
+
+## B-39 — A provider that was not available still had a check mark beside it on the machine profile
+
+**Found:** 2026-09-19, agent, while applying status colour to the machine profile
+**Status:** fixed 2026-09-19
+
+**Repro:** Open a computer's profile whose provider list includes one that is signed out or not
+installed. Its row reads "Signed out" (or the reason) with the same check mark as an available one.
+
+**Expected / Actual:** A check mark means available / it appeared on every row, including ones that
+said the provider could not run.
+
+**Fix:** `machines-surface.tsx` shows the check (now in the success colour) only for an available
+provider, and an alert icon otherwise. Type-checked and linted; not yet seen in a browser (U-19).
+
+**Release note:** Fixed: a computer's profile no longer shows a check mark beside an agent that is not available.

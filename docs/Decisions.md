@@ -899,3 +899,37 @@ Rejected: a new `ALLOW_SHARED_TOKEN` switch (a switch that can be turned on is o
 production); removing the route outright (a daemon run from source has no pairing, so local
 development would have to pair before it could be started, which is a real cost for no gain);
 keeping it and rotating it (rotation manages a secret whose value is that it does not exist).
+
+## D-039 — The default appearance is monochrome; brand colour is scarce and status colours are adopted
+
+**2026-09-19, owner, after auditing the design system artifact against his Claude Design kit.**
+
+**A new account starts monochrome:** the Mono surface and a new Neutral accent (near-black in light,
+near-white in dark), so colour is left to mean something instead of decorating. The other three
+surfaces and five accents are still one choice away in Settings. The kit said the same thing in its
+own words (no brand accent hue); the app had drifted to Paper and Amber.
+
+**Brand colour (`primary`, `ring`) has a short list of jobs:** the one primary action, the selected
+option, focus, and links. It never says how something is doing. The audit's evidence was the artifact's
+own preview: an "Online" badge in amber, which is a status and belongs to a status colour. In the app
+itself the audit found the brand colour already confined to those jobs, and no status colour anywhere:
+"Online" was plain text.
+
+**Status colours are adopted from the kit:** `success`, `info`, `warning`, each as an icon colour, a
+badge fill and a text colour. Red stays `destructive`; there is no separate danger token. The kit's
+light-mode icon colours failed 3:1 (success 2.5, warning 2.2), so they were darkened (success L 0.575,
+warning L 0.62) until they hold 3:1 on every surface; the text and fill pairs already passed (6.2 to
+9.8:1). A status is still a word or an icon as well, never colour alone, and a computer being Offline
+stays muted because that is not a fault.
+
+**Geometry stays the live app's** (32px controls, 10px radius, no shadow), not the kit's (36px, 6px,
+shadow), and nothing is set below 12px, so the kit's 10px micro text is dropped. Re-skin the kit, not the
+app.
+
+**Existing accounts keep what they have.** Only the column defaults change (migration 00014). A stored
+Paper and Amber cannot be told apart from a choice someone made, so moving them is L-29, not a silent
+update.
+
+Rejected: the kit's separate `--danger` (a duplicate of `--destructive`); its six task-board column
+colours (there is no task board yet, and three of them fail 3:1 on white); recolouring Offline or
+Unavailable (absence is not a fault).

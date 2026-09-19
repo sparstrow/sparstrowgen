@@ -94,7 +94,7 @@ async function json<T>(res: Response): Promise<T> {
 export type Appearance = {
   mode: "light" | "dark" | "system";
   surface: "paper" | "slate" | "soft" | "mono";
-  accent: "amber" | "violet" | "blue" | "teal" | "rose";
+  accent: "neutral" | "amber" | "violet" | "blue" | "teal" | "rose";
 };
 
 export type Session = {
