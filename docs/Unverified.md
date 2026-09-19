@@ -327,7 +327,7 @@ left Paper and Violet, Slate and Amber, and Mono and Neutral alone, with the mod
 
 ## U-21 — The signed-in screens show every status as a colour, an icon and a word
 
-**From:** D-040 and B-40, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the
+**From:** D-040 and B-41, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the
 testing account in the Browser pane (CLAUDE.md §1)
 **How:** Sign in, in light and dark, and check each place carries all three: (1) Machines lists an online
 computer with a green tick and "Online", an offline one with a grey dash and "Offline"; (2) a computer's

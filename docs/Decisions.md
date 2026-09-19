@@ -978,7 +978,7 @@ fix is to add the tone once. That is what keeps a tick meaning the same thing ev
 **Red text needed its own token.** `destructive` as text measures 3.3:1 on its own tint in light and 3.7:1
 in dark, so every red word (the destructive Button, Badge and menu item, the failure notice title, form
 errors) missed AA. `destructive-text` fixes it, following the `-text` pattern of the other three statuses
-(B-40). The icon and tint keep `destructive`.
+(B-41). The icon and tint keep `destructive`.
 
 Rejected: an `icon` override prop; filled icons (outline is what the toasts already use, and reads better
 at 14px); a coloured dot alone; colouring conversation rows without a state to show.

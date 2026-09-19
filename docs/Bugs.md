@@ -516,6 +516,41 @@ claiming that was a value nobody could match — but the submitted code is trimm
 constant time, and `"" == ""` is a match, so the one gate on claiming the app would have become
 first-request-wins. It now refuses to start instead.
 
+## B-39 — Provider names and marks, and several other texts, are too faint to read on the light surfaces
+
+**Found:** 2026-09-19, by the agent, measuring contrast against PRODUCT.md's WCAG 2.2 AA baseline
+**Status:** open — needs owner, [L-29](Later.md#l-29--light-surfaces-the-provider-colours-and-a-few-other-colours-are-below-aa-contrast)
+**Repro:** Open Chat in any light surface (paper, slate, soft, mono) and read an agent's name above its
+reply, the "hasn't seen this" notice under the composer, or a provider switch divider.
+**Expected / Actual:** 4.5:1 for text, 3:1 for marks and control outlines / the values below. Dark
+themes pass the provider colours (7.7:1 or better), so this is a light-surface problem.
+
+Measured from the token values in `globals.css` and `themes.css` with the WCAG 2 formula, worst case
+across the four light surfaces. Not measured from rendered pixels.
+
+| What | Where | Light now | Needs |
+|---|---|---|---|
+| `--provider-claude` as text | agent name in `message-list.tsx` (54, 183), switch divider (152), composer notice (76), `raw-transcript.tsx` (58, 69) | 2.5–2.7 | 4.5 |
+| `--provider-agy` as text | same places | 2.4–2.6 | 4.5 |
+| `--provider-codex` as text | same places | 1.6–1.7 | 4.5 |
+| provider marks (the icon, not the name) | `provider-strip.tsx` chips, composer, conversation list | same as above | 3 |
+| `--capacity-out` text | the blocked status in `provider-strip.tsx` (52) | 3.5–3.7 | 4.5 |
+| `--code-comment` | comments in code blocks (`markdown.tsx`) | 3.6–3.8 | 4.5 |
+| ~~destructive text on its own 10% tint~~ | fixed by B-41: a new `destructive-text` colour | was 4.0–4.2 light, 3.0–3.1 dark | 4.5 |
+| `--border` / `--input` | every outline | 1.1–1.2 | 3 for a control's outline; separators are arguable |
+
+Other things found while measuring: in `provider-strip.tsx` the provider colour is on the mark only —
+the chip's name is already `--foreground`. Destructive text straight on the page (auth error, folder
+picker) is 4.3–4.6, so it clears on paper, slate and mono and misses on soft. `--code-comment` also
+sits at 4.3 on the soft dark surface. Not measured: waiting chips are drawn at 55% opacity. (Blocked chips are no longer dimmed: a blocked provider is now a warning status, D-040.)
+
+**Why it is not fixed:** the provider colours are the owner's chosen identity (the design system artifact's colour table), and
+changing what a provider looks like is his call. The other rows would be routine on their own, but
+the question is one decision about how light themes read, so they go with it.
+**Fix:** none yet. The colours were deliberately not changed. Recommendation and the values that
+would pass are in L-29.
+**Release note:** written when it is fixed.
+
 ## B-38 — `scripts\dev.ps1` could not start the server, and offered a setup code that no longer exists
 
 **Found:** 2026-09-17, by the agent, running it for the first time since D-036 to verify the local
@@ -914,7 +949,7 @@ identifies resolution, refusal and authentication failures without printing the 
 `TestPostgresFailureDoesNotLogDatabasePassword` starts the server against an unreachable dummy
 database and proves its distinctive dummy password is absent from the captured output.
 
-## B-39 — A provider that was not available still had a check mark beside it on the machine profile
+## B-40 — A provider that was not available still had a check mark beside it on the machine profile
 
 **Found:** 2026-09-19, agent, while applying status colour to the machine profile
 **Status:** fixed 2026-09-19
@@ -930,7 +965,7 @@ provider, and an alert icon otherwise. Type-checked and linted; not yet seen in 
 
 **Release note:** Fixed: a computer's profile no longer shows a check mark beside an agent that is not available.
 
-## B-40 — Red words were too faint to read reliably
+## B-41 — Red words were too faint to read reliably
 
 **Found:** 2026-09-19, agent, while building the status component
 **Status:** fixed 2026-09-19

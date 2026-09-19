@@ -422,6 +422,47 @@ anything sparstrowgen's code reads.
 **Unblocks when:** the owner wants to find out about a failed deploy or backup by email instead of
 by noticing.
 
+## L-29 — Light surfaces: the provider colours and a few other colours are below AA contrast
+
+**Status:** question **Raised:** 2026-09-19, measuring contrast for [`Bugs.md`](Bugs.md) B-39
+
+PRODUCT.md sets WCAG 2.2 AA as the baseline, and on the four light surfaces the provider colours
+miss it by a wide margin: claude 2.5–2.7:1, agy 2.4–2.6:1, codex 1.6–1.7:1, against 4.5:1 for text
+(dark themes pass at 7.7:1 or better). The name above each agent reply is the main place it shows,
+and codex's near-white mark is close to invisible on a white page. The provider colours are your
+chosen identity (the design system artifact's colour table), so nothing was changed. B-39 has the full table.
+
+**Decide the providers** — this is the one that changes how they look, and it can be rendered:
+
+- **A. A darker light-mode colour, used for the name and the mark.** Same hue and chroma, lightness
+  about 0.53 (claude), 0.52 (agy), 0.52 (codex), which gives 4.5:1 on all four light surfaces. Dark
+  themes stay as they are. Claude goes from a soft orange to a deeper burnt orange, and codex from a
+  faint grey to a plain mid-grey. Identity stays in colour everywhere it is now.
+- **B. The name in `--foreground`, the mark keeps a colour.** The mark still needs 3:1, which is
+  lightness about 0.62, so it darkens a little rather than not at all. Quieter, and closer to
+  DESIGN.md's "restrained colour", but a provider is then told apart by its mark alone.
+- **C. Leave it**, and record that the baseline does not hold for light themes.
+
+**Recommendation: A.** Colour is there to say who is talking, and B removes it from the one place
+where a reader looks for it. I would render A and B on paper and soft for you before you pick.
+
+**The rest, on your yes, no rendering needed** (these change the value, not the look):
+
+- `--capacity-out` in light: lightness 0.63 → about 0.545 (4.5:1).
+- `--code-comment` in light: 0.60 → about 0.52 (4.5:1).
+- ~~Destructive text~~ is done: a `destructive-text` colour was added (B-41, D-040), at least 5.2:1 in every theme, so this bullet no longer waits.
+- `--input` (the outline of a field): the outline needs 3:1 to identify a control, and it is 1.2:1
+  today. Reaching 3:1 takes a near-black outline at about 70% strength, which is visibly heavier on
+  every field, so this one is a look decision too. **Recommendation:** raise `--input` and leave
+  `--border` alone, since card and divider lines are separators, not the only sign that a control is
+  there. I would render it with the providers.
+
+Doing any of it also means editing `globals.css`, `themes.css` and the design system artifact in the same
+turn, so the code and the artifact do not disagree.
+
+**Unblocks when:** you pick A, B or C for the providers, and say yes or no to the rest. It blocks
+only this fix; nothing else waits on it.
+
 ## L-30 — Restyle the app shell after the Claude Design kit
 
 **Status:** idea, next after the chat surface is settled **Raised:** 2026-09-19, owner
