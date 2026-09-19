@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en" data-surface="mono" data-accent="neutral">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App shell — direction A (prototype)</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  /* Derived radii, as in apps/web/app/globals.css @theme inline. */
+  :root { --r-sm: calc(var(--radius) - 4px); --r-md: calc(var(--radius) - 2px); --r-lg: var(--radius); --r-xl: calc(var(--radius) + 4px);
+          --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+  /* Prototype controls: not part of the design. */
+  .proto-bar { height: 40px; display: flex; align-items: center; gap: 18px; padding: 0 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; overflow-x: auto; white-space: nowrap; }
+  .proto-bar .grp { display: flex; align-items: center; gap: 4px; }
+  .proto-bar b { font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
+  .proto-bar button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); }
+  .proto-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  #stage { height: calc(100vh - 40px); display: flex; justify-content: center; }
+  #app { width: 100%; height: 100%; container: app / inline-size; position: relative; background: var(--background); }
+  #stage[data-width="narrow"] #app { width: 390px; border-inline: 1px solid var(--border); }
+
+  .shell { display: flex; height: 100%; overflow: hidden; }
+  .ic { flex: none; }
+  .mark { flex: none; }
+
+  /* Status: colour, icon and word together (D-040). */
+  .status { display: inline-flex; align-items: flex-start; gap: 6px; }
+  .status .i { display: flex; height: 1lh; align-items: center; flex: none; }
+  .status[data-tone="success"] .i { color: var(--success); } .status[data-tone="success"] .w { color: var(--success-text); }
+  .status[data-tone="info"] .i, .status[data-tone="progress"] .i { color: var(--info); } .status[data-tone="info"] .w, .status[data-tone="progress"] .w { color: var(--info-text); }
+  .status[data-tone="warning"] .i, .status[data-tone="pending"] .i { color: var(--warning); } .status[data-tone="warning"] .w, .status[data-tone="pending"] .w { color: var(--warning-text); }
+  .status[data-tone="danger"] .i { color: var(--destructive); } .status[data-tone="danger"] .w { color: var(--destructive-text); }
+  .status[data-tone="neutral"] .i, .status[data-tone="neutral"] .w { color: var(--muted-foreground); }
+  .status.quiet .w { color: inherit; }
+  @media (prefers-reduced-motion: no-preference) { .status[data-tone="progress"] .i svg { animation: spin 1s linear infinite; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Primary rail: icons only, labels appear on hover or focus as an overlay so nothing shifts. */
+  .railwrap { width: 60px; flex: none; position: relative; z-index: 30; }
+  .rail { position: absolute; inset: 0 auto 0 0; width: 60px; overflow: hidden; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--background); transition: width .22s cubic-bezier(.4,0,.2,1); }
+  .railwrap:hover .rail, .railwrap:focus-within .rail { width: 224px; }
+  .rail .lbl { opacity: 0; transition: opacity .18s; white-space: nowrap; }
+  .railwrap:hover .lbl, .railwrap:focus-within .lbl { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .rail, .rail .lbl { transition: none; } }
+  .rail-h { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+  .rail nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .navb { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 16px; border-radius: var(--r-sm); color: var(--muted-foreground); font-weight: 500; white-space: nowrap; }
+  .navb:hover { background: color-mix(in oklab, var(--accent) 60%, transparent); }
+  .navb[aria-current="page"] { background: var(--accent); color: var(--accent-foreground); }
+  .rail-f { border-top: 1px solid var(--border); padding: 10px 17px; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
+  .avatar { width: 26px; height: 26px; border-radius: 999px; background: var(--muted); color: var(--foreground); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex: none; }
+
+  /* Pane: the section's own navigation or list. */
+  .pane { width: 212px; flex: none; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: color-mix(in oklab, var(--muted) 40%, var(--background)); }
+  .pane-h, .head { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .pane-h { padding: 0 12px 0 16px; font-size: 13px; font-weight: 600; }
+  .iconbtn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--muted-foreground); flex: none; }
+  .iconbtn:hover { background: var(--accent); color: var(--foreground); }
+  .search { margin: 8px 8px 4px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--input); border-radius: var(--r-md); padding: 0 10px; background: var(--background); color: var(--muted-foreground); }
+  .search:focus-within { outline: 2px solid var(--ring); }
+  .search input { border: 0; outline: 0; background: none; font: inherit; font-size: 13px; height: 30px; flex: 1; min-width: 0; color: var(--foreground); }
+  .plist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .prow { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 8px 10px; border-radius: var(--r-md); }
+  .prow:hover { background: color-mix(in oklab, var(--accent) 55%, transparent); }
+  .prow[aria-current="true"] { background: var(--accent); }
+  .prow .body { min-width: 0; flex: 1; }
+  .prow .t { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prow .m { display: block; font-size: 12px; line-height: 16px; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .untitled { font-style: italic; color: var(--muted-foreground); }
+  .glabel { padding: 10px 10px 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+  .toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 10px; font-size: 12px; color: var(--muted-foreground); }
+  .toggle:hover { color: var(--foreground); }
+  .skel { background: var(--muted); border-radius: var(--r-sm); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+  .pempty { padding: 24px 16px; text-align: center; font-size: 13px; color: var(--muted-foreground); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .pempty .btn { margin-top: 2px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--background); font-weight: 500; white-space: nowrap; }
+  .btn:hover { background: var(--accent); }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .btn.primary:hover { opacity: .9; }
+  .btn.danger { color: var(--destructive-text); border-color: transparent; background: color-mix(in oklab, var(--destructive) 10%, transparent); }
+
+  /* Main and header. */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .head { padding: 0 20px; gap: 12px; }
+  .head h1 { margin: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .head .l { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .head .r { font-size: 12px; flex: none; }
+  .menubtn { display: none; }
+  .tt { min-width: 0; }
+  .tt h1 { line-height: 20px; }
+  .folder { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; line-height: 16px; color: var(--muted-foreground); border-radius: 4px; }
+  .folder:hover { color: var(--foreground); }
+  .folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder .pen { opacity: 0; transition: opacity .15s; }
+  .folder:hover .pen, .folder:focus-visible .pen { opacity: 1; }
+  .head .r { display: flex; align-items: center; gap: 16px; }
+  .vt { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-md); padding: 2px; gap: 2px; font-size: 12px; }
+  .vt button { padding: 2px 8px; border-radius: 6px; color: var(--muted-foreground); }
+  .vt button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); font-weight: 500; }
+  .tok { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); text-align: right; line-height: 16px; white-space: nowrap; }
+  .live .short { display: none; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+  .page { max-width: 48rem; margin: 0 auto; padding: 28px 24px; }
+  .page h2 { margin: 0; font-size: 14px; font-weight: 500; }
+  .page .lede { margin: 4px 0 0; color: var(--muted-foreground); }
+  .crumb { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); margin-bottom: 14px; }
+  .card { border: 1px solid var(--border); border-radius: var(--r-lg); }
+  .card > .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .card > .row:last-child { border-bottom: 0; }
+  .card .desc { font-size: 12px; color: var(--muted-foreground); line-height: 16px; margin-top: 2px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chipb { padding: 4px 12px; border-radius: var(--r-md); border: 1px solid var(--border); font-size: 13px; }
+  .chipb[aria-pressed="true"] { border-color: var(--primary); background: var(--accent); font-weight: 500; }
+  .field { height: 32px; min-width: 200px; border: 1px solid var(--input); border-radius: var(--r-lg); background: var(--background); padding: 0 10px; display: inline-flex; align-items: center; color: var(--muted-foreground); }
+  .switch { width: 32px; height: 18px; border-radius: 999px; background: var(--primary); position: relative; flex: none; }
+  .switch::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 999px; background: var(--primary-foreground); }
+  .divide > div { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .divide { border-top: 1px solid var(--border); margin-top: 14px; }
+
+  .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex: none; }
+  .chip { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: var(--r-md); }
+  .chip.muted { opacity: .55; }
+  .chip .n { font-size: 14px; font-weight: 500; }
+  .chip .r { font-size: 12px; color: var(--muted-foreground); }
+  .col { max-width: 48rem; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; }
+  .bubble { align-self: flex-end; max-width: 80%; background: var(--mine); color: var(--mine-foreground); border-radius: 16px 16px 6px 16px; padding: 10px 16px; font-size: 15px; line-height: 1.55; }
+  .turn .who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 500; }
+  .turn .who small { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+  .turn p { margin: 0; font-size: 15px; line-height: 1.65; }
+  .turn code { font-family: var(--font-mono); font-size: 13px; background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+  .composer { max-width: 48rem; margin: 0 auto; width: 100%; padding: 8px 20px 20px; flex: none; }
+  .cbox { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 8px 8px 14px; background: var(--background); }
+  .cbox .pick { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .cbox .pick small { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+  .cbox .ph { flex: 1; color: var(--muted-foreground); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .send { width: 32px; height: 32px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .cbox.off { opacity: .6; }
+  .notice { margin: 12px 0 8px; border: 1px solid color-mix(in oklab, var(--warning) 30%, transparent); background: color-mix(in oklab, var(--warning-fill) 50%, transparent); border-radius: var(--r-lg); padding: 8px 14px; font-size: 14px; }
+  .bigempty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--muted-foreground); max-width: 28rem; margin: 0 auto; }
+  .bigempty .ic { color: var(--muted-foreground); }
+  .bigempty h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--foreground); }
+  .bigempty p { margin: 0; }
+
+  /* Narrow: the rail and the pane become one drawer behind the menu button. */
+  .pane-col { display: contents; }
+  .drawer { display: none; }
+  @container app (max-width: 767px) {
+    .railwrap, .pane-col { display: none; }
+    .menubtn { display: inline-flex; margin-left: -8px; }
+    .vt, .tok { display: none; }
+    .live .full { display: none; } .live .short { display: inline; }
+    .head .r { gap: 8px; }
+    .head { padding: 0 12px 0 16px; }
+    .page { padding: 20px 16px; }
+    .drawer[data-open="true"] { display: flex; position: absolute; inset: 0; z-index: 40; }
+    .drawer .back { flex: 1; background: color-mix(in oklab, var(--foreground) 40%, transparent); }
+    .drawer .panel { order: -1; width: min(300px, 88%); display: flex; flex-direction: column; background: var(--background); border-right: 1px solid var(--border); min-height: 0; }
+    .drawer .tabs { display: flex; gap: 2px; padding: 8px; border-bottom: 1px solid var(--border); flex: none; }
+    .drawer .tabs .navb { padding: 8px 10px; justify-content: center; gap: 6px; font-size: 13px; }
+    .drawer .pane { width: 100%; flex: 1; border-right: 0; }
+  }
+  .toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--foreground); color: var(--background); padding: 8px 14px; border-radius: var(--r-lg); font-size: 13px; z-index: 60; max-width: 90%; }
+</style>
+</head>
+<body>
+<div class="proto-bar" id="bar" role="toolbar" aria-label="Prototype controls"></div>
+<div id="stage"><div id="app"></div></div>
+<script src="../icons.js"></script>
+<script src="../seed-data.js"></script>
+<script>
+(function () {
+  var D = window.SPG_SEED, ICONS = window.SPG_ICONS, MARKS = window.SPG_MARKS;
+  var Q = new URLSearchParams(location.search);
+  var S = {
+    section: pick(Q.get("section"), ["chat", "machines", "settings"], "chat"),
+    ui: pick(Q.get("state"), ["populated", "empty", "loading", "error"], "populated"),
+    computer: pick(Q.get("computer"), ["online", "offline", "reconnecting"], "online"),
+    theme: pick(Q.get("theme"), ["light", "dark"], "light"),
+    width: pick(Q.get("width"), ["desktop", "narrow"], "desktop"),
+    sel: { chat: "c1", machines: "m1", settings: "appearance" },
+    convs: D.conversations.slice(), archivedOpen: false, search: "", drawer: false, toast: "",
+  };
+  function pick(v, ok, d) { return ok.indexOf(v) > -1 ? v : d; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function I(n, s, cls) {
+    s = s || 16;
+    var nodes = (ICONS[n] || []).map(function (x) { return "<" + x[0] + " " + Object.keys(x[1]).map(function (k) { return k + '="' + x[1][k] + '"'; }).join(" ") + "/>"; }).join("");
+    return '<svg class="ic ' + (cls || "") + '" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes + "</svg>";
+  }
+  function M(p, s) { s = s || 14; return '<svg class="mark" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="currentColor" style="color:var(--provider-' + p + ')" aria-hidden="true"><path d="' + MARKS[p] + '"/></svg>'; }
+  var TONE = { success: "circle-check", info: "info", warning: "triangle-alert", danger: "octagon-x", progress: "loader-circle", pending: "clock", neutral: "circle-minus" };
+  function St(tone, text, opt) { opt = opt || {}; return '<span class="status' + (opt.quiet ? " quiet" : "") + '" data-tone="' + tone + '"' + (opt.role ? ' role="' + opt.role + '"' : "") + '><span class="i">' + I(TONE[tone], opt.size || 14) + '</span><span class="w">' + text + "</span></span>"; }
+  function tone(av) { return av === "available" ? "success" : av === "blocked" ? "warning" : "neutral"; }
+
+  var NAV = [["chat", "message-square-text", "Chat"], ["machines", "monitor-smartphone", "Machines"], ["settings", "settings", "Settings"]];
+  var TITLES = { chat: "Chat", machines: "Machines", settings: "Settings" };
+  var primary = D.machines[0];
+  function online() { return S.computer === "online"; }
+  function live() { return '<span class="live">' + live0() + "</span>"; }
+  function live0() {
+    if (S.ui === "empty" && S.section === "machines") return St("neutral", "No computer connected", { role: "status" });
+    var f = function (full, short) { return '<span class="full">' + full + '</span><span class="short">' + short + "</span>"; };
+    if (S.computer === "online") return St("success", f(primary.name + " online", "Online"), { role: "status" });
+    if (S.computer === "reconnecting") return St("progress", f("Reconnecting to " + primary.name + "…", "Reconnecting…"), { role: "status" });
+    return St("neutral", f(primary.name + " offline", "Offline"), { role: "status" });
+  }
+  function machineOnline(m) { return m.id === "m1" ? online() : m.online; }
+
+  /* ---------------------------------------------------------------- rail */
+  function railNav() {
+    return NAV.map(function (n) { return '<button class="navb" data-act="section" data-v="' + n[0] + '"' + (S.section === n[0] ? ' aria-current="page"' : "") + ">" + I(n[1]) + '<span class="lbl">' + n[2] + "</span></button>"; }).join("");
+  }
+  function rail() {
+    return '<div class="railwrap"><aside class="rail" aria-label="Primary"><div class="rail-h"><span aria-hidden="true">s</span><span class="lbl">sparstrowgen</span></div><nav aria-label="Sections">' + railNav() +
+      '</nav><div class="rail-f"><span class="avatar" aria-hidden="true">a</span><span class="lbl">' + esc(D.account.email) + "</span></div></aside></div>";
+  }
+
+  /* ---------------------------------------------------------------- panes */
+  function skelRows(n) { var w = [70, 55, 62, 48, 66, 52]; var o = ""; for (var i = 0; i < n; i++) o += '<div style="padding:8px 10px"><div class="skel" style="height:14px;width:' + w[i % 6] + '%"></div><div class="skel" style="height:11px;width:38%;margin-top:7px"></div></div>'; return '<div class="plist" aria-busy="true" aria-label="Loading">' + o + "</div>"; }
+  function errPane(what) { return '<div class="pempty">' + St("danger", what + " could not be loaded", { quiet: true }) + '<button class="btn" data-act="retry">Try again</button></div>'; }
+  function convRow(c) {
+    var sel = S.sel.chat === c.id;
+    return '<button class="prow" data-act="pick" data-v="' + c.id + '"' + (sel ? ' aria-current="true"' : "") + ">" + M(c.provider) + '<span class="body"><span class="t' + (c.title ? "" : " untitled") + '">' + esc(c.title || "New conversation") + '</span><span class="m">' + esc(c.folder) + " · " + esc(c.updated) + "</span></span></button>";
+  }
+  function panechat() {
+    var head = '<div class="pane-h"><span>Chat</span><button class="iconbtn" data-act="newchat" aria-label="New conversation">' + I("plus") + "</button></div>";
+    if (S.ui === "loading") return head + skelRows(6);
+    if (S.ui === "error") return head + errPane("Conversations");
+    if (S.ui === "empty") return head + '<div class="pempty">' + I("messages-square", 24) + "<div>No conversations yet. Start one and it will be saved here.</div>" + '<button class="btn primary" data-act="newchat">' + I("plus", 14) + "New conversation</button></div>";
+    var q = S.search.trim().toLowerCase();
+    var act = S.convs.filter(function (c) { return !q || (c.title + " " + c.folder).toLowerCase().indexOf(q) > -1; });
+    var arc = D.archived.filter(function (c) { return !q || (c.title + " " + c.folder).toLowerCase().indexOf(q) > -1; });
+    var open = S.archivedOpen || !!q;
+    var body = act.length || arc.length ? act.map(convRow).join("") : '<div class="pempty">Nothing matches “' + esc(S.search.trim()) + "”.</div>";
+    var arch = D.archived.length ? '<button class="toggle" data-act="archived" aria-expanded="' + open + '">' + I(open ? "chevron-down" : "chevron-right", 14) + "Archived (" + (q ? arc.length : D.archived.length) + ")</button>" + (open ? arc.map(convRow).join("") : "") : "";
+    return head + '<div class="search">' + I("search", 14) + '<input class="q" type="search" placeholder="Search conversations" aria-label="Search conversations" value="' + esc(S.search) + '"></div><div class="plist" aria-label="Conversations">' + body + arch + "</div>";
+  }
+  function panemach() {
+    var head = '<div class="pane-h"><span>Machines</span><button class="iconbtn" data-act="fake" data-v="Add computer opens the pairing panel in the real app" aria-label="Add computer">' + I("plus") + "</button></div>";
+    if (S.ui === "loading") return head + skelRows(3);
+    if (S.ui === "error") return head + errPane("Machines");
+    if (S.ui === "empty") return head + '<div class="pempty">' + I("monitor-smartphone", 24) + "<div>No computers connected. Pair the computer where your coding agents are installed.</div>" + '<button class="btn primary" data-act="fake" data-v="Add computer opens the pairing panel in the real app">' + I("plus", 14) + "Add computer</button></div>";
+    return head + '<div class="plist" aria-label="Computers">' + D.machines.map(function (m) {
+      var on = machineOnline(m), n = m.providers.length;
+      return '<button class="prow" data-act="pick" data-v="' + m.id + '"' + (S.sel.machines === m.id ? ' aria-current="true"' : "") + '><span style="margin-top:2px;color:var(--muted-foreground)">' + I("monitor-smartphone", 16) + '</span><span class="body"><span class="t">' + m.name + '</span><span class="m">' + n + " provider" + (n === 1 ? "" : "s") + " available</span><span class=\"m\" style=\"margin-top:2px\">" + St(on ? "success" : "neutral", on ? "Online" : "Offline", { size: 12 }) + "</span></span></button>";
+    }).join("") + "</div>";
+  }
+  function paneset() {
+    return '<div class="pane-h"><span>Settings</span></div><div class="plist" aria-label="Settings pages">' + D.settings.map(function (g) {
+      return '<div class="glabel">' + g.group + "</div>" + g.pages.map(function (p) { return '<button class="prow" style="align-items:center" data-act="pick" data-v="' + p.id + '"' + (S.sel.settings === p.id ? ' aria-current="true"' : "") + '><span style="color:var(--muted-foreground)">' + I(p.icon, 16) + '</span><span class="body"><span class="t">' + p.label + "</span></span></button>"; }).join("");
+    }).join("") + "</div>";
+  }
+  function pane() { return '<aside class="pane" aria-label="' + TITLES[S.section] + '">' + (S.section === "chat" ? panechat() : S.section === "machines" ? panemach() : paneset()) + "</aside>"; }
+
+  /* ---------------------------------------------------------------- main */
+  function chatTitle() { var c = S.convs.concat(D.archived).filter(function (x) { return x.id === S.sel.chat; })[0]; return c ? (c.title || "New conversation") : "Chat"; }
+  function strip() {
+    return '<div class="strip" aria-label="Providers">' + D.providers.map(function (p) {
+      var asleep = !online(), blocked = p.availability === "blocked" && !asleep;
+      var body = asleep ? '<span class="r">' + (S.computer === "reconnecting" ? "Reconnecting" : "Machine unreachable") + "</span>" : blocked ? St("warning", p.reason, { size: 12 }) : '<span class="r">' + esc(p.headroom) + "</span>";
+      return '<div class="chip' + (asleep ? " muted" : "") + '">' + M(p.id, 16) + '<span class="n">' + p.label + "</span>" + body + "</div>";
+    }).join("") + "</div>";
+  }
+  function composer(c) {
+    var off = !online();
+    return '<div class="composer">' + (off ? '<div class="notice">' + St("warning", "Your machine is " + (S.computer === "reconnecting" ? "reconnecting" : "unreachable") + ", so nothing new can be sent. Everything already said stays readable.", { quiet: true }) + "</div>" : "") +
+      '<div class="cbox' + (off ? " off" : "") + '"><span class="pick">' + M(c.provider, 16) + c.provider + " <small>" + esc(c.model) + '</small></span><span class="ph">' + (off ? "Unavailable" : "Message " + c.provider + "…") + '</span><button class="send" data-act="fake" data-v="Sending is inert in the prototype" aria-label="Send"' + (off ? " disabled" : "") + ">" + I("arrow-up") + "</button></div></div>";
+  }
+  function mainchat() {
+    if (S.ui === "loading") return '<div class="col" aria-busy="true"><div class="skel" style="height:44px;width:55%;align-self:flex-end"></div><div class="skel" style="height:14px;width:30%"></div><div class="skel" style="height:14px;width:90%"></div><div class="skel" style="height:14px;width:80%"></div></div>';
+    if (S.ui === "error") return '<div class="bigempty">' + I("octagon-x", 28) + "<h2>This conversation could not be loaded</h2><p>Nothing was lost; the transcript is kept by sparstrowgen. Try again.</p><button class=\"btn\" data-act=\"retry\">Try again</button></div>";
+    if (S.ui === "empty") return '<div class="bigempty">' + I("messages-square", 28) + "<h2>Start a conversation</h2><p>Pick a folder and an agent, then say what you want done. The transcript is kept by sparstrowgen, not by whichever agent answered.</p><button class=\"btn primary\" data-act=\"newchat\">" + I("plus", 14) + "New conversation</button></div>";
+    var c = S.convs.concat(D.archived).filter(function (x) { return x.id === S.sel.chat; })[0] || S.convs[0];
+    var t = D.transcript[c.id];
+    var body = t ? t.map(function (m) { return m.role === "user" ? '<div class="bubble">' + esc(m.text) + "</div>" : '<div class="turn"><div class="who">' + M(m.provider, 16) + '<span style="color:var(--provider-' + m.provider + ')">' + m.provider + "</span><small>" + esc(m.model) + " · " + m.at + "</small></div><p>" + esc(m.text).replace(/`([^`]+)`/g, "<code>$1</code>") + "</p></div>"; }).join("") : '<div class="bigempty" style="padding:48px 0">' + I("message-square-text", 24) + "<p>Nothing said yet in " + esc(c.folder) + ". Ask " + c.provider + " something.</p></div>";
+    return strip() + '<div class="scroll"><div class="col">' + body + "</div></div>" + composer(c);
+  }
+  function mainmach() {
+    if (S.ui === "loading") return '<div class="page" aria-busy="true"><div class="skel" style="height:16px;width:40%"></div><div class="skel" style="height:120px;margin-top:20px"></div></div>';
+    if (S.ui === "error") return '<div class="bigempty">' + I("plug-zap", 28) + "<h2>Machines could not be loaded</h2><p>Nothing on your computers has changed.</p><button class=\"btn\" data-act=\"retry\">Try again</button></div>";
+    if (S.ui === "empty") return '<div class="bigempty">' + I("monitor-smartphone", 28) + "<h2>No computers connected</h2><p>Pair the computer where your coding agents are installed. You can add another later.</p><button class=\"btn primary\" data-act=\"fake\" data-v=\"Add computer opens the pairing panel in the real app\">" + I("plus", 14) + "Add computer</button></div>";
+    var m = D.machines.filter(function (x) { return x.id === S.sel.machines; })[0] || D.machines[0], on = machineOnline(m);
+    return '<div class="scroll"><div class="page"><h2>Agent providers</h2><p class="lede">Providers this computer can make available to new work.</p><div class="divide">' + m.providers.map(function (p) { return "<div><span style=\"font-weight:500\">" + p.label + "</span>" + St(tone(p.availability), p.availability === "available" ? "Available" : esc(p.reason || "Unavailable")) + "</div>"; }).join("") +
+      '</div><div style="margin-top:22px;display:flex;align-items:center;gap:12px"><button class="btn danger" data-act="fake" data-v="Disconnect asks for confirmation in the real app">Disconnect</button><span style="font-size:12px;color:var(--muted-foreground)">' + St(on ? "success" : "neutral", on ? "Online" : "Offline", { size: 12 }) + " · version " + m.version + "</span></div></div></div>";
+  }
+  function mainset() {
+    var id = S.sel.settings, g = D.settings.filter(function (x) { return x.pages.some(function (p) { return p.id === id; }); })[0], pg = g.pages.filter(function (p) { return p.id === id; })[0];
+    var body;
+    if (id === "appearance") body = '<div class="card"><div class="row"><div><div>Mode</div><div class="desc">Light, dark, or follow this computer.</div></div><div class="chips">' + ["Light", "Dark", "System"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "System") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + '</div></div><div class="row"><div><div>Surface</div><div class="desc">The background and its cast.</div></div><div class="chips">' + ["Mono", "Paper", "Slate", "Soft"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "Mono") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + '</div></div><div class="row"><div><div>Accent</div><div class="desc">The colour of the primary action.</div></div><div class="chips">' + ["Neutral", "Amber", "Violet", "Blue", "Teal", "Rose"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "Neutral") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + "</div></div></div>";
+    else if (id === "password") body = '<div class="card"><div class="row"><div>Current password</div><span class="field">••••••••••••</span></div><div class="row"><div>New password</div><span class="field">At least 12 characters</span></div><div class="row"><div>Confirm new password</div><span class="field"></span></div></div><div style="margin-top:14px"><button class="btn primary" data-act="fake" data-v="Changing the password is inert in the prototype">Change password</button></div>';
+    else body = '<div class="card"><div class="row"><div><div>' + primary.name + '</div><div class="desc">Current version v' + primary.version + "</div></div>" + (online() ? St("success", "Online") : St("neutral", "Offline")) + '</div><div class="row"><div><div>Automatic updates</div><div class="desc">Checks every hour and installs a new version only when no agent work is running.</div></div><span class="switch" role="img" aria-label="On"></span></div><div class="row"><div class="desc" style="margin:0">' + (online() ? St("success", "You’re on the latest version.", { quiet: true }) : St("neutral", "This computer is offline. It checks for updates when it reconnects.", { quiet: true })) + '</div><button class="btn" data-act="fake" data-v="Check now is inert in the prototype">Check now</button></div></div>';
+    return '<div class="scroll"><div class="page"><div class="crumb">' + g.group + " " + I("chevron-right", 12) + " " + pg.label + "</div>" + body + "</div></div>";
+  }
+  function head() {
+    var t = S.section === "chat" ? (S.ui === "empty" || S.ui === "error" || S.ui === "loading" ? "Chat" : chatTitle()) : S.section === "machines" ? (S.ui === "populated" ? (D.machines.filter(function (x) { return x.id === S.sel.machines; })[0] || primary).name : "Machines") : (function () { var p = null; D.settings.forEach(function (g) { g.pages.forEach(function (x) { if (x.id === S.sel.settings) p = x; }); }); return p.label; })();
+    var chatHead = S.section === "chat" && S.ui === "populated", c = chatHead ? S.convs.concat(D.archived).filter(function (x) { return x.id === S.sel.chat; })[0] : null;
+    var folder = c ? '<button class="folder" data-act="fake" data-v="Changing the folder opens the folder picker in the real app" title="' + esc(c.folder) + '">' + I("folder-open", 14) + "<span>" + esc(c.folder) + '</span><span class="pen">' + I("pencil", 12) + "</span></button>" : "";
+    var extras = c ? '<span class="vt" role="group" aria-label="Transcript view"><button aria-pressed="true" data-act="fake" data-v="Raw shows the stored text in the real app">Rendered</button><button aria-pressed="false" data-act="fake" data-v="Raw shows the stored text in the real app">Raw</button></span><span class="tok">' + (c.spendUsd > 0 ? "$" + c.spendUsd.toFixed(2) + "<br>" : "") + (c.tokens >= 1000 ? (c.tokens / 1000).toFixed(1) + "k" : c.tokens) + " tokens</span>" : "";
+    return '<header class="head"><div class="l"><button class="iconbtn menubtn" data-act="drawer" aria-label="Open navigation">' + I("menu") + '</button><div class="tt"><h1>' + esc(t) + "</h1>" + folder + '</div></div><div class="r">' + extras + live() + "</div></header>";
+  }
+  function drawer() {
+    return '<div class="drawer" data-open="' + S.drawer + '"><div class="back" data-act="drawer"></div><div class="panel"><div class="tabs">' + railNav().replace(/class="lbl"/g, 'class="lbl" style="opacity:1"') + "</div>" + pane() + "</div></div>";
+  }
+
+  /* ---------------------------------------------------------------- render */
+  function render() {
+    document.documentElement.classList.toggle("dark", S.theme === "dark");
+    document.getElementById("stage").setAttribute("data-width", S.width);
+    var main = S.section === "chat" ? mainchat() : S.section === "machines" ? mainmach() : mainset();
+    var app = document.getElementById("app"), keep = document.activeElement && document.activeElement.classList.contains("q");
+    app.innerHTML = '<div class="shell">' + rail() + '<div class="pane-col">' + pane() + '</div><div class="main">' + head() + main + "</div></div>" + drawer() + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
+    if (keep) { var qs = [].slice.call(document.querySelectorAll(".q")).filter(function (x) { return x.offsetParent !== null; }); var q = qs[0]; if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+    renderBar();
+    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width });
+    try { history.replaceState(null, "", "?" + u.toString()); } catch (e) {}
+  }
+  function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-ctl="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
+  function renderBar() {
+    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "empty", "loading", "error"]) + grp("Computer", "computer", ["online", "offline", "reconnecting"]) + grp("Theme", "theme", ["light", "dark"]) + grp("Width", "width", ["desktop", "narrow"]);
+  }
+  var toastT;
+  function toast(m) { S.toast = m; render(); clearTimeout(toastT); toastT = setTimeout(function () { S.toast = ""; render(); }, 2200); }
+
+  document.addEventListener("click", function (e) {
+    var c = e.target.closest("[data-ctl]");
+    if (c) { S[c.dataset.ctl] = c.dataset.v; render(); return; }
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var a = b.dataset.act, v = b.dataset.v;
+    if (a === "section") { S.section = v; /* in the drawer, choosing a section keeps it open so a page can be picked from its list */ }
+    else if (a === "pick") { if (S.section === "chat") S.sel.chat = v; else if (S.section === "machines") S.sel.machines = v; else S.sel.settings = v; S.drawer = false; }
+    else if (a === "newchat") { var id = "n" + Date.now(); S.convs.unshift({ id: id, provider: "claude", model: "Opus 4.6", title: "", folder: "sparstrowgen", updated: "Just now" }); S.sel.chat = id; S.ui = "populated"; S.drawer = false; }
+    else if (a === "archived") S.archivedOpen = !S.archivedOpen;
+    else if (a === "retry") S.ui = "populated";
+    else if (a === "drawer") S.drawer = !S.drawer;
+    else if (a === "fake") { toast(v); return; }
+    render();
+  });
+  document.addEventListener("input", function (e) { if (e.target.classList.contains("q")) { S.search = e.target.value; render(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.drawer) { S.drawer = false; render(); } });
+  render();
+})();
+</script>
+</body>
+</html>

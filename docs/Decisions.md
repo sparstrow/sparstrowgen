@@ -1001,3 +1001,18 @@ records that the baseline does not hold for light themes.
 found while measuring (`--code-comment` in dark, `--code-type` in light). **The field outline was left alone**
 (G-39): reaching 3:1 needs the outline at about 48% strength instead of 16%, which is visibly heavier on every
 field, and fields already have a label and a focus ring that passes.
+
+## D-042 — The app shell follows the Claude Design kit: an icon rail, a pane for every section, one header line
+
+**2026-09-19, owner, choosing between three rendered shells (A, B, C) for L-30.** He chose A: "Go with A".
+
+The kit's shell is a 60px icon rail whose labels appear on hover as an overlay (so the layout never shifts), an
+always-visible 212px pane holding the section's own navigation or list, and a 56px header line across the top
+carrying the page title and a live indicator. Chat, Machines and Settings each get a pane, and only those three
+destinations appear; the kit's other entries arrive with their features, never as dead links. The live indicator
+is the computer's connection as a status (icon and word, D-040), not the kit's bare dot.
+
+Rejected: B, one labelled sidebar with the section nested inside it, which gives the widest content but is not the
+kit; and C, a pane only where a section already has a list, which is the smallest change but leaves every new
+section to decide for itself whether it gets one. The shots and the reasoning are in
+`docs/design/shots/2026-09-19-app-shell/`.

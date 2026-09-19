@@ -424,7 +424,7 @@ by noticing.
 
 ## L-30 — Restyle the app shell after the Claude Design kit
 
-**Status:** idea, next after the chat surface is settled **Raised:** 2026-09-19, owner
+**Status:** in progress: direction A chosen 2026-09-19 (D-042), prototype in `docs/design/prototypes/Shell/` **Raised:** 2026-09-19, owner
 
 He wants the interface to look like the kit's app: a 240px sidebar with grouped navigation, a 56px
 header with a live indicator, and a second navigation pane per section, so the agent, schedule and
