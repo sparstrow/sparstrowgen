@@ -422,22 +422,6 @@ anything sparstrowgen's code reads.
 **Unblocks when:** the owner wants to find out about a failed deploy or backup by email instead of
 by noticing.
 
-## L-29 — Move existing accounts to the monochrome default?
-
-**Status:** question **Raised:** 2026-09-19, D-039
-
-New accounts now start on the Mono surface with the Neutral accent (migration 00014 changes only the
-column defaults). Every existing account, his own included, still holds Paper and Amber, and a stored
-Paper and Amber cannot be told from a choice made on purpose.
-
-**Recommendation:** leave the data alone. He switches his own account in Settings → Appearance in two
-clicks, and anyone else who chose Amber keeps it. If he wants every account still on exactly Paper and
-Amber moved anyway, that is one `UPDATE users SET appearance_surface = 'mono', appearance_accent =
-'neutral' WHERE appearance_surface = 'paper' AND appearance_accent = 'amber'`, run knowingly against
-production.
-
-**Unblocks when:** he says which.
-
 ## L-30 — Restyle the app shell after the Claude Design kit
 
 **Status:** idea, next after the chat surface is settled **Raised:** 2026-09-19, owner
@@ -456,11 +440,14 @@ one still needs its own spec and a check against `Capabilities.md`.
 
 ## L-31 — Where else should status colour appear?
 
-**Status:** idea **Raised:** 2026-09-19, D-039
+**Status:** question **Raised:** 2026-09-19, D-039
 
 Colour is now applied only where the audit found an unambiguous state: a computer's online state,
 provider availability on the profile, the update status lines, and toast icons. Left plain on purpose
 until he says otherwise: the provider strip's "waitable" state (a warning would fit, but the strip is
 meant to stay quiet), the pairing steps, and conversation rows.
 
-**Unblocks when:** he looks at the shipped colour and asks for more or less of it.
+He asked (2026-09-19) to be shown the difference before deciding, so the next step is a before-and-after
+of those three places rendered from the real tokens, not a written recommendation.
+
+**Unblocks when:** he has looked at that comparison and said more, less, or as it is.

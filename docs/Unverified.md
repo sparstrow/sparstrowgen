@@ -307,7 +307,8 @@ green icon and the word Online in green, an offline one muted; (3) a computer's 
 check for an available provider and an alert icon for one that is not (B-39); (4) Settings → Updates
 shows a green check for "latest version", a blue arrow for "available", an amber clock for "waiting",
 and a blue spinner while installing; (5) a success, info, warning and error toast each carry their
-coloured icon; (6) an existing account still shows what it chose. Passing: all six, in light and dark.
+coloured icon; (6) an existing account that had Paper and Amber is now Mono and Neutral (migration 00015), and one
+that chose anything else still shows what it chose. Passing: all six, in light and dark.
 **Status:** open. What was seen 2026-09-19: the compiled stylesheet of the dev server, in a signed-out
 browser, with the default resolving to Mono and Neutral, all eight mode and surface combinations and
 four accents resolving to the right `--primary`, `--ring` and status colours, and every status
@@ -315,11 +316,15 @@ utility present. The screens above need a signed-in session and a backend, which
 
 ## U-20 — The database-backed appearance tests pass with the new default
 
-**From:** D-039, migration 00014, 2026-09-19 · **Who can run it:** agent, with the local stack running
+**From:** D-039, migrations 00014 and 00015, 2026-09-19 · **Who can run it:** agent, with the local stack running
 **How:** With the local Postgres up, run the store and API tests: `go test ./internal/store
 ./internal/api -run Appearance -count=1 -v` from `server/`. Passing: none skipped, and
 `TestTheSessionCarriesTheAppearanceSoTheFirstPaintIsRight` sees a new account on `DefaultAppearance`
-(Mono, Neutral). Also that migration 00014 applies and rolls back.
-**Status:** open. Seen 2026-09-19: the new database-free test
-`TestTheDefaultAppearanceIsMonochromeAndIsOffered` passes; the seven that need Postgres skipped
-because none was running.
+(Mono, Neutral). Also that migrations 00014 and 00015 apply and roll back, and that 00015 moves only an
+account on exactly Paper and Amber.
+**Status:** verified 2026-09-19 — against a scratch database on a running local Postgres (its own
+databases, dropped afterwards): all seven Postgres-backed appearance tests plus the database-free one
+ran and passed, none skipped. Migrations went up to 15, down to 14 (column defaults back to Paper and
+Amber) and up again to 15. On four sample accounts the 00015 statement moved only Paper and Amber and
+left Paper and Violet, Slate and Amber, and Mono and Neutral alone, with the mode unchanged. Not run:
+00015 against the owner's real production row, which happens when it deploys.

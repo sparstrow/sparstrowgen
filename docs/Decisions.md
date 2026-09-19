@@ -926,9 +926,12 @@ stays muted because that is not a fault.
 shadow), and nothing is set below 12px, so the kit's 10px micro text is dropped. Re-skin the kit, not the
 app.
 
-**Existing accounts keep what they have.** Only the column defaults change (migration 00014). A stored
-Paper and Amber cannot be told apart from a choice someone made, so moving them is L-29, not a silent
-update.
+**Accounts on the old default move too.** Migration 00014 changes only the column defaults, and 00015
+then moves every account still on exactly Paper and Amber to Mono and Neutral. A stored Paper and Amber
+cannot be told apart from a choice someone made, and the owner settled it on 2026-09-19: every account
+that exists is his own, so he wants monochrome everywhere and will change it in Settings later. Anyone
+on another surface, another accent, or only one of the two is untouched, and the mode is never changed.
+It cannot be undone by migration (which rows moved is not recorded), so 00015's Down is a no-op.
 
 Rejected: the kit's separate `--danger` (a duplicate of `--destructive`); its six task-board column
 colours (there is no task board yet, and three of them fail 3:1 on white); recolouring Offline or
