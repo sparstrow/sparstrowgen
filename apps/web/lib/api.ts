@@ -94,7 +94,7 @@ async function json<T>(res: Response): Promise<T> {
 export type Appearance = {
   mode: "light" | "dark" | "system";
   surface: "paper" | "slate" | "soft" | "mono";
-  accent: "amber" | "violet" | "blue" | "teal" | "rose";
+  accent: "neutral" | "amber" | "violet" | "blue" | "teal" | "rose";
 };
 
 export type Session = {
@@ -105,8 +105,8 @@ export type Session = {
   appearance?: Appearance;
 };
 
-/* Account access (US1). Served by server/internal/api/accounts.go; the data
-   contract is design-system/designs/Accounts/account-access.handoff.md. */
+/* Account access (US1). Served by server/internal/api/accounts.go, which is the
+   data contract. */
 
 /** What registering an address led to. The server decides; the screen reports.
  *  An address that already has an account answers "check-email" too — the email

@@ -296,3 +296,56 @@ focus path could not be run here: the Browser pane reports `document.visibilityS
 `hasFocus()` false even when a tab is fronted, and the refresh it triggers is exactly what a hidden
 page suppresses (the same harness limit that produced G-36). The code path is
 `refetchOnWindowFocus: "always"` on the session and appearance queries.
+
+## U-19 — The signed-in screens show the monochrome default and the status colours
+
+**From:** D-039 (appearance and status colour), 2026-09-19 · **Who can run it:** owner, or the agent once
+he has signed the testing account in the Browser pane (CLAUDE.md §1)
+**How:** After a deploy, or against a local stack, sign in and check: (1) a brand-new account opens
+monochrome and Settings → Appearance lists Neutral first; (2) to (5) are the status screens, which D-040
+changed to icon and word together and U-21 now covers; (6) an existing account that had Paper and Amber is now Mono and Neutral (migration 00015), and one
+that chose anything else still shows what it chose. Passing: all six, in light and dark.
+**Status:** open. What was seen 2026-09-19: the compiled stylesheet of the dev server, in a signed-out
+browser, with the default resolving to Mono and Neutral, all eight mode and surface combinations and
+four accents resolving to the right `--primary`, `--ring` and status colours, and every status
+utility present. The screens above need a signed-in session and a backend, which that run did not have.
+
+## U-20 — The database-backed appearance tests pass with the new default
+
+**From:** D-039, migrations 00014 and 00015, 2026-09-19 · **Who can run it:** agent, with the local stack running
+**How:** With the local Postgres up, run the store and API tests: `go test ./internal/store
+./internal/api -run Appearance -count=1 -v` from `server/`. Passing: none skipped, and
+`TestTheSessionCarriesTheAppearanceSoTheFirstPaintIsRight` sees a new account on `DefaultAppearance`
+(Mono, Neutral). Also that migrations 00014 and 00015 apply and roll back, and that 00015 moves only an
+account on exactly Paper and Amber.
+**Status:** verified 2026-09-19 — against a scratch database on a running local Postgres (its own
+databases, dropped afterwards): all seven Postgres-backed appearance tests plus the database-free one
+ran and passed, none skipped. Migrations went up to 15, down to 14 (column defaults back to Paper and
+Amber) and up again to 15. On four sample accounts the 00015 statement moved only Paper and Amber and
+left Paper and Violet, Slate and Amber, and Mono and Neutral alone, with the mode unchanged. Not run:
+00015 against the owner's real production row, which happens when it deploys.
+
+## U-21 — The signed-in screens show every status as a colour, an icon and a word
+
+**From:** D-040 and B-41, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the
+testing account in the Browser pane (CLAUDE.md §1)
+**How:** Sign in, in light and dark, and check each place carries all three: (1) Machines lists an online
+computer with a green tick and "Online", an offline one with a grey dash and "Offline"; (2) a computer's
+profile does the same under its name, shows a green tick and "Available" for an available agent and an
+amber triangle with the reason for one that is not installed, and a grey dash for one that is waiting;
+(3) Add computer shows a blue turning arc while it looks for the computer, then an amber triangle if it
+has not answered, and no icon on "Approve this computer?"; (4) Settings → Updates shows, per computer,
+a green tick for "latest version", a blue "i" for "available", an amber clock for "waiting", a blue arc while
+installing, a red octagon for a failure, and a grey dash while offline; (5) in Chat, the provider strip
+shows an amber triangle and "Not installed" for a missing agent and stays quiet while the computer is
+asleep, and the notice above the composer is amber with a triangle; (6) a failed turn shows the red
+octagon and a red title; (7) the folder picker's "not inside a git repository" hint has an amber
+triangle; (8) a wrong password shows a red octagon and the message, and a resent confirmation shows a
+green tick; (9) a success, info, warning and error toast each carry their icon; (10) red words are
+readable, including the Disconnect button and a destructive menu item. Passing: all ten, and the arc
+does not turn with the system's reduced-motion setting on.
+**Status:** open. Seen 2026-09-19 in a signed-out dev server, on a scratch page rendering the real
+components and tokens (deleted afterwards): all seven tones inline, as a badge and as a quiet sentence,
+in light and dark, with the icon on the first line of a wrapped sentence; the provider strip with a
+blocked and a waiting provider; the composer notice; and the form error. Type-checked and linted. Not
+seen: any of the real screens above, the failed-turn and folder-picker notices, and reduced motion.

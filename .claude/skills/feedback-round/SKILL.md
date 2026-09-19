@@ -116,7 +116,7 @@ will re-read. It belongs where it will be enforced:
   `design-shots` content rule was rewritten this way.
 - A standing preference about working with him → memory.
 - A taste note about a surface → that surface's round record in
-  `design-system/shots/<slug>/README.md`.
+  `docs/design/shots/<slug>/README.md`.
 
 Most rounds reveal nothing durable, and forcing one out is how documents grow
 that nobody reads. Look for it; usually find nothing.

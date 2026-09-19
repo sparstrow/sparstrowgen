@@ -174,15 +174,28 @@ the rule.
 
 ### Design
 
-- **`DESIGN.md` is the doctrine** (written with him by `design-brief`). Point at it; never restate
-  its rules elsewhere, or the copy keeps enforcing itself after the original changes.
+The design system lives in Claude, not in this repo:
+[sparstrowgen Design System](https://claude.ai/artifact/Lyougp9xy958FaBcXWQFyS) — private, so open it
+with the Artifact tool. Read its `project/README.md` first, then the README of any component before
+using it; `project/tokens.json` has every token and its usage note. Agents that cannot open it
+(Codex, agy) ask him to paste the part they need. Point at it; do not copy its rules into skills,
+comments or docs, or the copy keeps enforcing itself after the original changes.
+
+- **Build from what exists.** Use a primitive from the system before writing one, and check the
+  shadcn registry before hand-building a missing one. A new persistent surface or navigation
+  destination is his call, shown to him first.
+- **No hardcoded colour, ever.** Colour resolves through a token, so every appearance works, not just
+  the one you looked at.
+- **Keep the system true to the code.** The system is built from `apps/web` (`globals.css`,
+  `themes.css`, `components/ui`, `components/chat`). When a token or component changes there,
+  update the artifact in the same turn, or record the drift in `docs/Unverified.md`. Where they
+  disagree, the code is what shipped.
 - **Load `ai-design-slop` before writing UI**, so the tells never go in.
-- **No hardcoded colour, ever.** The doctrine is a theming contract; a literal hue breaks every
-  theme but the one you looked at.
-- **Images pick a direction; the prototype makes the decision.** Say so when showing
-  shots — an image has no interaction, no real data, and no states, and if he thinks
-  approving one approved the design, the prototype step feels like re-opening it.
-- **`design-brief` and `design-system` run once**, when real UI work starts — not per feature.
+- **Images pick a direction; the prototype makes the decision.** Say so when showing shots — an image
+  has no interaction, no real data, and no states, and if he thinks approving one approved the
+  design, the prototype step feels like re-opening it. Shots and prototypes live in `docs/design/`.
+- **Record his design reactions** in `docs/Decisions.md` the turn he gives them, with the reason —
+  the reason is what carries over to the next screen.
 - **Mock data is `*.mock.ts`.** A feature isn't done while a shipped route imports one.
 
 ### Presenting a choice
@@ -225,12 +238,13 @@ Conventional prefixes: `feat(scope)`, `fix(scope)`, `refactor(scope)`, `docs`, `
 | Question, parked, or just an idea | [`Later.md`](docs/Later.md) |
 | What he wants and why | [`docs/specs/`](docs/specs/) |
 | Several changes at once, after he looks at something built | [`docs/feedback/`](docs/feedback/) |
+| Image directions and clickable prototypes, before they are built | [`docs/design/`](docs/design/) |
 | Only a human can do it — dashboard, DNS, secrets | [`docs/runbooks/`](docs/runbooks/) |
 | Which branch/environment/release path is active | [`WORKFLOW.md`](WORKFLOW.md) |
 
 Skills carry procedure so this file doesn't: `design-driven-feature`, `writing-specs`,
 `design-shots`, `interactive-prototype`, `frontend-verify`, `ai-design-slop`, `testing`,
-`design-brief`, `design-system`, `feedback-round`.
+`feedback-round`.
 
 When he says "park it", "later", or "just an idea", write it down in the same turn. Chat is not read
 by the next session.

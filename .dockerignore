@@ -28,7 +28,6 @@ Reference
 
 # Nothing in the image reads these.
 docs
-design-system
 .claude
 .sparstrowgen
 *.md

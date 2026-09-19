@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   ChevronRight,
   Clock,
   CornerLeftUp,
@@ -16,6 +15,7 @@ import type { DirListing, DirReason } from "@/lib/chat-types";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Status, StatusIcon } from "@/components/ui/status";
 import {
   Dialog,
   DialogContent,
@@ -216,12 +216,10 @@ function Body({ onOpenChange, current, onChoose, hasMessages }: Props) {
               )}
 
               {!usable && data?.reason && (
-                <p className="flex items-start gap-2 px-2.5 py-3 text-sm text-muted-foreground">
-                  <AlertTriangle
-                    className="mt-0.5 size-4 shrink-0 text-destructive"
-                    aria-hidden
-                  />
-                  {REASONS[data.reason]}
+                <p className="px-2.5 py-3 text-sm text-muted-foreground">
+                  <Status tone="danger" quiet size="md">
+                    {REASONS[data.reason]}
+                  </Status>
                 </p>
               )}
 
@@ -254,7 +252,7 @@ function Body({ onOpenChange, current, onChoose, hasMessages }: Props) {
           {data.isGitRepo ? (
             <GitBranch className="size-3.5 shrink-0" aria-hidden />
           ) : (
-            <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+            <StatusIcon tone="warning" />
           )}
           <span className="truncate">
             {data.path}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { RegisterResult } from "@/lib/api";
 import { useRegister, useResendConfirmation } from "@/lib/queries";
+import { Status } from "@/components/ui/status";
 import {
   AuthLinks,
   AuthShell,
@@ -17,8 +18,7 @@ import {
 /* Creating an account, for anybody who has the address.
  *
  * Only an email is asked for. The password comes after the address is proved,
- * so an account nobody has confirmed never exists (design-system/DECISIONS.md
- * DD-002).
+ * so an account nobody has confirmed never exists.
  *
  * The server decides what happens next and the screen only reports it: an
  * invited address gets "check your email", anything else becomes a request to
@@ -132,8 +132,10 @@ function CheckEmail({ email, onDifferentAddress }: { email: string; onDifferentA
       <div className="mt-3">
         {resend.isError && <FormError id="resend-error" message={resend.error.message} />}
         {resend.isSuccess && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Sent again. Only the newest link will work.
+          <p role="status" className="text-sm">
+            <Status tone="success" quiet>
+              Sent again. Only the newest link will work.
+            </Status>
           </p>
         )}
       </div>

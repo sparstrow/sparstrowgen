@@ -536,15 +536,15 @@ across the four light surfaces. Not measured from rendered pixels.
 | provider marks (the icon, not the name) | `provider-strip.tsx` chips, composer, conversation list | same as above | 3 |
 | `--capacity-out` text | the blocked status in `provider-strip.tsx` (52) | 3.5–3.7 | 4.5 |
 | `--code-comment` | comments in code blocks (`markdown.tsx`) | 3.6–3.8 | 4.5 |
-| destructive text on its own 10% tint | "Turn did not finish" title (`message-list.tsx` 100), destructive `Button` and `Badge` | 4.0–4.2 light, 3.0–3.1 dark | 4.5 |
+| ~~destructive text on its own 10% tint~~ | fixed by B-41: a new `destructive-text` colour | was 4.0–4.2 light, 3.0–3.1 dark | 4.5 |
 | `--border` / `--input` | every outline | 1.1–1.2 | 3 for a control's outline; separators are arguable |
 
 Other things found while measuring: in `provider-strip.tsx` the provider colour is on the mark only —
 the chip's name is already `--foreground`. Destructive text straight on the page (auth error, folder
 picker) is 4.3–4.6, so it clears on paper, slate and mono and misses on soft. `--code-comment` also
-sits at 4.3 on the soft dark surface. Not measured: blocked and waiting chips are drawn at 55% opacity.
+sits at 4.3 on the soft dark surface. Not measured: waiting chips are drawn at 55% opacity. (Blocked chips are no longer dimmed: a blocked provider is now a warning status, D-040.)
 
-**Why it is not fixed:** the provider colours are the owner's chosen identity (DESIGN.md §2), and
+**Why it is not fixed:** the provider colours are the owner's chosen identity (the design system artifact's colour table), and
 changing what a provider looks like is his call. The other rows would be routine on their own, but
 the question is one decision about how light themes read, so they go with it.
 **Fix:** none yet. The colours were deliberately not changed. Recommendation and the values that
@@ -948,3 +948,39 @@ Fixed by logging the connection error without attaching the connection string. T
 identifies resolution, refusal and authentication failures without printing the password.
 `TestPostgresFailureDoesNotLogDatabasePassword` starts the server against an unreachable dummy
 database and proves its distinctive dummy password is absent from the captured output.
+
+## B-40 — A provider that was not available still had a check mark beside it on the machine profile
+
+**Found:** 2026-09-19, agent, while applying status colour to the machine profile
+**Status:** fixed 2026-09-19
+
+**Repro:** Open a computer's profile whose provider list includes one that is signed out or not
+installed. Its row reads "Signed out" (or the reason) with the same check mark as an available one.
+
+**Expected / Actual:** A check mark means available / it appeared on every row, including ones that
+said the provider could not run.
+
+**Fix:** `machines-surface.tsx` shows the check (now in the success colour) only for an available
+provider, and an alert icon otherwise. Type-checked and linted; not yet seen in a browser (U-19).
+
+**Release note:** Fixed: a computer's profile no longer shows a check mark beside an agent that is not available.
+
+## B-41 — Red words were too faint to read reliably
+
+**Found:** 2026-09-19, agent, while building the status component
+**Status:** fixed 2026-09-19
+
+**Repro:** Look at a red word on a light surface: a form error such as a wrong password, the title of a
+"Turn did not finish" notice, the text of a Disconnect button, a destructive menu item, or a "Failed"
+badge.
+
+**Expected / Actual:** Text should hold 4.5:1 against what is behind it / red text used the same red as
+the icon and fill, which is 3.3:1 on its own light tint (3.7:1 in dark) and about 3.9:1 on the page.
+
+**Fix:** a new `destructive-text` colour (light `oklch(0.485 0.22 27.325)`, dark `oklch(0.855 0.13 22)`),
+used for every red word: the destructive Button, Badge and menu item, the failure notice title, and the
+danger status. The red icon, border and tint are unchanged. Measured in the design system's contrast
+table across all eight themes: at least 5.2:1 on every surface and on the tint. Not yet seen in the
+signed-in app (U-21).
+
+**Release note:** Fixed: red error text and destructive buttons are now easier to read.

@@ -28,6 +28,10 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
+  /* Red as TEXT. --destructive alone is 3.3:1 on its own tint, so a word in it
+     fails AA; this holds at least 5.2:1 on every surface and on the tint. The icon and the
+     fill keep --destructive. */
+  --destructive-text: oklch(0.485 0.22 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -45,6 +49,22 @@
      silence must never read as a provider doing fine. */
   --capacity-out: oklch(0.63 0.2 25);
   --capacity-unknown: oklch(0.55 0.01 250);
+
+  /* Status: success (working, done), info (in progress), warning (needs attention
+     soon). Red is --destructive, so there is no fourth. Each meaning has an icon
+     colour, a fill for a badge, and a text colour for a word, because one
+     lightness cannot serve all three. The light-mode icon colours are darkened
+     until they hold 3:1 on every surface, and the text colours until they hold
+     4.5:1; a status is still always a word or icon as well, never colour alone. */
+  --success: oklch(0.575 0.17 162.48);
+  --success-fill: oklch(0.95 0.052 163);
+  --success-text: oklch(0.432 0.095 166);
+  --info: oklch(0.62 0.214 259.81);
+  --info-fill: oklch(0.932 0.032 255);
+  --info-text: oklch(0.424 0.199 265);
+  --warning: oklch(0.62 0.188 70.08);
+  --warning-fill: oklch(0.954 0.038 75);
+  --warning-text: oklch(0.473 0.137 46);
 
   /* Surface used for the owner's own messages, distinct from agent output. */
   --mine: oklch(0.93 0.02 255);
@@ -78,6 +98,7 @@
   --accent-foreground: oklch(0.95 0.003 260);
   --destructive: oklch(0.68 0.19 22);
   --destructive-foreground: oklch(0.98 0 0);
+  --destructive-text: oklch(0.855 0.13 22);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.55 0.01 260);
@@ -88,6 +109,16 @@
 
   --capacity-out: oklch(0.68 0.2 25);
   --capacity-unknown: oklch(0.48 0.01 250);
+
+  --success: oklch(0.696 0.17 162.48);
+  --success-fill: oklch(0.27 0.06 164);
+  --success-text: oklch(0.85 0.13 163);
+  --info: oklch(0.623 0.214 259.81);
+  --info-fill: oklch(0.28 0.09 264);
+  --info-text: oklch(0.82 0.11 256);
+  --warning: oklch(0.769 0.188 70.08);
+  --warning-fill: oklch(0.3 0.07 60);
+  --warning-text: oklch(0.86 0.12 85);
 
   --mine: oklch(0.3 0.028 258);
   --mine-foreground: oklch(0.96 0.003 260);
@@ -122,6 +153,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -132,6 +164,16 @@
 
   --color-capacity-out: var(--capacity-out);
   --color-capacity-unknown: var(--capacity-unknown);
+
+  --color-success: var(--success);
+  --color-success-fill: var(--success-fill);
+  --color-success-text: var(--success-text);
+  --color-info: var(--info);
+  --color-info-fill: var(--info-fill);
+  --color-info-text: var(--info-text);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-text: var(--warning-text);
 
   --color-mine: var(--mine);
   --color-mine-foreground: var(--mine-foreground);

@@ -404,8 +404,7 @@ alias on `agent@sparstrow.com` would only change `MAIL_FROM`; `SMTP_USERNAME`/`S
 stay the real mailbox's, since an alias has no login of its own.
 
 **Unblocks when:** the owner creates the `no-reply@sparstrow.com` alias in hPanel — then flip
-`MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) and the design-system mock/handoff
-back to `no-reply@sparstrow.com`.
+`MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) back to `no-reply@sparstrow.com`.
 
 ## L-28 — Configure Coolify's own instance email
 
@@ -431,7 +430,7 @@ PRODUCT.md sets WCAG 2.2 AA as the baseline, and on the four light surfaces the 
 miss it by a wide margin: claude 2.5–2.7:1, agy 2.4–2.6:1, codex 1.6–1.7:1, against 4.5:1 for text
 (dark themes pass at 7.7:1 or better). The name above each agent reply is the main place it shows,
 and codex's near-white mark is close to invisible on a white page. The provider colours are your
-chosen identity ([`DESIGN.md`](../DESIGN.md) §2), so nothing was changed. B-39 has the full table.
+chosen identity (the design system artifact's colour table), so nothing was changed. B-39 has the full table.
 
 **Decide the providers** — this is the one that changes how they look, and it can be rendered:
 
@@ -451,16 +450,42 @@ where a reader looks for it. I would render A and B on paper and soft for you be
 
 - `--capacity-out` in light: lightness 0.63 → about 0.545 (4.5:1).
 - `--code-comment` in light: 0.60 → about 0.52 (4.5:1).
-- Destructive text in light: 0.577 → about 0.50 on its own 10% tint. In dark, lightening the text does
-  not help, because the tint lightens with it; thin the tint to about 5% instead (4.7:1).
+- ~~Destructive text~~ is done: a `destructive-text` colour was added (B-41, D-040), at least 5.2:1 in every theme, so this bullet no longer waits.
 - `--input` (the outline of a field): the outline needs 3:1 to identify a control, and it is 1.2:1
   today. Reaching 3:1 takes a near-black outline at about 70% strength, which is visibly heavier on
   every field, so this one is a look decision too. **Recommendation:** raise `--input` and leave
   `--border` alone, since card and divider lines are separators, not the only sign that a control is
   there. I would render it with the providers.
 
-Doing any of it also means editing DESIGN.md §2's table and the design-system artifact, which both
-carry these values, so the copies do not disagree.
+Doing any of it also means editing `globals.css`, `themes.css` and the design system artifact in the same
+turn, so the code and the artifact do not disagree.
 
 **Unblocks when:** you pick A, B or C for the providers, and say yes or no to the rest. It blocks
 only this fix; nothing else waits on it.
+
+## L-30 — Restyle the app shell after the Claude Design kit
+
+**Status:** idea, next after the chat surface is settled **Raised:** 2026-09-19, owner
+
+He wants the interface to look like the kit's app: a 240px sidebar with grouped navigation, a 56px
+header with a live indicator, and a second navigation pane per section, so the agent, schedule and
+pipeline screens have a home when they arrive. Chat stays first.
+
+**Recommendation:** treat it as a feature under CLAUDE.md §2. Show two or three shell directions as
+images (`design-shots`, using the kit's shell as the reference), then wire the chosen one into the real
+app. Show only destinations that exist (Chat, Machines, Settings); the kit's other entries appear when
+their features do, never as dead links. The kit's screens describe a different, older product, so each
+one still needs its own spec and a check against `Capabilities.md`.
+
+**Unblocks when:** the owner is ready to look at shell directions.
+
+## L-31 — Show a conversation's state in the list
+
+**Status:** idea **Raised:** 2026-09-19, D-040
+
+A conversation row carries no state today (title, folder, time, provider), so there was nothing for status
+colour to say about it. Showing one, such as a turn running now or the last turn failed, would use the
+existing `progress` and `danger` tones, but it needs the server to expose it per conversation and
+`Capabilities.md` to say whether it can be delivered, so it is a feature to spec, not a styling change.
+
+**Unblocks when:** he wants to see at a glance which conversations are busy or broken.

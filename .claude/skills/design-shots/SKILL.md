@@ -13,7 +13,7 @@ description: >-
 license: MIT
 metadata:
   runs-before: interactive-prototype
-  produces: design-system/shots/<slug>/
+  produces: docs/design/shots/<slug>/
   requires: codex CLI with image generation
 ---
 
@@ -193,7 +193,7 @@ Notes that cost time to rediscover:
   two failed and why. Silently presenting three when four were promised makes the
   owner think three was the plan.
 
-Land them in `design-system/shots/<YYYY-MM-DD>-<slug>/`, named `A-`, `B-`, `C-`
+Land them in `docs/design/shots/<YYYY-MM-DD>-<slug>/`, named `A-`, `B-`, `C-`
 so they can be referred to by letter.
 
 ### 4. Show them
@@ -214,7 +214,7 @@ more image at it rather than arguing in prose.
 
 ### 5. Record why — this is the part that compounds
 
-Write `design-system/shots/<slug>/README.md` in the same turn the owner reacts:
+Write `docs/design/shots/<slug>/README.md` in the same turn the owner reacts:
 
 ```markdown
 # <Feature> — <date>
@@ -231,8 +231,8 @@ action inside the content area, not a toolbar" is durable. "Liked B" is not.>
 
 The reasons are worth more than the winner. A reason generalises into a rule that
 saves every later screen a round of feedback; a winner only settles one screen.
-When a preference shows up twice, promote it into `DESIGN.md` doctrine so it stops
-being rediscovered — and read this folder's earlier `README.md` files before
+When a preference shows up twice, promote it into the design system (and log it in `docs/Decisions.md`) so it
+stops being rediscovered — and read this folder's earlier `README.md` files before
 writing prompts, so the same rejected direction is not generated again.
 
 ### 6. Hand off

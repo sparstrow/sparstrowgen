@@ -67,3 +67,15 @@ func TestAnUnreadableSavedChoiceFallsBackPartByPart(t *testing.T) {
 		t.Errorf("appearanceOf = %+v, want %+v", got, want)
 	}
 }
+
+// A new account is monochrome, and both halves of that are choices this version
+// offers, so the default can never be one a save would refuse.
+func TestTheDefaultAppearanceIsMonochromeAndIsOffered(t *testing.T) {
+	want := Appearance{Mode: "system", Surface: "mono", Accent: "neutral"}
+	if DefaultAppearance != want {
+		t.Errorf("default = %+v, want %+v", DefaultAppearance, want)
+	}
+	if !DefaultAppearance.Valid() {
+		t.Errorf("the default %+v is not something this version offers", DefaultAppearance)
+	}
+}

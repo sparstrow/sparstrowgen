@@ -21,7 +21,7 @@ narrowest-exception suppression ladder.
 | **Not taken** | The detector implementation, the command surface, the platform references, and the project doctrine it ships with |
 
 Rules deliberately dropped: `overused-font` (a typography call that belongs to
-`DESIGN.md`, not to a generic catalogue), the four `design-system-*` drift rules
+the design system, not to a generic catalogue), the four `design-system-*` drift rules
 (project-relative — see `references/drift.md`), and the model-fingerprint rules
 `codex-grid-background`, `gpt-thin-border-wide-shadow`, and
 `theater-slop-phrase`, which name specific generations and date quickly.
@@ -36,7 +36,7 @@ of the restraint principle behind `announced-restraint`.
 | **Original work** | https://github.com/anthropics/skills/tree/main/skills/frontend-design |
 | **Original licence** | Apache License 2.0 |
 | **Taken** | The three AI-default clusters it names, restated as rules with ids |
-| **Not taken** | The skill itself. It generates an aesthetic per brief, which would compete with `DESIGN.md` and re-decide the look on every screen |
+| **Not taken** | The skill itself. It generates an aesthetic per brief, which would compete with the design system and re-decide the look on every screen |
 
 ## Changes from the originals
 

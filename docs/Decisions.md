@@ -899,3 +899,86 @@ Rejected: a new `ALLOW_SHARED_TOKEN` switch (a switch that can be turned on is o
 production); removing the route outright (a daemon run from source has no pairing, so local
 development would have to pair before it could be started, which is a real cost for no gain);
 keeping it and rotating it (rotation manages a secret whose value is that it does not exist).
+
+## D-039 — The default appearance is monochrome; brand colour is scarce and status colours are adopted
+
+**2026-09-19, owner, after auditing the design system artifact against his Claude Design kit.**
+
+**A new account starts monochrome:** the Mono surface and a new Neutral accent (near-black in light,
+near-white in dark), so colour is left to mean something instead of decorating. The other three
+surfaces and five accents are still one choice away in Settings. The kit said the same thing in its
+own words (no brand accent hue); the app had drifted to Paper and Amber.
+
+**Brand colour (`primary`, `ring`) has a short list of jobs:** the one primary action, the selected
+option, focus, and links. It never says how something is doing. The audit's evidence was the artifact's
+own preview: an "Online" badge in amber, which is a status and belongs to a status colour. In the app
+itself the audit found the brand colour already confined to those jobs, and no status colour anywhere:
+"Online" was plain text.
+
+**Status colours are adopted from the kit:** `success`, `info`, `warning`, each as an icon colour, a
+badge fill and a text colour. Red stays `destructive`; there is no separate danger token. The kit's
+light-mode icon colours failed 3:1 (success 2.5, warning 2.2), so they were darkened (success L 0.575,
+warning L 0.62) until they hold 3:1 on every surface; the text and fill pairs already passed (6.2 to
+9.8:1). A status is still a word or an icon as well, never colour alone, and a computer being Offline
+stays muted because that is not a fault.
+
+**Geometry stays the live app's** (32px controls, 10px radius, no shadow), not the kit's (36px, 6px,
+shadow), and nothing is set below 12px, so the kit's 10px micro text is dropped. Re-skin the kit, not the
+app.
+
+**Accounts on the old default move too.** Migration 00014 changes only the column defaults, and 00015
+then moves every account still on exactly Paper and Amber to Mono and Neutral. A stored Paper and Amber
+cannot be told apart from a choice someone made, and the owner settled it on 2026-09-19: every account
+that exists is his own, so he wants monochrome everywhere and will change it in Settings later. Anyone
+on another surface, another accent, or only one of the two is untouched, and the mode is never changed.
+It cannot be undone by migration (which rows moved is not recorded), so 00015's Down is a no-op.
+
+Rejected: the kit's separate `--danger` (a duplicate of `--destructive`); its six task-board column
+colours (there is no task board yet, and three of them fail 3:1 on white); recolouring Offline or
+Unavailable (absence is not a fault).
+
+## D-040 — Every status is a colour, an icon and a word, through one `Status` component
+
+**2026-09-19, owner, after seeing the provider strip and the pairing steps with status colour.** He said
+it made the interface more informed and friendly, and asked for status to go beyond a coloured badge:
+"a green tick and the word success", researched and applied across the app.
+
+**Research.** Carbon builds a severity from three things, colour, shape and symbol, plus a descriptive
+label, and warns that a shape or a colour alone is not enough for someone with low colour vision.
+Cloudscape's status indicator has error, warning, success, pending, loading and stopped, each an icon
+and text. The accessibility guidance agrees: distinct icon shapes rather than colour variants, a visible
+word, `role="status"` where it changes live. (Their pages are thin to fetch, so the icon-by-icon detail
+is from those summaries, not from a full read; the toast icons we already had matched the pattern.)
+
+**The vocabulary is seven tones**, each with its own silhouette so it reads with the colour removed:
+`success` (circle-check), `info` (circle-i), `warning` (triangle), `danger` (octagon-x), `progress` (a
+turning arc), `pending` (clock) and `neutral` (circle-minus). `apps/web/components/ui/status.tsx` holds the
+one map from tone to icon and colour, and every screen goes through it: computer online state, provider
+availability, the pairing steps, the update lines, the provider strip, the "cannot send" notice, the
+failure notice under a turn, the folder picker, form errors, and the toast icons. A short label is coloured
+("Online"); a sentence is `quiet`, with only the icon carrying the tone. `appearance="badge"` gives the
+pill form.
+
+**No `icon` prop, on purpose.** A screen that wants another glyph is naming a tone the list lacks, and the
+fix is to add the tone once. That is what keeps a tick meaning the same thing everywhere.
+
+**What each state maps to, and what stays quiet:**
+- A provider that **cannot run and needs a person** (not installed, computer needs an update) is a
+  warning. One that **will come back by itself** (computer asleep) stays muted, like Offline, so the strip
+  does not go amber whenever a laptop lid closes. A value an older app does not know is muted too.
+- Online is a tick, Offline a dash. The Wi-Fi glyphs went: the word already says it, and one tick means
+  the same on every screen.
+- The "cannot send" notice above the composer is amber, not red: nothing has failed, but nothing new can
+  go until a person or the computer changes.
+- Conversation rows get nothing. They carry no state (title, folder, time, provider), so there is nothing
+  to colour, and inventing one would be a backend feature (L-32).
+- A spinner inside a Button ("Checking…"), "Saving…" and the chat working indicator are not statuses and
+  are left as they were.
+
+**Red text needed its own token.** `destructive` as text measures 3.3:1 on its own tint in light and 3.7:1
+in dark, so every red word (the destructive Button, Badge and menu item, the failure notice title, form
+errors) missed AA. `destructive-text` fixes it, following the `-text` pattern of the other three statuses
+(B-41). The icon and tint keep `destructive`.
+
+Rejected: an `icon` override prop; filled icons (outline is what the toasts already use, and reads better
+at 14px); a coloured dot alone; colouring conversation rows without a state to show.

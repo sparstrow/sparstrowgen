@@ -24,8 +24,8 @@ one browser would make the same account feel inconsistent elsewhere.
 
 I can choose the appearance that helps me read and work comfortably. My choice belongs to my
 account, follows me between signed-in browsers, and applies without changing the meaning of status
-or code colours. A new account begins with the familiar Paper surface, Amber accent and System
-mode, then remembers whatever I choose.
+or code colours. A new account begins monochrome (the Mono surface, Neutral accent and System mode; changed
+from Paper and Amber on 2026-09-19, D-039), then remembers whatever I choose.
 
 ## User stories
 
@@ -56,11 +56,11 @@ remaining recognisably the same product.
 
 **Acceptance**
 
-- **Given** I have not customised my appearance, **when** my account is created, **then** Paper is
-  the surface and Amber is the accent.
+- **Given** I have not customised my appearance, **when** my account is created, **then** Mono is
+  the surface and Neutral is the accent (D-039; first release was Paper and Amber).
 - **Given** I choose a surface, **when** I select Paper, Slate, Soft or Mono, **then** the product's
   neutral background character changes consistently in both light and dark expressions.
-- **Given** I choose an accent, **when** I select Amber, Violet, Blue, Teal or Rose, **then**
+- **Given** I choose an accent, **when** I select Neutral, Amber, Violet, Blue, Teal or Rose, **then**
   interactive emphasis uses that accent consistently without recolouring success, warning,
   approval, danger or information meanings.
 - **Given** I change either choice, **when** it is accepted, **then** I can see its effect without
