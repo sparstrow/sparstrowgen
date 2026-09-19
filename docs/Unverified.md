@@ -349,3 +349,9 @@ components and tokens (deleted afterwards): all seven tones inline, as a badge a
 in light and dark, with the icon on the first line of a wrapped sentence; the provider strip with a
 blocked and a waiting provider; the composer notice; and the form error. Type-checked and linted. Not
 seen: any of the real screens above, the failed-turn and folder-picker notices, and reduced motion.
+
+## U-22 — The light themes show the darker provider colours and stay recognisable
+
+**From:** D-041 and B-39, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the testing account in the Browser pane
+**How:** Sign in, choose a light theme (Mono, Paper, Slate and Soft), and open a conversation that has had a claude, a codex and an agy turn. Passing: the agent name above each reply, the provider strip marks, the switch notice and the conversation list are readable, each provider is still told apart by colour, a code block's comments and types are readable, and a blocked usage window's text is a deeper red. Dark themes look as they did.
+**Status:** open. Seen 2026-09-19: the new values read back from the running app's stylesheet in light and dark, and the contrast table for all eight themes. The screens above need a signed-in session.

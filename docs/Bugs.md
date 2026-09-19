@@ -519,7 +519,7 @@ first-request-wins. It now refuses to start instead.
 ## B-39 — Provider names and marks, and several other texts, are too faint to read on the light surfaces
 
 **Found:** 2026-09-19, by the agent, measuring contrast against PRODUCT.md's WCAG 2.2 AA baseline
-**Status:** open — needs owner, [L-29](Later.md#l-29--light-surfaces-the-provider-colours-and-a-few-other-colours-are-below-aa-contrast)
+**Status:** fixed 2026-09-19, except the outline of a field, which was left on purpose (G-39)
 **Repro:** Open Chat in any light surface (paper, slate, soft, mono) and read an agent's name above its
 reply, the "hasn't seen this" notice under the composer, or a provider switch divider.
 **Expected / Actual:** 4.5:1 for text, 3:1 for marks and control outlines / the values below. Dark
@@ -544,12 +544,15 @@ the chip's name is already `--foreground`. Destructive text straight on the page
 picker) is 4.3–4.6, so it clears on paper, slate and mono and misses on soft. `--code-comment` also
 sits at 4.3 on the soft dark surface. Not measured: waiting chips are drawn at 55% opacity. (Blocked chips are no longer dimmed: a blocked provider is now a warning status, D-040.)
 
-**Why it is not fixed:** the provider colours are the owner's chosen identity (the design system artifact's colour table), and
-changing what a provider looks like is his call. The other rows would be routine on their own, but
-the question is one decision about how light themes read, so they go with it.
-**Fix:** none yet. The colours were deliberately not changed. Recommendation and the values that
-would pass are in L-29.
-**Release note:** written when it is fixed.
+**Fix:** the owner chose option A on 2026-09-19 (D-041): on the four light surfaces the provider colours
+keep their hue and chroma and get a lower lightness (claude `oklch(0.53 0.128 45)`, codex `oklch(0.52 0.012 250)`,
+agy `oklch(0.52 0.115 255)`), so a provider name and mark now hold at least 5.0:1. `--capacity-out` in light is
+`oklch(0.545 0.2 25)` (4.96:1 or better), `--code-comment` in light `oklch(0.52 0.02 250)` and in dark
+`oklch(0.64 0.015 250)` (the soft dark surface was 4.3), and `--code-type` in light `oklch(0.49 0.13 195)` (Soft
+Light was 4.4). The destructive text row was fixed earlier by B-41. Dark provider colours did not change.
+Read back from the running app's stylesheet in light and dark, and measured in the design system's contrast
+table across all eight themes; not yet seen in the signed-in Chat (U-22).
+**Release note:** Fixed: agent names, the blocked-limit text and code comments are easier to read on the light themes.
 
 ## B-38 — `scripts\dev.ps1` could not start the server, and offered a setup code that no longer exists
 

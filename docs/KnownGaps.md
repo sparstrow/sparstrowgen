@@ -442,3 +442,18 @@ put it here to find out.
 - **Clears when:** the owner deletes the variable (Settings → Edit environment variables for your
   account) and removes the `DAEMON_TOKEN` row from both Coolify applications. Nothing needs it: local
   development sets its own per worktree (D-036), and deployments no longer accept one.
+
+## G-39 — The outline of a field and the border of a card are faint on light surfaces
+
+**Kind:** caveat
+**Raised:** 2026-09-19, closing B-39 (D-041)
+
+`--input` (a field's outline) is 1.2:1 and `--border` (cards and dividers) 1.1:1 against a light surface, where WCAG
+asks 3:1 for the edge that identifies a control. Left as shipped on purpose: reaching 3:1 needs the outline at about
+48% strength instead of 16%, which is visibly heavier on every field, so it is a look decision the owner
+declined for now. Fields carry a visible label or placeholder and a focus ring that passes, so a field is still
+identifiable without the outline.
+
+- **If wrong:** someone with low vision may find the boundary of an empty field hard to see on a light theme.
+- **Clears when:** the owner wants heavier outlines, in which case `--input` in `globals.css` goes to about
+  `oklch(0.2 0 0 / 48%)` and the design system artifact follows. Separators (`--border`) are arguable and can stay.
