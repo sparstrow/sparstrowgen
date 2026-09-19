@@ -8,7 +8,7 @@ description: >-
   until one full pass finds nothing new. This is Definition of Done, not
   optional QA — invoke it immediately after finishing any UI-producing work
   (a new page, a component change, a bug fix) and especially right after the
-  `interactive-prototype` or `design-system` skills produce something,
+  `interactive-prototype` skill produces something,
   BEFORE reporting the task complete. Use it even when the user didn't ask
   for testing — "it should work," a passing typecheck, and a code review
   that looks right are exactly the false signals this skill exists to catch.
@@ -16,8 +16,8 @@ description: >-
   actually work," or silently as the closing step of any frontend task.
 license: MIT
 metadata:
-  companion-skill: design-system, interactive-prototype
-  consumes: a running app route, a design-system card, or a *.dc.html prototype
+  companion-skill: interactive-prototype
+  consumes: a running app route, a design-system component preview, or a *.dc.html prototype
 ---
 
 # Frontend verify
@@ -38,9 +38,10 @@ who knows what "correct" was supposed to look like.
   or route, a component change, a bug fix, a prototype.
 - Immediately after **`interactive-prototype`** produces a `.dc.html` — verify
   against its own `handoff.md` States and Interactions tables.
-- Immediately after **`design-system`** adds or edits a card — verify it
-  actually renders as described, in both light and dark, including
-  focus-visible and other states the card claims to show.
+- Immediately after a component or token in the design system artifact is
+  added or edited — open its preview and verify it actually renders as
+  described, in both light and dark, including focus-visible and other states
+  the preview claims to show.
 - After any real, production frontend change — verify against the task's
   spec/acceptance criteria if one exists, otherwise against the ordinary UX
   baseline in "No source of truth exists," below.

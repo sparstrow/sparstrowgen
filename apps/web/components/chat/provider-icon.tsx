@@ -9,7 +9,7 @@ import type { ProviderId } from "@/lib/chat-types";
  *
  * currentColor is what matters here. It lets one component work in the provider
  * colour, muted, and disabled contexts without a variant per case, and it keeps
- * DESIGN.md's no-hardcoded-colour rule intact — the brand hue comes from the
+ * the no-hardcoded-colour rule intact — the brand hue comes from the
  * provider token, not from the mark.
  *
  * An earlier version of this file drew these by hand. They were recognisable

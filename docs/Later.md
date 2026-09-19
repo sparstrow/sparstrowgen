@@ -404,8 +404,7 @@ alias on `agent@sparstrow.com` would only change `MAIL_FROM`; `SMTP_USERNAME`/`S
 stay the real mailbox's, since an alias has no login of its own.
 
 **Unblocks when:** the owner creates the `no-reply@sparstrow.com` alias in hPanel — then flip
-`MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) and the design-system mock/handoff
-back to `no-reply@sparstrow.com`.
+`MAIL_FROM` in [`docs/runbooks/deploy.md`](runbooks/deploy.md) back to `no-reply@sparstrow.com`.
 
 ## L-28 — Configure Coolify's own instance email
 

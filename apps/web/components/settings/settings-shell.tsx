@@ -12,7 +12,7 @@ export type SettingsPageId = "password" | "appearance" | "updates";
 
 type Entry = { id: SettingsPageId; label: string; href: string; icon: ComponentType<{ className?: string }> };
 
-// Only what is built. A group earns a place here when it has a page (DESIGN.md §9).
+// Only what is built. A group earns a place here when it has a page.
 const groups: { label: string; entries: Entry[] }[] = [
   { label: "Account", entries: [
     { id: "password", label: "Password", href: "/settings", icon: KeyRound },

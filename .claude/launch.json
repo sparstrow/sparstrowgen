@@ -34,12 +34,6 @@
       "env": {
         "NEXT_PUBLIC_API_URL": "http://localhost:8317"
       }
-    },
-    {
-      "name": "design-system",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/serve-design-system.mjs", "4173"],
-      "port": 4173
     }
   ]
 }

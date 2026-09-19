@@ -112,14 +112,14 @@ different spacing is one option, not three.
 Two ways to render them, both valid:
 
 - **Standalone prototype** — `interactive-prototype` builds it into
-  `design-system/designs/`. Right when the app route doesn't exist yet, or when
+  `docs/design/prototypes/`. Right when the app route doesn't exist yet, or when
   comparing directions side by side.
 - **Placeholder in the real app** — a real route in `apps/web`, real
   components, mock data. Right when the surrounding app exists, because
   context changes judgment. Prefer this once there is an app to put it in.
 
-Build against `DESIGN.md` and the design system's tokens, with
-`ai-design-slop` loaded so the tells never go in. A prototype that invents its
+Build against the design system's tokens and components (linked from
+`CLAUDE.md`), with `ai-design-slop` loaded so the tells never go in. A prototype that invents its
 own visual language teaches the owner nothing about what the real thing will
 look like.
 

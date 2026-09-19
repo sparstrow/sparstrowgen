@@ -8,7 +8,7 @@ description: >-
   already exists. Use whenever a screen "looks AI", "looks like every
   other app", "feels templated", "looks generic", or whenever a page, component,
   or prototype is about to be built or reviewed. Do NOT use it to decide what
-  this product should look like — that is DESIGN.md's job, and this file
+  this product should look like — that is the design system's job, and this file
   deliberately states none of it.
 license: Apache-2.0
 metadata:
@@ -17,8 +17,8 @@ metadata:
 
 # AI design slop
 
-A catalogue, not a procedure. It names the tells; `DESIGN.md` is what decides
-the actual design.
+A catalogue, not a procedure. It names the tells; the design system (linked
+from `CLAUDE.md`) is what decides the actual design.
 
 This is the `design` family. Later families (`ai-coding-slop`,
 `ai-database-slop`) use the same schema and the same tiers.
@@ -31,14 +31,13 @@ someone else's app?**
 | | Where it lives |
 |---|---|
 | **Yes — absolute tell.** Gradient text, kicker above a heading, emoji standing in for an icon | Here, in [references/refuse-list.md](references/refuse-list.md) |
-| **No — relative drift.** An untokenised colour, the wrong icon set, a contrast floor, a surface character | `DESIGN.md` and `design-system/`. [references/drift.md](references/drift.md) says where to look — it copies nothing |
+| **No — relative drift.** An untokenised colour, the wrong icon set, a contrast floor, a surface character | The design system. [references/drift.md](references/drift.md) says where to look — it copies nothing |
 
-**This file states no rule from `DESIGN.md`, and must never start.** That is not
-tidiness. `design-system/DECISIONS.md` records the defect: design rules were
-duplicated into a conformance skill, so changing the doctrine left the copy
-enforcing the retired rules for every agent that loaded it. `DESIGN.md` §12
-carries the ban in its own words. A catalogue that hardcodes the doctrine can
-never be re-pointed at a new one.
+**This file states no rule from the design system, and must never start.** That
+is not tidiness. Design rules duplicated into a conformance skill keep
+enforcing themselves after the system changes, for every agent that loaded the
+copy. A catalogue that hardcodes the design system can never be re-pointed at
+a new one.
 
 The practical test when adding a rule here: if it mentions a value, a token
 name, or a component this project happens to use, it is drift and belongs in
@@ -86,7 +85,7 @@ separate decision — list it first, never silently rewrite.
 
 **A rule the brief actually earns.** These are the category's defaults, not
 bans — one exception, `kicker-above-heading`, is marked as a hard ban and says
-so. When `DESIGN.md`, a pinned brief, or the owner has explicitly chosen
+so. When the design system, a pinned brief, or the owner has explicitly chosen
 something on this list, that choice wins and the finding is a false positive.
 Record the exception against that one rule on that one surface; never widen it
 to make a fix go away.
@@ -94,9 +93,9 @@ to make a fix go away.
 ## Scope boundaries
 
 - **No production code.** This is a catalogue.
-- **No design decisions.** What this product looks like is `DESIGN.md`'s, written
-  with the owner via `design-brief`. If a screen needs something the doctrine
-  lacks, that is a `DESIGN.md` change with sign-off, not a rule added here.
+- **No design decisions.** What this product looks like is the design system's,
+  decided with the owner. If a screen needs something the system lacks, that is
+  a design system change with sign-off, not a rule added here.
 - **Nothing project-specific added here.** A rule naming this repo's tokens,
   components, or palette has leaked from `drift.md` and belongs back in it.
 

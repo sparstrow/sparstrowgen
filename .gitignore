@@ -5,7 +5,7 @@ Reference/
 .stack.env
 
 # design-shots generation logs — transient
-design-system/shots/**/.[A-Z].log
+docs/design/shots/**/.[A-Z].log
 
 # Next.js / node
 node_modules/

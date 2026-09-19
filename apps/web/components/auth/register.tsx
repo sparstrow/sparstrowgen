@@ -17,8 +17,7 @@ import {
 /* Creating an account, for anybody who has the address.
  *
  * Only an email is asked for. The password comes after the address is proved,
- * so an account nobody has confirmed never exists (design-system/DECISIONS.md
- * DD-002).
+ * so an account nobody has confirmed never exists.
  *
  * The server decides what happens next and the screen only reports it: an
  * invited address gets "check your email", anything else becomes a request to

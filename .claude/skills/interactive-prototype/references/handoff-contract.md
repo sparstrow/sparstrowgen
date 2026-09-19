@@ -22,7 +22,7 @@ prototype is the reference.** When they disagree, the handoff wins.
 | **Provenance** | `docs/specs/<file>.md` — or `<the owner's request, in one line>` |
 | **Mode** | build \| explore |
 | **Status** | draft \| reviewed <date> \| superseded by <x> |
-| **Design system** | mirror \| greenfield, at `design-system/` |
+| **Design system** | the Claude artifact linked from `CLAUDE.md` |
 
 ## What this is
 
@@ -42,7 +42,7 @@ stops a reimplementation of something that already exists.
 ## Token usage
 
 Tokens consumed, and — critically — any the prototype needed that the system
-does not have. A missing token is a design-system decision, not something the
+does not have. A missing token is a design system decision, not something the
 implementer should invent.
 
 | Needed | Exists? | Action |
@@ -136,7 +136,7 @@ adds, assumes, or leaves open — one copy of the requirements, not two that dri
 
 ## Where it goes
 
-Next to the prototype: `design-system/designs/<Category>/<name>.handoff.md`.
+Next to the prototype: `docs/design/prototypes/<Category>/<name>.handoff.md`.
 
 In a repo running a spec → plan → tasks lifecycle, the handoff is an input to
 the **plan**, not a replacement for it. The spec says what the owner wants, the

@@ -3,8 +3,8 @@ name: interactive-prototype
 description: >-
   Builds a clickable, high-fidelity HTML prototype of a page, screen, or feature
   before any production code is written, using the project's design system
-  tokens and components, and lands it in design-system/designs/ with a preview
-  card and a handoff contract. Use this skill whenever the user wants to see,
+  tokens and components, and lands it in docs/design/prototypes/ with a
+  handoff contract. Use this skill whenever the user wants to see,
   try, click through, or validate a feature before building it — including
   "prototype this", "mock up this screen", "what would this look like", "build
   me a clickable version", "let's see it before we build it", or when they hand
@@ -13,8 +13,7 @@ description: >-
   application code.
 license: MIT
 metadata:
-  companion-skill: design-system
-  produces: design-system/designs/<Category>/
+  produces: docs/design/prototypes/<Category>/
 ---
 
 # Interactive prototype
@@ -24,24 +23,24 @@ through** — real layout, real interactions, real-looking data, no build step a
 no backend. It exists to answer "is this right?" while changing it still costs
 minutes instead of days.
 
-It lands inside the design system rather than a scratch folder, because a
-prototype built against ad-hoc colours drifts from the product immediately and
-teaches you the wrong thing. Read
-[`../design-system/references/file-conventions.md`](../design-system/references/file-conventions.md)
-for the folder contract this writes into.
+It lands in `docs/design/prototypes/<Category>/`, next to its handoff, rather than
+a scratch folder, so the decision it carried stays findable. It is built against
+the product's real tokens, because a prototype built against ad-hoc colours
+drifts from the product immediately and teaches you the wrong thing.
 
-## First: is there a design system?
+## First: the design system
 
-Look for `design-system/system.json`.
+The design system is the Claude artifact linked from `CLAUDE.md` (§4, Design).
+Read its `project/README.md` and the README of every component you will use
+before drawing anything; they say what each variant *means*. An agent that
+cannot open the artifact asks the owner to paste the parts it needs, and says so
+rather than guessing.
 
-- **Present** → read it, read `design-system/README.md`, and build against those
-  tokens and components. This is the normal case and the whole point.
-- **Absent** → say so, and offer to run the `design-system` skill first. You
-  *can* prototype without one, but everything you produce will be invented
-  styling that has to be re-decided later. Prototyping first is legitimate when
-  the product's look genuinely does not exist yet — in that case the prototype
-  becomes the raw material for the design system, and you should say that
-  explicitly rather than quietly inventing a palette.
+Tokens come from `docs/design/prototypes/tokens.css`: the custom-property blocks
+copied from `apps/web/app/globals.css` and `apps/web/app/themes.css`, nothing
+else. If it does not exist, create it from those two files; if either of them
+has changed since, refresh it. A prototype links it (`../tokens.css` from a
+`<Category>/` folder) and never redeclares a value.
 
 ## Feasibility first — before either mode
 
@@ -97,11 +96,11 @@ Only the first is required — infer the rest and state what you inferred.
 | Input | Required | Notes |
 |---|---|---|
 | **What to prototype** | yes | A spec path (`build`) or a description (`explore`) |
-| Surface name | no | Defaults from the spec title; becomes the filename and card title |
-| Category | no | The `designs/<Category>/` nav group. Reuse an existing one before inventing |
+| Surface name | no | Defaults from the spec title; becomes the filename and page title |
+| Category | no | The `docs/design/prototypes/<Category>/` folder. Reuse an existing one before inventing |
 | Fidelity | no | `static` (layout only) or `live` (clickable, stateful). Default `live` |
-| Data | no | Reuse `design-system/lib/*-data.js` if present — see below |
-| Reference | no | An existing card/design whose shape to match |
+| Data | no | Reuse `docs/design/prototypes/seed-data.js` if present — see below |
+| Reference | no | An existing prototype or component whose shape to match |
 | Viewport | no | `desktop` (default), `mobile`, or both |
 
 If the user says only "prototype the sales orders page", that is enough: mode
@@ -110,8 +109,8 @@ inferred in one line rather than interrogating them.
 
 ## Use the shared seed data
 
-If `design-system/lib/*-data.js` exists, import it. If it does not and this is
-the first prototype, **create it** — do not inline an array of fake rows.
+If `docs/design/prototypes/seed-data.js` exists, import it. If it does not and
+this is the first prototype, **create it** — do not inline an array of fake rows.
 
 This matters more than it looks. Shared seed data means a reviewer can follow one
 order from the list view into the detail drawer into the invoice and it is the
@@ -125,42 +124,31 @@ names, real-shaped codes, realistic quantities and dates.
 
 ## Building it
 
-1. **Read** `system.json`, `README.md`, and the cards for the components you will
-   use — especially their `.prompt.md` files, which say what each variant *means*.
-   Also check `DESIGN.md` §6 (Iconography): does any value on this screen have a
+1. **Read** the design system README and the READMEs of the components you will
+   use. Check its Iconography section too: does any value on this screen have a
    unique, externally-recognizable identity that should carry its own mark rather
-   than text (DD-016)? Does any control trigger an irreversible action, which
-   changes its resting colour, not just its hover/confirm state?
-2. **Create the files** via the design-system CLI so the folder contract and the
-   manifest stay correct:
-   ```bash
-   node .claude/skills/design-system/scripts/ds.mjs add \
-     --root design-system --kind prototype --name "Sales Orders" --category "ERP App"
-   ```
-3. **Build the `.dc.html`.** One file. Link `../../styles.css` for tokens. Inline
+   than text? Does any control trigger an irreversible action, which changes its
+   resting colour, not just its hover/confirm state?
+2. **Create the files**: `docs/design/prototypes/<Category>/<name>.dc.html` and
+   `<name>.handoff.md` next to it. Reuse an existing `<Category>` before
+   inventing one.
+3. **Build the `.dc.html`.** One file. Link `../tokens.css` for tokens. Inline
    the interaction JS. No bundler, no npm install, no network calls — it has to
    open from disk in six months.
 4. **Ship all four states.** Populated, empty, loading, error. Make them
    reachable — a toolbar toggle, `?state=empty`, whatever is quickest. The empty
    state is what the owner sees on day one and the one most likely to be skipped.
-5. **Fill in the preview card** (`*.card.html`) so it appears in the index. A
-   representative screenshot-like fragment is fine; it is a tile, not the thing.
-6. **Write the handoff** — see
+5. **Write the handoff** — see
    [references/handoff-contract.md](references/handoff-contract.md).
-7. **Rebuild it**:
-   ```bash
-   node .claude/skills/design-system/scripts/ds.mjs build --root design-system
-   ```
-8. **When the owner reacts, log why — not just what.** A prototype exists to
+6. **When the owner reacts, log why — not just what.** A prototype exists to
    provoke exactly this: "try it denser", "that colour is wrong", "add
    something here". Those requests arrive with their reasoning attached, and
    the reasoning is the valuable half — it usually generalises into a rule that
    saves every later screen from the same round of feedback. Record it in
-   `design-system/DECISIONS.md` in the same turn it is said, per the
-   `design-system` skill's decision-log reference. A revision applied to the
+   `docs/Decisions.md` in the same turn it is said. A revision applied to the
    prototype but never written down is lost the moment someone builds the real
-   page from the doctrine instead.
-9. **Run the `frontend-verify` skill against it before calling the prototype
+   page from the design system instead.
+7. **Run the `frontend-verify` skill against it before calling the prototype
    done.** This is not optional and not the same as opening it once yourself —
    that skill's loop (enumerate every state and interaction from this
    handoff, click through them, watch the console, fix and re-verify from the

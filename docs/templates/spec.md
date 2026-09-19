@@ -29,7 +29,7 @@ Skip it entirely for bug fixes, backend-only work, and small specific changes
 | **Status** | <Draft \| Approved <date> \| Superseded by <spec>> |
 | **Created** | <YYYY-MM-DD> |
 | **Trigger** | <what prompted this — the owner's words where possible> |
-| **Design** | <design-system/designs/<...> once locked, or "not designed yet"> |
+| **Design** | <docs/design/prototypes/<...> once locked, or "not designed yet"> |
 | **Open questions** | <L-n, or "none"> |
 
 ## What's wrong today

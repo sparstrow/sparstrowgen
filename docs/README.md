@@ -32,8 +32,9 @@ Mostly not here:
 
 ```
 docs/specs/<date>-<slug>.md                         what he asked for, approved
-design-system/designs/<Category>/<name>.dc.html     the locked design
-design-system/designs/<Category>/<name>.handoff.md  what the backend must provide
+docs/design/prototypes/<Category>/<name>.dc.html     the locked design
+docs/design/prototypes/<Category>/<name>.handoff.md  what the backend must provide
+docs/design/shots/<date>-<slug>/                     image directions and why one was chosen
 proto/                                              shapes crossing Go ↔ TypeScript
 server/migrations/                                  the schema it needed
 ```
