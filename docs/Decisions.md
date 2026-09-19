@@ -936,3 +936,49 @@ It cannot be undone by migration (which rows moved is not recorded), so 00015's 
 Rejected: the kit's separate `--danger` (a duplicate of `--destructive`); its six task-board column
 colours (there is no task board yet, and three of them fail 3:1 on white); recolouring Offline or
 Unavailable (absence is not a fault).
+
+## D-040 — Every status is a colour, an icon and a word, through one `Status` component
+
+**2026-09-19, owner, after seeing the provider strip and the pairing steps with status colour.** He said
+it made the interface more informed and friendly, and asked for status to go beyond a coloured badge:
+"a green tick and the word success", researched and applied across the app.
+
+**Research.** Carbon builds a severity from three things, colour, shape and symbol, plus a descriptive
+label, and warns that a shape or a colour alone is not enough for someone with low colour vision.
+Cloudscape's status indicator has error, warning, success, pending, loading and stopped, each an icon
+and text. The accessibility guidance agrees: distinct icon shapes rather than colour variants, a visible
+word, `role="status"` where it changes live. (Their pages are thin to fetch, so the icon-by-icon detail
+is from those summaries, not from a full read; the toast icons we already had matched the pattern.)
+
+**The vocabulary is seven tones**, each with its own silhouette so it reads with the colour removed:
+`success` (circle-check), `info` (circle-i), `warning` (triangle), `danger` (octagon-x), `progress` (a
+turning arc), `pending` (clock) and `neutral` (circle-minus). `apps/web/components/ui/status.tsx` holds the
+one map from tone to icon and colour, and every screen goes through it: computer online state, provider
+availability, the pairing steps, the update lines, the provider strip, the "cannot send" notice, the
+failure notice under a turn, the folder picker, form errors, and the toast icons. A short label is coloured
+("Online"); a sentence is `quiet`, with only the icon carrying the tone. `appearance="badge"` gives the
+pill form.
+
+**No `icon` prop, on purpose.** A screen that wants another glyph is naming a tone the list lacks, and the
+fix is to add the tone once. That is what keeps a tick meaning the same thing everywhere.
+
+**What each state maps to, and what stays quiet:**
+- A provider that **cannot run and needs a person** (not installed, computer needs an update) is a
+  warning. One that **will come back by itself** (computer asleep) stays muted, like Offline, so the strip
+  does not go amber whenever a laptop lid closes. A value an older app does not know is muted too.
+- Online is a tick, Offline a dash. The Wi-Fi glyphs went: the word already says it, and one tick means
+  the same on every screen.
+- The "cannot send" notice above the composer is amber, not red: nothing has failed, but nothing new can
+  go until a person or the computer changes.
+- Conversation rows get nothing. They carry no state (title, folder, time, provider), so there is nothing
+  to colour, and inventing one would be a backend feature (L-32).
+- A spinner inside a Button ("Checking…"), "Saving…" and the chat working indicator are not statuses and
+  are left as they were.
+
+**Red text needed its own token.** `destructive` as text measures 3.3:1 on its own tint in light and 3.7:1
+in dark, so every red word (the destructive Button, Badge and menu item, the failure notice title, form
+errors) missed AA. `destructive-text` fixes it, following the `-text` pattern of the other three statuses
+(B-40). The icon and tint keep `destructive`.
+
+Rejected: an `icon` override prop; filled icons (outline is what the toasts already use, and reads better
+at 14px); a coloured dot alone; colouring conversation rows without a state to show.

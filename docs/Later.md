@@ -438,16 +438,13 @@ one still needs its own spec and a check against `Capabilities.md`.
 
 **Unblocks when:** the owner is ready to look at shell directions.
 
-## L-31 — Where else should status colour appear?
+## L-31 — Show a conversation's state in the list
 
-**Status:** question **Raised:** 2026-09-19, D-039
+**Status:** idea **Raised:** 2026-09-19, D-040
 
-Colour is now applied only where the audit found an unambiguous state: a computer's online state,
-provider availability on the profile, the update status lines, and toast icons. Left plain on purpose
-until he says otherwise: the provider strip's "waitable" state (a warning would fit, but the strip is
-meant to stay quiet), the pairing steps, and conversation rows.
+A conversation row carries no state today (title, folder, time, provider), so there was nothing for status
+colour to say about it. Showing one, such as a turn running now or the last turn failed, would use the
+existing `progress` and `danger` tones, but it needs the server to expose it per conversation and
+`Capabilities.md` to say whether it can be delivered, so it is a feature to spec, not a styling change.
 
-He asked (2026-09-19) to be shown the difference before deciding, so the next step is a before-and-after
-of those three places rendered from the real tokens, not a written recommendation.
-
-**Unblocks when:** he has looked at that comparison and said more, less, or as it is.
+**Unblocks when:** he wants to see at a glance which conversations are busy or broken.

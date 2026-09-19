@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Status } from "@/components/ui/status";
 
 /* The furniture shared by every door into the app: sign in, create an account,
  * the pages an email link opens, and password reset.
@@ -151,8 +152,8 @@ export function Field({
  *  surfaced rather than replaced with something generic. */
 export function FormError({ id, message }: { id: string; message: string }) {
   return (
-    <p id={id} role="alert" className="text-sm text-destructive">
-      {message}
+    <p id={id} role="alert" className="text-sm">
+      <Status tone="danger">{message}</Status>
     </p>
   );
 }

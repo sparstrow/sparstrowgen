@@ -929,3 +929,23 @@ said the provider could not run.
 provider, and an alert icon otherwise. Type-checked and linted; not yet seen in a browser (U-19).
 
 **Release note:** Fixed: a computer's profile no longer shows a check mark beside an agent that is not available.
+
+## B-40 — Red words were too faint to read reliably
+
+**Found:** 2026-09-19, agent, while building the status component
+**Status:** fixed 2026-09-19
+
+**Repro:** Look at a red word on a light surface: a form error such as a wrong password, the title of a
+"Turn did not finish" notice, the text of a Disconnect button, a destructive menu item, or a "Failed"
+badge.
+
+**Expected / Actual:** Text should hold 4.5:1 against what is behind it / red text used the same red as
+the icon and fill, which is 3.3:1 on its own light tint (3.7:1 in dark) and about 3.9:1 on the page.
+
+**Fix:** a new `destructive-text` colour (light `oklch(0.485 0.22 27.325)`, dark `oklch(0.855 0.13 22)`),
+used for every red word: the destructive Button, Badge and menu item, the failure notice title, and the
+danger status. The red icon, border and tint are unchanged. Measured in the design system's contrast
+table across all eight themes: at least 5.2:1 on every surface and on the tint. Not yet seen in the
+signed-in app (U-21).
+
+**Release note:** Fixed: red error text and destructive buttons are now easier to read.

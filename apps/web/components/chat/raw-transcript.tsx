@@ -2,6 +2,7 @@
 
 import type { Entry } from "@/lib/chat-types";
 import { providerStyle, formatTokens, formatUsd, clockTime } from "./provider-meta";
+import { Status } from "@/components/ui/status";
 
 /* The transcript with nothing done to it.
  *
@@ -83,8 +84,8 @@ export function RawTranscript({ entries }: { entries: Entry[] }) {
               </p>
             )}
             {e.failure && !e.stopped && (
-              <p className="mt-1 text-[13px] text-destructive">
-                turn did not finish: {e.failure}
+              <p className="mt-1 text-[13px]">
+                <Status tone="danger">turn did not finish: {e.failure}</Status>
               </p>
             )}
           </div>

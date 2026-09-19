@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft, CircleSlash } from "lucide-react";
+import { ArrowRightLeft, CircleSlash } from "lucide-react";
 import type { Entry, Model, ProviderId } from "@/lib/chat-types";
 import { providerStyle, formatTokens, formatUsd, clockTime } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Markdown } from "./markdown";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusIcon } from "@/components/ui/status";
 
 /* The owner's messages sit right, as a bubble. Agent output runs down the
    centre as a reading column with no bubble at all — it is usually long, often
@@ -95,9 +96,9 @@ function AgentTurn({
           reading. The stop is the truer account, so it is the one shown. */}
       {failure && !stopped && (
         <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3.5 py-2.5">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <StatusIcon tone="danger" size="md" className="mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium text-destructive">Turn did not finish</p>
+            <p className="font-medium text-destructive-text">Turn did not finish</p>
             <p className="mt-0.5 text-muted-foreground">{failure}</p>
             {/* Only when there is something above to mean. A turn that broke
                 before producing anything used to be told its output had been

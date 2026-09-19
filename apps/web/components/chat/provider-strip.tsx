@@ -5,6 +5,7 @@ import { Clock } from "lucide-react";
 import type { Headroom, Provider } from "@/lib/chat-types";
 import { providerStyle } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
+import { Status } from "@/components/ui/status";
 import {
   Tooltip,
   TooltipContent,
@@ -68,7 +69,7 @@ function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
   const chip = (
     <div
       className={`flex min-w-0 items-center gap-2.5 rounded-md px-3 py-1.5 ${
-        blocked || waiting ? "opacity-55" : ""
+        waiting ? "opacity-55" : ""
       }`}
     >
       <ProviderIcon
@@ -77,7 +78,13 @@ function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
       />
       <span className="text-sm font-medium">{provider.label}</span>
 
-      {blocked || waiting ? (
+      {/* Blocked needs a person to act, so it says so in colour, icon and word.
+          Waitable comes back on its own and stays quiet, like Offline. */}
+      {blocked ? (
+        <Status tone="warning" className="min-w-0 text-xs">
+          {provider.unavailableReason}
+        </Status>
+      ) : waiting ? (
         <span className="truncate text-xs text-muted-foreground">
           {provider.unavailableReason}
         </span>
