@@ -982,3 +982,22 @@ errors) missed AA. `destructive-text` fixes it, following the `-text` pattern of
 
 Rejected: an `icon` override prop; filled icons (outline is what the toasts already use, and reads better
 at 14px); a coloured dot alone; colouring conversation rows without a state to show.
+
+## D-041 — On light surfaces the provider colours are darkened, not dropped
+
+**2026-09-19, owner, choosing between three rendered options for L-29.** He took the recommendation.
+
+The provider colours missed AA badly on the four light surfaces (claude 2.3:1, agy 2.2:1, codex 1.4:1 against
+4.5:1 for text; measured on every light surface with its card and muted backgrounds). Three ways out were shown:
+a darker light-mode colour for the name and the mark (A), the name in plain text with a colour only on the mark
+(B), or leaving it (C). **A was chosen:** the same hue and chroma at a lower lightness, so a provider is still
+known by colour wherever it is now. claude becomes a burnt orange, codex a plain mid-grey and agy a deeper
+blue. Dark themes already passed and did not change.
+
+**Rejected:** B, because it takes colour out of the one place a reader looks to see who is talking; and C, which
+records that the baseline does not hold for light themes.
+
+**The smaller colours went with it:** `--capacity-out` and `--code-comment` in light, and two near-misses
+found while measuring (`--code-comment` in dark, `--code-type` in light). **The field outline was left alone**
+(G-39): reaching 3:1 needs the outline at about 48% strength instead of 16%, which is visibly heavier on every
+field, and fields already have a label and a focus ring that passes.
