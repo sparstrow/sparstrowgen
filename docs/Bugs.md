@@ -1008,43 +1008,45 @@ and the Machines link on [`install/page.tsx`](../apps/web/app/install/page.tsx).
 **Release note:** Buttons that take you somewhere else now behave the same way as every other
 button, including for keyboard and screen-reader users.
 
-## B-43 — Pairing a computer from a second account silently takes it from the first
+## B-43 — Pairing a computer from a second account silently took it from the first
 
 **Found:** 2026-09-20, after the owner clicked "Add computer" while signed in as
-`agent@sparstrow.com` on the computer already paired to his own account. **Open — the fix needs a
-decision.**
+`agent@sparstrow.com` on the computer already paired to his own account.
 
-`CLAUDE.md` describes this as "a refusal deletes it". Reading the code, there is no refusal, and
-that is the problem:
+`CLAUDE.md` describes this as "a refusal deletes it". Reading the code, there was no refusal, and
+that was the problem:
 
-1. The `sparstrowgen://` handler is registered on the owner's machine and points at his installed
-   daemon, so the link goes to the computer that is already paired.
-2. The daemon sends the credential it holds ([`pair.go:58`](../server/cmd/daemon/pair.go)) so the
+1. The `sparstrowgen://` handler points at the daemon that is already installed, so the link goes to
+   the computer that is already paired.
+2. That daemon offers the credential it holds ([`pair.go:58`](../server/cmd/daemon/pair.go)) so the
    server can recognise a computer it already knows.
-3. The server looks it up **scoped to the pairing's account**
-   ([`machines.go:109`](../server/internal/store/machines.go),
-   `ApprovedMachineForUserCredential`). His credential belongs to a different account, so it finds
-   nothing — and falls straight through to `CreateMachine` for the *new* account, issuing a fresh
-   credential.
+3. The server looked it up **scoped to the pairing's account**
+   (`ApprovedMachineForUserCredential`). A credential belonging to a different account found
+   nothing, and fell through to `CreateMachine` for the *new* account with a fresh credential.
 4. On approval, `promotePending` renames the pending file over `machine-credential`
    ([`endpoints.go:124`](../server/cmd/daemon/endpoints.go)), "replacing any earlier one".
 
-The computer is then the second account's, and the first account has silently lost it. Nothing warns
-anybody, at any step. It did not fire this time only because the browser never launched the handler —
-which is its own unexplained problem, not a safeguard.
+The computer became the second account's, and the first account silently lost it, with nothing
+warning anybody at any step. It did not fire this time only because the browser never launched the
+handler — which is its own unexplained problem ([`KnownGaps.md`](KnownGaps.md) G-40), not a safeguard.
 
-**Recommendation:** refuse. When a claim presents a credential that is an approved machine for a
-*different* account, answer with a distinct error and say so in the browser — "this computer is
-already connected to another account; disconnect it there first". Re-homing a computer is a real
-thing to want, but it should be a deliberate act, not the side effect of clicking Add computer in the
-wrong tab. The alternative is a confirmation step, which is worse: the person clicking is in the
-second account and cannot see what the first account is about to lose.
+**Fixed** in [`store/machines.go`](../server/internal/store/machines.go): a claim presenting a
+credential that is a live, approved machine of a *different* account is refused with
+`ErrMachineBelongsToAnotherAccount`, which the API returns as 409 with an explanation. 409 and not
+403 deliberately — the daemon treats 403 as "this credential is dead" and deletes it, which would
+lose the pairing the refusal exists to protect.
 
-**Why it stays open:** refuse versus confirm is the owner's call, and it changes what the Machines
-screen has to say.
+**A revoked machine still finds nothing**, so disconnecting a computer and pairing it again — the
+legitimate reason a daemon holds a credential the server will not honour — keeps working.
+`TestAComputerCanBePairedAgainAfterItIsDisconnected` covers that, and
+`TestAddingAComputerThatIsAlreadyConnectedChangesNothing` now asserts the refusal.
 
-**Release note (when fixed):** Connecting a computer that already belongs to another account is
-refused with an explanation, instead of quietly moving it.
+**An existing test asserted the old behaviour** and was rewritten rather than deleted. Its reasoning
+was that the second account gets a new machine and so never reaches the owner's computer — true on
+the server, and it misses what the daemon then does on the computer. The comment now records both.
+
+**Release note:** Connecting a computer that already belongs to another account is refused with an
+explanation, instead of quietly moving it off the account that had it.
 
 ## B-44 — The "check now / update now" API test raced on one websocket connection
 **Found:** 2026-09-20, adding pull-request CI (the Go suite under `-race` on Linux)   **Status:** fixed 2026-09-20 (#51)
@@ -1052,3 +1054,24 @@ refused with an explanation, instead of quietly moving it.
 **Expected / Actual:** The test passes / the race detector fails it: the goroutine answering the server and the test body both wrote to the same websocket connection, and gorilla/websocket allows one writer at a time.
 **Fix:** The test's writes now go through one mutex. The CI `server` job runs the whole suite under `-race` against a real Postgres and passes. Only the test was wrong; the server writes each connection from one goroutine.
 **Release note:** None — test-only, nothing a user sees.
+
+## B-45 — An offline computer left an empty bar across the top of the conversation
+
+**Found:** 2026-09-20, verifying the status vocabulary on production (U-21) with the agent's test
+computer stopped.
+
+A computer that is not connected reports no providers, so `ProviderStrip` rendered its container
+with nothing in it: a 17px band with a bottom border, sitting between the header and the transcript.
+A line across the screen that says nothing, and it appeared exactly when the screen was already
+carrying two other messages about the same fact.
+
+Measured rather than guessed: with the daemon stopped, the element after the header was
+`flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2`, 17px tall, with zero children, and
+`GET /api/providers` returned an empty list.
+
+**Fixed** in [`provider-strip.tsx`](../apps/web/components/chat/provider-strip.tsx): the strip
+returns nothing when there are no providers. The header already says the computer is offline and the
+composer's amber notice says what that means, so nothing is lost.
+
+**Release note:** When your computer is offline, the conversation no longer shows an empty bar where
+the agent list used to be.
