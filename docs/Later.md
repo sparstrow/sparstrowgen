@@ -449,3 +449,38 @@ existing `progress` and `danger` tones, but it needs the server to expose it per
 `Capabilities.md` to say whether it can be delivered, so it is a feature to spec, not a styling change.
 
 **Unblocks when:** he wants to see at a glance which conversations are busy or broken.
+
+## L-32 — Two accounts sharing one computer
+
+**Status:** question **Raised:** 2026-09-20, owner: "can multiple account use same machine, but
+everything else is separate?"
+
+**Several accounts are already allowed.** Migration 00008 added
+`CREATE UNIQUE INDEX users_only_one ON users ((true))` so a deployment had exactly one account, and
+migration 00009 dropped it again when accounts came to own their work. Production carries at least
+two today: the owner's, and `agent@sparstrow.com`.
+
+**And the separation is real.** Conversations carry `user_id`, appearance lives on the `users` row,
+machines carry `user_id`, and four tests in `server/internal/api/isolation_test.go` prove a second
+account cannot read the owner's conversations, hear his events, stop his turn, or use his computer's
+credential.
+
+**What is NOT shared is the computer.** A machine credential belongs to one account: the daemon keeps
+one credential file per `SPARSTROWGEN_HOME`, and `sockets.go` refuses a credential presented for a
+different account. So a second account on the same physical computer needs its **own daemon install
+with its own `SPARSTROWGEN_HOME`** — which already works, and is how the agent's test computer is
+meant to run beside the owner's (CLAUDE.md). What does not exist, and would be the expensive version,
+is one daemon serving several accounts: multiple credentials, routing per account, a folder scope per
+account.
+
+**The part that is not a schema problem.** Both daemons run as the same Windows user with the same
+filesystem rights, so the second account's agents can read the first account's folders and
+repositories. The isolation is in the database, not on the computer. Any answer here has to say what
+a shared computer is allowed to see, or the separation is only on paper.
+
+**Recommendation:** nothing to build. One daemon install per account works now. Revisit only if
+running two daemons becomes a nuisance, or if a second account should be unable to see the first
+account's files — which is an operating-system question (a second Windows user), not a sparstrowgen
+one.
+
+**Unblocks when:** two daemons on one computer prove annoying enough to be worth a protocol change.
