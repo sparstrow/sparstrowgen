@@ -1045,3 +1045,10 @@ screen has to say.
 
 **Release note (when fixed):** Connecting a computer that already belongs to another account is
 refused with an explanation, instead of quietly moving it.
+
+## B-44 — The "check now / update now" API test raced on one websocket connection
+**Found:** 2026-09-20, adding pull-request CI (the Go suite under `-race` on Linux)   **Status:** fixed 2026-09-20 (#51)
+**Repro:** `go test ./internal/api -race -run TestCheckNowAndUpdateNowAreAnsweredByTheComputer` on a machine with a C compiler.
+**Expected / Actual:** The test passes / the race detector fails it: the goroutine answering the server and the test body both wrote to the same websocket connection, and gorilla/websocket allows one writer at a time.
+**Fix:** The test's writes now go through one mutex. The CI `server` job runs the whole suite under `-race` against a real Postgres and passes. Only the test was wrong; the server writes each connection from one goroutine.
+**Release note:** None — test-only, nothing a user sees.
