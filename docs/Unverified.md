@@ -355,3 +355,30 @@ seen: any of the real screens above, the failed-turn and folder-picker notices, 
 **From:** D-041 and B-39, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the testing account in the Browser pane
 **How:** Sign in, choose a light theme (Mono, Paper, Slate and Soft), and open a conversation that has had a claude, a codex and an agy turn. Passing: the agent name above each reply, the provider strip marks, the switch notice and the conversation list are readable, each provider is still told apart by colour, a code block's comments and types are readable, and a blocked usage window's text is a deeper red. Dark themes look as they did.
 **Status:** open. Seen 2026-09-19: the new values read back from the running app's stylesheet in light and dark, and the contrast table for all eight themes. The screens above need a signed-in session.
+
+## U-23 — The chat surface works at phone width, and on a desktop inside the new shell
+
+**Who can run it:** the owner, because it needs a signed-in session and this agent never
+types a password or creates an account (`CLAUDE.md`, the testing account).
+
+Everything else in the new shell was verified in a browser at 1280 and 375 — the rail and its
+pin, the pane, the 56px header, the bottom tray, list-then-detail and the back arrow on
+Machines and Settings, no horizontal overflow, and a clean production build. Chat could not
+be: `/` shows the sign-in screen until a session exists, so `ChatSurface` never rendered.
+
+**The step.** The dev stack for this worktree is already running (`scripts\dev.ps1`, server on
+:8082, web on :3002, database on :5435). Open `http://localhost:3002`, create the account it
+asks for, and open the confirmation link the server log prints:
+`Select-String -Path "$env:TEMP\sg-server.log" -Pattern 'http.*token='`. Then check, at a
+phone width and at a desktop width:
+
+| | |
+|---|---|
+| Phone, `/` | The conversation list fills the screen with the tray under it, and nothing is opened for you |
+| Phone, a conversation | It fills the screen, the tray is gone, the back arrow returns to the list, and the composer sits on the bottom edge with nothing under it |
+| Phone, the header | Title and folder fit on one line; the Rendered/Raw toggle and the token count are not shown |
+| Desktop, `/` | Rail, conversations, transcript side by side, and the first conversation opens by itself |
+| Desktop, the header | Title, folder, Rendered/Raw, tokens and the live status all on the 56px line |
+| Either, the live status | It says the computer's name and "online" while the daemon is up, and "Reconnecting…" if the server is stopped |
+
+**Closes** [`KnownGaps.md`](KnownGaps.md) G-21 when the phone rows pass.

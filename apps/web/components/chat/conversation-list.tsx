@@ -231,21 +231,10 @@ export function ConversationList({
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-r bg-card">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
-        <h2 className="text-sm font-medium">Conversations</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          onClick={onCreate}
-          aria-label="New conversation"
-        >
-          <Plus className="size-4" />
-        </Button>
-      </div>
-
-      <div className="shrink-0 px-3 pb-2">
+    /* No wrapper of its own any more: the shell's pane is the surface, and its
+       header carries the title and the New conversation button (D-042). */
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-3 pt-2 pb-2">
         <div className="flex items-center gap-2 rounded-md border bg-background px-2.5 focus-within:ring-2 focus-within:ring-ring">
           <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <input
@@ -377,6 +366,6 @@ export function ConversationList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </aside>
+    </div>
   );
 }

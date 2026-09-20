@@ -1060,3 +1060,27 @@ This replaces the drawer the first prototype used, and it is the phone layout Kn
 it would both crowd the transcript and sit a few pixels from Send. It is hidden there and the back arrow is the
 way out — which is what every phone messaging app does. Machines and Settings keep the tray in their detail,
 because nothing competes for that edge.
+
+## D-045 — The live status is two facts, and the shell owns the one socket
+
+**2026-09-19, wiring the shell.** The header's status had to work on every page, not only Chat, and
+that forced two changes worth recording.
+
+**The socket moved to the shell.** `connect` opens a WebSocket per call, and `useRealtime` was
+mounted by `ChatSurface` and again by `UpdatesSurface` — two sockets whenever Updates was open.
+`AppShell` now mounts it exactly once and every surface reads the cache it patches.
+
+**"Can the computer be reached" is server state, so it lives in the Query cache** under `["daemon"]`,
+not in Zustand. It was `useState` inside `ChatSurface`, which is why no other page could show it.
+Mirroring it into a store would have been the thing AGENTS.md §3 forbids outright.
+
+**The browser's own connection is a separate fact from the computer's.** They are reported
+separately (`serverConnected`, `online`) and the header says different words for each: while our
+socket is down we are being told nothing, so "Reconnecting…" is the only honest word — claiming a
+computer is online then would be a lie the app has no way to notice. This answers the question the
+prototype raised about what "live" means.
+
+**With more than one computer the status counts rather than names.** The server reports one "a
+computer is reachable" fact for the account, not one per machine, so naming the first would be a
+guess about which one it meant. One computer is named; several are counted from the machines list.
+Still open for the owner if he wants it tied to the open conversation's computer instead.

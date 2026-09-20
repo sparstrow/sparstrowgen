@@ -105,6 +105,50 @@ export const useChatView = create<ChatView>((set, get) => ({
    re-renders when the value it actually reads changes. Returning a fresh object
    from a selector re-renders on every store write, which is the standard way
    this pattern goes wrong. */
+/* -------------------------------------------------------------------------
+   The shell.
+
+   Whether the navigation rail is held open. It is a choice about one window,
+   not about the account (docs/Decisions.md D-043), so it is remembered in this
+   browser and never sent anywhere: no column, no endpoint. Reading
+   localStorage is wrapped because it throws outright in a browser with site
+   data blocked, and a pin nobody can save is not worth a blank screen. */
+
+const RAIL_PIN_KEY = "sparstrowgen.rail-pinned";
+
+function readPinned(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(RAIL_PIN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+type ShellView = {
+  railPinned: boolean;
+  toggleRailPin: () => void;
+  /** Called once on mount, because the server renders with the rail closed and
+   *  only the browser can know better. */
+  loadRailPin: () => void;
+};
+
+export const useShellView = create<ShellView>((set, get) => ({
+  railPinned: false,
+  toggleRailPin: () => {
+    const next = !get().railPinned;
+    set({ railPinned: next });
+    try {
+      window.localStorage.setItem(RAIL_PIN_KEY, next ? "1" : "0");
+    } catch {
+      // Blocked site data: the pin still works for this visit.
+    }
+  },
+  loadRailPin: () => set({ railPinned: readPinned() }),
+}));
+
+/* ---------------------------------------------------------------------- */
+
 export const selectSelectedId = (s: ChatView) => s.selectedId;
 export const selectPending = (s: ChatView) => s.pending;
 export const selectInFlight = (s: ChatView) => s.inFlight;

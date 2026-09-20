@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, MonitorSmartphone, PlugZap, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Machine } from "@/lib/chat-types";
-import { useRealtime } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,9 +18,8 @@ const machineKey = ["machines"] as const;
 
 export function UpdatesSurface() {
   // Waiting, installing and reconnecting happen on the computer and arrive as
-  // machines events, so this page listens like Chat does.
-  const ignoreDaemon = useCallback(() => {}, []);
-  useRealtime(ignoreDaemon);
+  // machines events. The shell holds the one socket for every page now, so
+  // this page only has to read the cache those events patch.
   const query = useQuery({ queryKey: machineKey, queryFn: () => api.machines() });
   return <SettingsShell current="updates">
     <SettingsPage title="Updates" description="Control automatic updates for sparstrowgen on each of your computers, or check for a new version manually.">

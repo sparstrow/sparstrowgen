@@ -26,7 +26,7 @@ export default function InstallPage() {
         </li>
         <li>When it says sparstrowgen is installed, come back to Machines and choose Add computer.</li>
       </ol>
-      <Button className="mt-6 w-fit" variant="outline" render={<Link href="/machines" />}>
+      <Button className="mt-6 w-fit" variant="outline" nativeButton={false} render={<Link href="/machines" />}>
         Back to Machines
       </Button>
     </main>
