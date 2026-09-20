@@ -377,3 +377,18 @@ rather than a stale guess.
 nothing. It now reads "No computer".
 
 This closes [`KnownGaps.md`](KnownGaps.md) G-21.
+
+## U-24 — The design system artifact still describes the old shell
+
+**From:** the shell wiring (#48), 2026-09-19 · **Who can run it:** agent
+**Status:** open — **known drift, recorded rather than fixed**, per CLAUDE.md's design rules.
+
+`apps/web` gained `components/shell/` — `Rail`, `SectionTray`, `AppShell`, `AppHeader`, `PaneHeader`
+and `LiveStatus` — and lost `components/ui/sidebar.tsx` and `components/product-sidebar.tsx`. The
+[artifact](https://claude.ai/artifact/Lyougp9xy958FaBcXWQFyS) still documents the shadcn `Sidebar`
+as the app's navigation and knows nothing about the rail, the pin, the pane or the bottom tray.
+
+**The step:** add a Shell section to the artifact covering those five components — their props, the
+60/224/212/56 measurements, the 768px breakpoint, and the phone's list-then-detail behaviour — and
+delete `Sidebar` from it, noting that its `--sidebar-*` tokens were never defined in this app. Also
+add `--pane` if the pane's `bg-muted/40` is ever tuned into a token of its own.
