@@ -1047,3 +1047,31 @@ the server, and it misses what the daemon then does on the computer. The comment
 
 **Release note:** Connecting a computer that already belongs to another account is refused with an
 explanation, instead of quietly moving it off the account that had it.
+
+## B-44 — The "check now / update now" API test raced on one websocket connection
+**Found:** 2026-09-20, adding pull-request CI (the Go suite under `-race` on Linux)   **Status:** fixed 2026-09-20 (#51)
+**Repro:** `go test ./internal/api -race -run TestCheckNowAndUpdateNowAreAnsweredByTheComputer` on a machine with a C compiler.
+**Expected / Actual:** The test passes / the race detector fails it: the goroutine answering the server and the test body both wrote to the same websocket connection, and gorilla/websocket allows one writer at a time.
+**Fix:** The test's writes now go through one mutex. The CI `server` job runs the whole suite under `-race` against a real Postgres and passes. Only the test was wrong; the server writes each connection from one goroutine.
+**Release note:** None — test-only, nothing a user sees.
+
+## B-45 — An offline computer left an empty bar across the top of the conversation
+
+**Found:** 2026-09-20, verifying the status vocabulary on production (U-21) with the agent's test
+computer stopped.
+
+A computer that is not connected reports no providers, so `ProviderStrip` rendered its container
+with nothing in it: a 17px band with a bottom border, sitting between the header and the transcript.
+A line across the screen that says nothing, and it appeared exactly when the screen was already
+carrying two other messages about the same fact.
+
+Measured rather than guessed: with the daemon stopped, the element after the header was
+`flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2`, 17px tall, with zero children, and
+`GET /api/providers` returned an empty list.
+
+**Fixed** in [`provider-strip.tsx`](../apps/web/components/chat/provider-strip.tsx): the strip
+returns nothing when there are no providers. The header already says the computer is offline and the
+composer's amber notice says what that means, so nothing is lost.
+
+**Release note:** When your computer is offline, the conversation no longer shows an empty bar where
+the agent list used to be.
