@@ -1007,3 +1007,41 @@ and the Machines link on [`install/page.tsx`](../apps/web/app/install/page.tsx).
 
 **Release note:** Buttons that take you somewhere else now behave the same way as every other
 button, including for keyboard and screen-reader users.
+
+## B-43 — Pairing a computer from a second account silently takes it from the first
+
+**Found:** 2026-09-20, after the owner clicked "Add computer" while signed in as
+`agent@sparstrow.com` on the computer already paired to his own account. **Open — the fix needs a
+decision.**
+
+`CLAUDE.md` describes this as "a refusal deletes it". Reading the code, there is no refusal, and
+that is the problem:
+
+1. The `sparstrowgen://` handler is registered on the owner's machine and points at his installed
+   daemon, so the link goes to the computer that is already paired.
+2. The daemon sends the credential it holds ([`pair.go:58`](../server/cmd/daemon/pair.go)) so the
+   server can recognise a computer it already knows.
+3. The server looks it up **scoped to the pairing's account**
+   ([`machines.go:109`](../server/internal/store/machines.go),
+   `ApprovedMachineForUserCredential`). His credential belongs to a different account, so it finds
+   nothing — and falls straight through to `CreateMachine` for the *new* account, issuing a fresh
+   credential.
+4. On approval, `promotePending` renames the pending file over `machine-credential`
+   ([`endpoints.go:124`](../server/cmd/daemon/endpoints.go)), "replacing any earlier one".
+
+The computer is then the second account's, and the first account has silently lost it. Nothing warns
+anybody, at any step. It did not fire this time only because the browser never launched the handler —
+which is its own unexplained problem, not a safeguard.
+
+**Recommendation:** refuse. When a claim presents a credential that is an approved machine for a
+*different* account, answer with a distinct error and say so in the browser — "this computer is
+already connected to another account; disconnect it there first". Re-homing a computer is a real
+thing to want, but it should be a deliberate act, not the side effect of clicking Add computer in the
+wrong tab. The alternative is a confirmation step, which is worse: the person clicking is in the
+second account and cannot see what the first account is about to lose.
+
+**Why it stays open:** refuse versus confirm is the owner's call, and it changes what the Machines
+screen has to say.
+
+**Release note (when fixed):** Connecting a computer that already belongs to another account is
+refused with an explanation, instead of quietly moving it.
