@@ -1084,3 +1084,40 @@ prototype raised about what "live" means.
 computer is reachable" fact for the account, not one per machine, so naming the first would be a
 guess about which one it meant. One computer is named; several are counted from the machines list.
 Still open for the owner if he wants it tied to the open conversation's computer instead.
+
+## D-046 — First-run setup is one list of steps rendered twice, and "install" is not one of them
+
+**2026-09-20, from the owner's choice between four directions**
+([shots](design/shots/2026-09-20-first-run-setup/README.md)).
+
+He picked two of the four and said why: **A** — a dedicated full-screen wizard — "is what we want
+when a new account is being setup, we would add lot more steps like adding workspace, account
+details etc", and **B** — a card inside the running app — "is needed when there is some of the
+setup in the wizard is skipped or the app is being quit in between".
+
+**They are one thing rendered two ways, not two features.** A is the full-screen rendering of the
+setup steps and B is the compact one. Both read the same `useSetupSteps()` hook and neither decides
+for itself what is outstanding. Two surfaces each computing "what is left" independently is how a
+checklist ends up claiming a step is undone after the wizard completed it — and with more steps
+coming, the number of ways they can disagree grows with every step added.
+
+**Install is a branch inside Connect, not a step of its own.** The chosen image showed "1 Install"
+already ticked. Nothing had checked it and nothing can: the daemon dials out only, so the sole way
+to learn whether the component is present is to open the `sparstrowgen://` link and see whether
+anything claims the pairing within eight seconds (`Capabilities.md`). A tick there asserts something
+we have no way to know, and an unanswered link still cannot be told apart from a slow or blocked one
+(`KnownGaps.md` G-40). So the steps are what the person does, and install help is what Connect shows
+when nothing answers.
+
+**Progress is derived today and account state later, behind one hook.** The only step that exists
+now is connecting a computer, and "has this account got one" is already in the machines list — so
+nothing new is stored, and Skip sets a per-browser flag like the rail pin (D-043). That per-browser
+choice is right *for this step*, because the daemon runs on the computer the browser is on and the
+same question on a phone is a genuinely different one. It stops being right the moment a step is an
+account fact — naming a workspace is not something to re-answer per browser. Putting both behind
+`useSetupSteps()` means that move changes the hook and neither surface.
+
+**Rejected:** C, sign-in opening the existing Machines section with pairing already running, which
+would have cost almost nothing because every piece of it is built. It has nowhere to put a second
+step. **Rejected:** D, a Bluetooth-style discovery list — a list implies more rows may arrive, and
+only one computer can ever appear, the one the browser is running on.

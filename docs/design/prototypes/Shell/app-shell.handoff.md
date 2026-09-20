@@ -118,6 +118,77 @@ Everything here was decided by the prototype and approved by nobody.
 - **OQ5:** the Chat pane's "New conversation" button is a plus in the header. The kit's convention is a header action; the
   app today has a labelled button in the conversation list.
 
+---
+
+# First-run setup — added 2026-09-20
+
+| | |
+|---|---|
+| **Provenance** | Approved spec US2, [`2026-09-12-first-usable-release.md`](../../../specs/2026-09-12-first-usable-release.md) — the unbuilt half. Directions from [`shots/2026-09-20-first-run-setup/`](../../shots/2026-09-20-first-run-setup/README.md); the owner chose **A and B together** and said why (D-046). |
+| **Mode** | build |
+| **Status** | draft — waiting for the owner to react |
+| **Reach it** | `?setup=idle` (and `waiting`, `unanswered`, `approval`, `ready`, `loading`, `error`); `?resume=1` for the in-app card; `?future=1` to see where later steps would sit |
+
+Built into this same prototype rather than a new file, at the owner's request
+("if I ask more to build you can start adding on same app-shell.dc, that will save lot of time and
+token"). The wizard replaces the whole frame; the resume card lives inside it.
+
+## Component mapping
+
+| Prototype element | Use | Notes |
+|---|---|---|
+| `.setup` full-screen wizard | **NEW `SetupWizard`** on a route of its own (`/setup`) | No rail, no pane, no tray: there is nowhere else to be during first-run setup. |
+| `.steps` stepper | **NEW `Stepper`** | Nothing in the design system covers it. Built from the step list so adding a step is a data change. |
+| `.setupcard` in the Chat pane | **NEW `SetupCard`** in `components/shell/` | The compact rendering of the same list. It reopens the wizard; it never carries its own copy of a step. |
+| The step list itself | **NEW `useSetupSteps()`** in `lib/queries.ts` | The single source both read (D-046). Derived from `useMachines()` today; server-backed when a step becomes an account fact. |
+| Connect card, in all six states | existing `Status` (`progress`, `warning`, `success`, `danger`), `Button` | Same vocabulary as everywhere else (D-040). |
+| Install help | existing `/install` page | Reached from "I have not installed it yet" and from the unanswered state. |
+
+## States
+
+| State | What it is | How it is reached |
+|---|---|---|
+| `idle` | Before anything is launched. Explains what connecting does. | Arriving at setup, or "Not now" from approval |
+| `waiting` | The link was opened; polling for a claim | "Connect this computer" |
+| `unanswered` | Eight seconds with no claim. Retry **and** install help, never "it is absent" | the timer (2.6s here, so the branch can be watched) |
+| `approval` | The computer answered. Names it, its version and the agents found | the poll seeing `claimed` |
+| `ready` | Connected. The only state with no Skip row | "Approve computer" |
+| `loading` | Checking the account before offering anything | first paint |
+| `error` | The pairing request could not be created at all | a failed `POST /api/machines/pairings` |
+
+## Invented — not in the spec, not approved
+
+- **The wizard's copy.** Every sentence on it.
+- **"Step n of m" in the top bar** as well as the stepper. Two renderings of the same fact; drop one
+  if it reads as noise.
+- **The `?future=1` steps** ("Workspace", "Profile"), shown dashed and labelled *(later)*. They exist
+  only to show the owner that the shape takes more steps. **They are out of scope for this release**
+  (first-usable-release, Out of scope: "Multiple workspaces, workspace invitations and workspace
+  management") and must not be built.
+- **"See this computer"** on the ready step, going to the Machines profile.
+- **The dismiss (×) on the resume card.** Nothing says a person may hide it; if they can, whether it
+  comes back on the next sign-in is undecided.
+- **The calm (non-amber) notice** for "no computer yet". Not having connected one is a step not
+  taken, not a fault, so it does not get the colour that means "attention needed".
+
+## Open questions
+
+- **OQ6 — does the wizard run for an invited person who already has a computer?** It is reached when
+  the account has none. Somebody who paired on another browser has one, so they would never see it.
+  Believed right; not confirmed.
+- **OQ7 — does Skip ever expire?** The resume card currently stays until setup is finished or the ×
+  is pressed. Nothing says whether a dismissed card should return.
+- **OQ8 — what does the wizard do on a second computer?** Today it is first-run only; "Add computer"
+  in Machines stays the way to add another. Worth confirming that is what he wants.
+
+## Deliberately absent
+
+- **A refused pairing** — the computer belongs to another account. The browser cannot currently tell
+  that apart from one that never answered ([`KnownGaps.md`](../../../KnownGaps.md) G-40), so drawing
+  it would be designing a state the backend cannot serve. It needs the refusal recorded against the
+  pairing first.
+- **Install detection.** There is none and cannot be one: the daemon dials out only.
+
 ## Not included
 
 - The kit's theme toggle in the header: appearance is per account and changes in Settings.
@@ -154,3 +225,29 @@ Re-run the same day after the pin and the bottom tray were added.
 | Console errors | none |
 
 Not checked: real hover on touch devices, real screen readers, and any behaviour on real data (nothing here calls the API).
+
+### First-run setup — verified 2026-09-20
+
+Run against `http://localhost:4181/Shell/app-shell.dc.html` (the `proto` launch config, added in
+this change so the next session does not have to rebuild it).
+
+| Checked | Result |
+|---|---|
+| All seven setup states render their own heading, body, tone and buttons | pass — read from the DOM, not eyeballed |
+| Each state in light **and** dark, at 390 wide | pass — 14/14, no horizontal overflow in any |
+| `waiting` → `unanswered` on the timer | pass |
+| `unanswered` → "Try again" → `waiting` → `unanswered` again | pass |
+| Skip leaves the app with the resume card, in Chat | pass |
+| The resume card reopens the wizard rather than duplicating its steps | pass |
+| Approve → ready → "Start your first conversation" clears the card and the notice | pass |
+| `?future=1` numbers correctly (Connect becomes "Step 4 of 5") | pass |
+| Console | clean, no messages |
+
+**Two bugs this found and fixed, both in the existing shell rather than the new work:**
+
+- The composer said "Your machine is unreachable" after a skip, when the account has no computer at
+  all — the same wrong sentence as [`Bugs.md`](../../../Bugs.md) B-46, which was found independently
+  in `apps/web` the same day. Both now say nothing is connected yet.
+- The provider strip rendered its empty container in that state. It is hidden, matching B-45.
+
+**Not verified:** nothing here has been seen by the owner, and none of it exists in `apps/web` yet.
