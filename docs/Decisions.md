@@ -1016,3 +1016,47 @@ Rejected: B, one labelled sidebar with the section nested inside it, which gives
 kit; and C, a pane only where a section already has a list, which is the smallest change but leaves every new
 section to decide for itself whether it gets one. The shots and the reasoning are in
 `docs/design/shots/2026-09-19-app-shell/`.
+
+## D-043 — The rail can be pinned open, and it stays pinned
+
+**2026-09-19, owner, asked what happens to the shell when it grows past three destinations.** He said he wanted
+the pin: "I like the pin that you suggested".
+
+The rail shows labels on hover only, which is fine for three icons and is what the kit does. It stops being fine
+at six or seven — agents, schedules and pipelines are coming (L-30, and the destinations in
+`specs/2026-09-12-product-destinations-and-settings.md`), and a column of unlabelled glyphs becomes a memory
+test. A pin in the rail's header holds it open at 224px with the words showing, remembered per account, closed
+by default. Pinned pushes the content across; hovering still overlays and shifts nothing.
+
+**Remembered per browser, not per account.** It is view state, so Zustand owns it and it persists in
+`localStorage` — no column, no endpoint, no migration. Per account was the first instinct and is worse: the
+preference would follow him to his phone, where there is no rail to pin. Appearance stays per account because a
+theme is a choice about the product; this is a choice about one window.
+
+It also answers the touch problem the prototype raised, since hover does nothing on a tablet: pin once and the
+labels are simply always there.
+
+**Growth goes into the rail, not somewhere else.** A bottom bar was considered and rejected for the desktop: the
+convention caps at five before the rest goes behind "More", which is the opposite of what growth needs; the
+bottom edge of a desktop window is the far corner rather than where a thumb already rests; and Chat's composer
+lives there. The rail is the kit's own answer — its app carries about ten destinations this way. When the
+fourth destination lands, the rail gets a hairline between the things that run and the things you set up.
+
+## D-044 — On a phone the sections move to a bottom tray, and the pane becomes the first screen
+
+**2026-09-19, owner.** "I would like the bottom tray for the phone view with the left side bar which will hold
+the conversations, list of machine, list of settings... the main menu will be in the bottom tray and the second
+menu will become the main menu in phone view."
+
+Under 768px the rail disappears and its three sections become a bottom tray. The pane — conversations, computers,
+settings pages — stops being a side panel and becomes the screen you land on, with its own 56px header carrying
+the section name, the live status and the section's one action. Choosing a row opens the detail (transcript,
+computer profile, settings page) with a back arrow to the list. So the phone has two levels where the desktop
+shows both at once, and nothing is hidden behind a hamburger.
+
+This replaces the drawer the first prototype used, and it is the phone layout KnownGaps G-21 was waiting for.
+
+**The tray steps aside in a conversation.** Chat's detail has the composer pinned to the bottom, so a tray under
+it would both crowd the transcript and sit a few pixels from Send. It is hidden there and the back arrow is the
+way out — which is what every phone messaging app does. Machines and Settings keep the tray in their detail,
+because nothing competes for that edge.

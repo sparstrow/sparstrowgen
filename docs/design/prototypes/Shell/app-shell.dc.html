@@ -25,7 +25,8 @@
   #app { width: 100%; height: 100%; container: app / inline-size; position: relative; background: var(--background); }
   #stage[data-width="narrow"] #app { width: 390px; border-inline: 1px solid var(--border); }
 
-  .shell { display: flex; height: 100%; overflow: hidden; }
+  .frame { display: flex; flex-direction: column; height: 100%; }
+  .shell { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   .ic { flex: none; }
   .mark { flex: none; }
 
@@ -48,7 +49,14 @@
   .rail .lbl { opacity: 0; transition: opacity .18s; white-space: nowrap; }
   .railwrap:hover .lbl, .railwrap:focus-within .lbl { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { .rail, .rail .lbl { transition: none; } }
-  .rail-h { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+  .rail-h { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 22px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+  .rail-h .wm { display: flex; align-items: center; gap: 12px; }
+  .pinbtn { opacity: 0; transition: opacity .18s; }
+  .railwrap:hover .pinbtn, .railwrap:focus-within .pinbtn { opacity: 1; }
+  #app[data-pinned="true"] .railwrap, #app[data-pinned="true"] .rail { width: 224px; }
+  #app[data-pinned="true"] .lbl, #app[data-pinned="true"] .pinbtn { opacity: 1; }
+  #app[data-pinned="true"] .pinbtn { background: var(--accent); color: var(--foreground); }
+  @media (prefers-reduced-motion: reduce) { .pinbtn { transition: none; } }
   .rail nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
   .navb { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 16px; border-radius: var(--r-sm); color: var(--muted-foreground); font-weight: 500; white-space: nowrap; }
   .navb:hover { background: color-mix(in oklab, var(--accent) 60%, transparent); }
@@ -60,6 +68,8 @@
   .pane { width: 212px; flex: none; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: color-mix(in oklab, var(--muted) 40%, var(--background)); }
   .pane-h, .head { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
   .pane-h { padding: 0 12px 0 16px; font-size: 13px; font-weight: 600; }
+  .pane-h .ph-r { display: flex; align-items: center; gap: 8px; }
+  .pane-live { display: none; font-size: 12px; font-weight: 400; }
   .iconbtn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--muted-foreground); flex: none; }
   .iconbtn:hover { background: var(--accent); color: var(--foreground); }
   .search { margin: 8px 8px 4px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--input); border-radius: var(--r-md); padding: 0 10px; background: var(--background); color: var(--muted-foreground); }
@@ -150,23 +160,30 @@
   .bigempty h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--foreground); }
   .bigempty p { margin: 0; }
 
-  /* Narrow: the rail and the pane become one drawer behind the menu button. */
+  /* Narrow: the sections move to a bottom tray, and the pane becomes the screen you land on.
+     Picking from it opens the detail; the back arrow returns. */
   .pane-col { display: contents; }
-  .drawer { display: none; }
+  .tray, .backbtn { display: none; }
   @container app (max-width: 767px) {
-    .railwrap, .pane-col { display: none; }
-    .menubtn { display: inline-flex; margin-left: -8px; }
+    .railwrap { display: none; }
     .vt, .tok { display: none; }
     .live .full { display: none; } .live .short { display: inline; }
+    .pane-live { display: inline-flex; }
     .head .r { gap: 8px; }
     .head { padding: 0 12px 0 16px; }
     .page { padding: 20px 16px; }
-    .drawer[data-open="true"] { display: flex; position: absolute; inset: 0; z-index: 40; }
-    .drawer .back { flex: 1; background: color-mix(in oklab, var(--foreground) 40%, transparent); }
-    .drawer .panel { order: -1; width: min(300px, 88%); display: flex; flex-direction: column; background: var(--background); border-right: 1px solid var(--border); min-height: 0; }
-    .drawer .tabs { display: flex; gap: 2px; padding: 8px; border-bottom: 1px solid var(--border); flex: none; }
-    .drawer .tabs .navb { padding: 8px 10px; justify-content: center; gap: 6px; font-size: 13px; }
-    .drawer .pane { width: 100%; flex: 1; border-right: 0; }
+    .pane { width: 100%; flex: 1; border-right: 0; }
+    .pane-col { display: none; }
+    .backbtn { display: inline-flex; margin-left: -8px; }
+    #app[data-mview="list"] .pane-col { display: flex; flex: 1; min-width: 0; min-height: 0; }
+    #app[data-mview="list"] .main { display: none; }
+    .tray { display: flex; flex: none; border-top: 1px solid var(--border); background: var(--background); }
+    .tray .tb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 7px 0 9px; color: var(--muted-foreground); font-size: 11px; line-height: 14px; font-weight: 500; }
+    .tray .tb:hover { color: var(--foreground); }
+    .tray .tb[aria-current="page"] { color: var(--foreground); }
+    /* Chat's detail has the composer at the bottom, so the tray steps out of its way. */
+    #app[data-mview="detail"][data-section="chat"] .tray { display: none; }
+    .composer { padding-bottom: 12px; }
   }
   .toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--foreground); color: var(--background); padding: 8px 14px; border-radius: var(--r-lg); font-size: 13px; z-index: 60; max-width: 90%; }
 </style>
@@ -186,8 +203,10 @@
     computer: pick(Q.get("computer"), ["online", "offline", "reconnecting"], "online"),
     theme: pick(Q.get("theme"), ["light", "dark"], "light"),
     width: pick(Q.get("width"), ["desktop", "narrow"], "desktop"),
+    pinned: Q.get("pin") === "1",
+    mview: "list",
     sel: { chat: "c1", machines: "m1", settings: "appearance" },
-    convs: D.conversations.slice(), archivedOpen: false, search: "", drawer: false, toast: "",
+    convs: D.conversations.slice(), archivedOpen: false, search: "", toast: "",
   };
   function pick(v, ok, d) { return ok.indexOf(v) > -1 ? v : d; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -221,7 +240,8 @@
     return NAV.map(function (n) { return '<button class="navb" data-act="section" data-v="' + n[0] + '"' + (S.section === n[0] ? ' aria-current="page"' : "") + ">" + I(n[1]) + '<span class="lbl">' + n[2] + "</span></button>"; }).join("");
   }
   function rail() {
-    return '<div class="railwrap"><aside class="rail" aria-label="Primary"><div class="rail-h"><span aria-hidden="true">s</span><span class="lbl">sparstrowgen</span></div><nav aria-label="Sections">' + railNav() +
+    return '<div class="railwrap"><aside class="rail" aria-label="Primary"><div class="rail-h"><span class="wm"><span aria-hidden="true">s</span><span class="lbl">sparstrowgen</span></span>' +
+      '<button class="iconbtn pinbtn" data-act="pin" aria-pressed="' + S.pinned + '" aria-label="' + (S.pinned ? "Let the menu collapse" : "Keep the menu open") + '">' + I("panel-left") + '</button></div><nav aria-label="Sections">' + railNav() +
       '</nav><div class="rail-f"><span class="avatar" aria-hidden="true">a</span><span class="lbl">' + esc(D.account.email) + "</span></div></aside></div>";
   }
 
@@ -232,8 +252,9 @@
     var sel = S.sel.chat === c.id;
     return '<button class="prow" data-act="pick" data-v="' + c.id + '"' + (sel ? ' aria-current="true"' : "") + ">" + M(c.provider) + '<span class="body"><span class="t' + (c.title ? "" : " untitled") + '">' + esc(c.title || "New conversation") + '</span><span class="m">' + esc(c.folder) + " · " + esc(c.updated) + "</span></span></button>";
   }
+  function paneHead(title, action) { return '<div class="pane-h"><span>' + title + '</span><span class="ph-r"><span class="pane-live">' + live() + "</span>" + action + "</span></div>"; }
   function panechat() {
-    var head = '<div class="pane-h"><span>Chat</span><button class="iconbtn" data-act="newchat" aria-label="New conversation">' + I("plus") + "</button></div>";
+    var head = paneHead("Chat", '<button class="iconbtn" data-act="newchat" aria-label="New conversation">' + I("plus") + "</button>");
     if (S.ui === "loading") return head + skelRows(6);
     if (S.ui === "error") return head + errPane("Conversations");
     if (S.ui === "empty") return head + '<div class="pempty">' + I("messages-square", 24) + "<div>No conversations yet. Start one and it will be saved here.</div>" + '<button class="btn primary" data-act="newchat">' + I("plus", 14) + "New conversation</button></div>";
@@ -246,7 +267,7 @@
     return head + '<div class="search">' + I("search", 14) + '<input class="q" type="search" placeholder="Search conversations" aria-label="Search conversations" value="' + esc(S.search) + '"></div><div class="plist" aria-label="Conversations">' + body + arch + "</div>";
   }
   function panemach() {
-    var head = '<div class="pane-h"><span>Machines</span><button class="iconbtn" data-act="fake" data-v="Add computer opens the pairing panel in the real app" aria-label="Add computer">' + I("plus") + "</button></div>";
+    var head = paneHead("Machines", '<button class="iconbtn" data-act="fake" data-v="Add computer opens the pairing panel in the real app" aria-label="Add computer">' + I("plus") + "</button>");
     if (S.ui === "loading") return head + skelRows(3);
     if (S.ui === "error") return head + errPane("Machines");
     if (S.ui === "empty") return head + '<div class="pempty">' + I("monitor-smartphone", 24) + "<div>No computers connected. Pair the computer where your coding agents are installed.</div>" + '<button class="btn primary" data-act="fake" data-v="Add computer opens the pairing panel in the real app">' + I("plus", 14) + "Add computer</button></div>";
@@ -256,7 +277,7 @@
     }).join("") + "</div>";
   }
   function paneset() {
-    return '<div class="pane-h"><span>Settings</span></div><div class="plist" aria-label="Settings pages">' + D.settings.map(function (g) {
+    return paneHead("Settings", "") + '<div class="plist" aria-label="Settings pages">' + D.settings.map(function (g) {
       return '<div class="glabel">' + g.group + "</div>" + g.pages.map(function (p) { return '<button class="prow" style="align-items:center" data-act="pick" data-v="' + p.id + '"' + (S.sel.settings === p.id ? ' aria-current="true"' : "") + '><span style="color:var(--muted-foreground)">' + I(p.icon, 16) + '</span><span class="body"><span class="t">' + p.label + "</span></span></button>"; }).join("");
     }).join("") + "</div>";
   }
@@ -306,10 +327,12 @@
     var chatHead = S.section === "chat" && S.ui === "populated", c = chatHead ? S.convs.concat(D.archived).filter(function (x) { return x.id === S.sel.chat; })[0] : null;
     var folder = c ? '<button class="folder" data-act="fake" data-v="Changing the folder opens the folder picker in the real app" title="' + esc(c.folder) + '">' + I("folder-open", 14) + "<span>" + esc(c.folder) + '</span><span class="pen">' + I("pencil", 12) + "</span></button>" : "";
     var extras = c ? '<span class="vt" role="group" aria-label="Transcript view"><button aria-pressed="true" data-act="fake" data-v="Raw shows the stored text in the real app">Rendered</button><button aria-pressed="false" data-act="fake" data-v="Raw shows the stored text in the real app">Raw</button></span><span class="tok">' + (c.spendUsd > 0 ? "$" + c.spendUsd.toFixed(2) + "<br>" : "") + (c.tokens >= 1000 ? (c.tokens / 1000).toFixed(1) + "k" : c.tokens) + " tokens</span>" : "";
-    return '<header class="head"><div class="l"><button class="iconbtn menubtn" data-act="drawer" aria-label="Open navigation">' + I("menu") + '</button><div class="tt"><h1>' + esc(t) + "</h1>" + folder + '</div></div><div class="r">' + extras + live() + "</div></header>";
+    return '<header class="head"><div class="l"><button class="iconbtn backbtn" data-act="back" aria-label="Back to ' + TITLES[S.section] + '">' + I("chevron-left") + '</button><div class="tt"><h1>' + esc(t) + "</h1>" + folder + '</div></div><div class="r">' + extras + live() + "</div></header>";
   }
-  function drawer() {
-    return '<div class="drawer" data-open="' + S.drawer + '"><div class="back" data-act="drawer"></div><div class="panel"><div class="tabs">' + railNav().replace(/class="lbl"/g, 'class="lbl" style="opacity:1"') + "</div>" + pane() + "</div></div>";
+  function tray() {
+    return '<nav class="tray" aria-label="Sections">' + NAV.map(function (n) {
+      return '<button class="tb" data-act="section" data-v="' + n[0] + '"' + (S.section === n[0] ? ' aria-current="page"' : "") + ">" + I(n[1], 20) + "<span>" + n[2] + "</span></button>";
+    }).join("") + "</nav>";
   }
 
   /* ---------------------------------------------------------------- render */
@@ -318,10 +341,13 @@
     document.getElementById("stage").setAttribute("data-width", S.width);
     var main = S.section === "chat" ? mainchat() : S.section === "machines" ? mainmach() : mainset();
     var app = document.getElementById("app"), keep = document.activeElement && document.activeElement.classList.contains("q");
-    app.innerHTML = '<div class="shell">' + rail() + '<div class="pane-col">' + pane() + '</div><div class="main">' + head() + main + "</div></div>" + drawer() + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
+    app.setAttribute("data-pinned", S.pinned);
+    app.setAttribute("data-section", S.section);
+    app.setAttribute("data-mview", S.mview);
+    app.innerHTML = '<div class="frame"><div class="shell">' + rail() + '<div class="pane-col">' + pane() + '</div><div class="main">' + head() + main + "</div></div>" + tray() + "</div>" + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
     if (keep) { var qs = [].slice.call(document.querySelectorAll(".q")).filter(function (x) { return x.offsetParent !== null; }); var q = qs[0]; if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
     renderBar();
-    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width });
+    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width, pin: S.pinned ? "1" : "0" });
     try { history.replaceState(null, "", "?" + u.toString()); } catch (e) {}
   }
   function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-ctl="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
@@ -336,17 +362,18 @@
     if (c) { S[c.dataset.ctl] = c.dataset.v; render(); return; }
     var b = e.target.closest("[data-act]"); if (!b) return;
     var a = b.dataset.act, v = b.dataset.v;
-    if (a === "section") { S.section = v; /* in the drawer, choosing a section keeps it open so a page can be picked from its list */ }
-    else if (a === "pick") { if (S.section === "chat") S.sel.chat = v; else if (S.section === "machines") S.sel.machines = v; else S.sel.settings = v; S.drawer = false; }
-    else if (a === "newchat") { var id = "n" + Date.now(); S.convs.unshift({ id: id, provider: "claude", model: "Opus 4.6", title: "", folder: "sparstrowgen", updated: "Just now" }); S.sel.chat = id; S.ui = "populated"; S.drawer = false; }
+    if (a === "section") { S.section = v; S.mview = "list"; }
+    else if (a === "pick") { if (S.section === "chat") S.sel.chat = v; else if (S.section === "machines") S.sel.machines = v; else S.sel.settings = v; S.mview = "detail"; }
+    else if (a === "newchat") { var id = "n" + Date.now(); S.convs.unshift({ id: id, provider: "claude", model: "Opus 4.6", title: "", folder: "sparstrowgen", updated: "Just now" }); S.sel.chat = id; S.ui = "populated"; S.mview = "detail"; }
     else if (a === "archived") S.archivedOpen = !S.archivedOpen;
     else if (a === "retry") S.ui = "populated";
-    else if (a === "drawer") S.drawer = !S.drawer;
+    else if (a === "back") S.mview = "list";
+    else if (a === "pin") S.pinned = !S.pinned;
     else if (a === "fake") { toast(v); return; }
     render();
   });
   document.addEventListener("input", function (e) { if (e.target.classList.contains("q")) { S.search = e.target.value; render(); } });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.drawer) { S.drawer = false; render(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.mview === "detail") { S.mview = "list"; render(); } });
   render();
 })();
 </script>

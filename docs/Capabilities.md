@@ -85,7 +85,7 @@ This is the hard ceiling on what a chat UI can show. We drive these CLIs; we don
 they report. Captured 2026-09-09 by running each with a trivial prompt and reading the real
 output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G-4.
 
-| | `claude` 2.1.90 | `codex` 0.154.0 | `agy` 1.2.0 |
+| | `claude` 2.1.278 | `codex` 0.154.0 | `agy` 1.2.0 |
 |---|---|---|---|
 | Non-interactive | `-p` *(verified)* | `codex exec` *(verified)* | `-p` *(verified)* |
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
@@ -97,7 +97,7 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 | Resume a session | `--resume <uuid>` *(verified flag)* | `codex exec resume <id>` *(verified flag)* | `--conversation <id>` *(verified flag)* |
 | We choose the session id | `--session-id <uuid>` *(verified flag)* | no | no |
 | Model override | `--model` *(verified)* | `-m` *(verified)* | `--model` *(verified)* |
-| List available models | **yes, on a new enough CLI** — a `list_models` **control request** over stream-json, no user message and nothing billed. Our 2.1.90 answers `Unsupported control request subtype` in ~2s; Multica has it working on 2.1.223+. Aliases resolve today by reading `model` back out of `system.init` | **no** — names scraped from the binary, configured one read from `~/.codex/config.toml`; an invalid model returns a 400 naming no alternatives, and the valid set is **account-dependent** (`"not supported when using Codex with a ChatGPT account"`) | `agy models` *(verified, returns id + label)* |
+| List available models | **yes, on a new enough CLI** — a `list_models` **control request** over stream-json, no user message and nothing billed. Our 2.1.278 answers `Unsupported control request subtype` in ~2s (not re-tested at 2.1.278); Multica has it working on 2.1.223+. Aliases resolve today by reading `model` back out of `system.init` | **no** — names scraped from the binary, configured one read from `~/.codex/config.toml`; an invalid model returns a 400 naming no alternatives, and the valid set is **account-dependent** (`"not supported when using Codex with a ChatGPT account"`) | `agy models` *(verified, returns id + label)* |
 | Model carries reasoning effort | not observed | `model_reasoning_effort` in config, separate from the model | **in the model id** *(verified — `gemini-3.1-pro-high` and `-low` are distinct models, not one model with a setting)* |
 | Messages per turn | **several** *(verified 2026-09-10 — one turn was four `assistant` events: thinking, prose, `tool_use`, answer. Only `text_delta` carries `.text`, so thinking and tool arguments cannot leak in)* | **several** *(verified — two `item.completed` `agent_message` items in one turn)* | **one** *(verified 2026-09-10 — `result.response` is a single authoritative string, byte-identical to the concatenated deltas)* |
 | Session is scoped to a directory | **yes** *(verified 2026-09-10 — `--resume <id>` from a different cwd answers `No conversation found with session ID`, and the turn fails in about a second. Moving a conversation's folder therefore has to drop the session)* | not tested | not tested |
@@ -178,7 +178,7 @@ the design from the first draft, not retrofitted when codex is wired up.
 
 Checked because nothing here covered attachments, and the answer decides what the feature *is*.
 
-| | `claude` 2.1.90 | `codex` 0.154.0 | `agy` 1.2.0 |
+| | `claude` 2.1.278 | `codex` 0.154.0 | `agy` 1.2.0 |
 |---|---|---|---|
 | A flag that attaches a file to the prompt | **no** — `--file` takes Claude's own file-API ids (`file_abc:doc.txt`), not local paths *(verified from `--help`)* | **`-i, --image <FILE>...`**, on `exec` **and** `exec resume` *(verified flag, images only)* | **no** — its `-i` is `--prompt-interactive`, unrelated *(verified from `--help`)* |
 | Reads a file from disk when the prompt names the path | assumed — its read tool handles images, not re-checked here (the token in the checking shell had expired) | **yes, including images** *(verified 2026-09-11 — a PNG containing "SECRET CODE: PELICAN-7429" and "count of rows: 314" was read from cwd and both values returned, with no attachment flag and no vision plumbing from us)* | **no — denied before it tries**, see [`Bugs.md`](Bugs.md) B-11 |
