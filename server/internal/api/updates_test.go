@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,6 +144,14 @@ func TestTurningAutomaticUpdatesOffIsKeptAndToldToTheComputer(t *testing.T) {
 func TestCheckNowAndUpdateNowAreAnsweredByTheComputer(t *testing.T) {
 	r := newRig(t)
 	id, conn, inbox := r.updatingComputer("DESKTOP-GJ8NLB8", currentDaemon)
+	// A websocket connection allows one writer at a time, and this test writes
+	// from the goroutine answering the server and again from the test itself.
+	var write sync.Mutex
+	send := func(m protocol.DaemonMessage) error {
+		write.Lock()
+		defer write.Unlock()
+		return conn.WriteJSON(m)
+	}
 	go func() {
 		for msg := range inbox {
 			var s protocol.UpdateStatus
@@ -154,7 +163,7 @@ func TestCheckNowAndUpdateNowAreAnsweredByTheComputer(t *testing.T) {
 			default:
 				continue
 			}
-			_ = conn.WriteJSON(protocol.DaemonMessage{Type: protocol.DaemonUpdateStatus, RequestID: msg.RequestID, Update: &s})
+			_ = send(protocol.DaemonMessage{Type: protocol.DaemonUpdateStatus, RequestID: msg.RequestID, Update: &s})
 		}
 	}()
 
@@ -182,7 +191,7 @@ func TestCheckNowAndUpdateNowAreAnsweredByTheComputer(t *testing.T) {
 	b := r.watch()
 	b.await("daemon", func(ev protocol.ClientEvent) bool { return ev.Type == protocol.EventDaemon })
 	current := protocol.UpdateStatus{Kind: protocol.UpdateCurrent}
-	if err := conn.WriteJSON(protocol.DaemonMessage{Type: protocol.DaemonUpdateStatus, Update: &current}); err != nil {
+	if err := send(protocol.DaemonMessage{Type: protocol.DaemonUpdateStatus, Update: &current}); err != nil {
 		t.Fatal(err)
 	}
 	b.await("machines", func(ev protocol.ClientEvent) bool { return ev.Type == protocol.EventMachines })
