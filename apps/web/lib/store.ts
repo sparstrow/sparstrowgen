@@ -147,6 +147,75 @@ export const useShellView = create<ShellView>((set, get) => ({
   loadRailPin: () => set({ railPinned: readPinned() }),
 }));
 
+/* -------------------------------------------------------------------------
+   Skipping first-run setup.
+
+   Per browser, like the rail pin, and for a sharper reason than convenience:
+   the only step that exists is connecting a computer, and the daemon runs on
+   the computer this browser is running on. Opening the app on a phone and
+   being asked about connecting *that* device is a genuinely different
+   question, so answering it once here should not answer it everywhere
+   (docs/Decisions.md D-046).
+
+   It stops being the right home as soon as a step is an account fact — naming
+   a workspace is not something to re-answer per browser. When Profile and
+   Workspace arrive, this moves to the account and `useSetup` reads it there. */
+
+const SETUP_SKIPPED_KEY = "sparstrowgen.setup-skipped";
+
+function readSkipped(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SETUP_SKIPPED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+type SetupView = {
+  /** Whether setup has been skipped in this browser. Starts true on the server
+   *  and before the flag is read, so nobody is briefly redirected into a wizard
+   *  they already dismissed. */
+  skipped: boolean;
+  /** True once the flag has actually been read, so the redirect can wait for a
+   *  real answer instead of acting on the default. */
+  loaded: boolean;
+  skip: () => void;
+  /** Finishing setup, or choosing to resume it, clears the skip. */
+  unskip: () => void;
+  loadSkipped: () => void;
+  /** The × on the resume card. Deliberately NOT persisted: whether a hidden
+   *  card should stay hidden across visits is an open question for the owner
+   *  (the prototype handoff's OQ7), and a flag written to disk would answer it
+   *  silently. For this visit it goes away; on the next it is back. */
+  cardHidden: boolean;
+  hideCard: () => void;
+};
+
+export const useSetupView = create<SetupView>((set) => ({
+  skipped: true,
+  loaded: false,
+  cardHidden: false,
+  hideCard: () => set({ cardHidden: true }),
+  skip: () => {
+    set({ skipped: true });
+    try {
+      window.localStorage.setItem(SETUP_SKIPPED_KEY, "1");
+    } catch {
+      // Blocked site data: setup stays skipped for this visit only.
+    }
+  },
+  unskip: () => {
+    set({ skipped: false });
+    try {
+      window.localStorage.removeItem(SETUP_SKIPPED_KEY);
+    } catch {
+      // As above.
+    }
+  },
+  loadSkipped: () => set({ skipped: readSkipped(), loaded: true }),
+}));
+
 /* ---------------------------------------------------------------------- */
 
 export const selectSelectedId = (s: ChatView) => s.selectedId;

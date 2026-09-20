@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
+import { SetupCard } from "@/components/setup/setup-card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatTokens, formatUsd } from "./provider-meta";
 
@@ -338,6 +339,10 @@ export function ChatSurface() {
           </Button>
         }
       />
+      {/* A setup that was skipped or interrupted is finished from here (D-046).
+          Above the conversations and below the section header, because it is
+          about the account rather than about any one conversation. */}
+      <SetupCard />
       <ConversationList
         conversations={conversations.data ?? []}
         selectedId={selectedId}
@@ -487,6 +492,7 @@ export function ChatSurface() {
                 activeModel={activeModel}
                 pending={pending}
                 disabled={!daemonOnline || daemonTooOld || inFlight !== null}
+                disabledTone={noComputerYet ? "neutral" : "warning"}
                 disabledReason={
                   noComputerYet
                     ? "You have not connected a computer yet, so there is nothing to run agents on. Connect one in Machines. Everything already said stays readable."

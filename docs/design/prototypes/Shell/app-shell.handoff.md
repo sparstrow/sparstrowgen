@@ -251,3 +251,59 @@ this change so the next session does not have to rebuild it).
 - The provider strip rendered its empty container in that state. It is hidden, matching B-45.
 
 **Not verified:** nothing here has been seen by the owner, and none of it exists in `apps/web` yet.
+
+### First-run setup — wired into apps/web, 2026-09-20
+
+The owner approved the Machines step and set the order (D-047), so it was built. Against the real
+backend on a local stack: a seeded account with no computers, a real pairing, and a real daemon
+claiming it.
+
+**Where it lives**
+
+| Piece | File |
+|---|---|
+| The wizard | [`components/setup/setup-wizard.tsx`](../../../../apps/web/components/setup/setup-wizard.tsx) |
+| The resume card | [`components/setup/setup-card.tsx`](../../../../apps/web/components/setup/setup-card.tsx) |
+| The step list both read | `useSetup()` in [`lib/queries.ts`](../../../../apps/web/lib/queries.ts) |
+| The pairing sequence both surfaces run | [`lib/pairing.ts`](../../../../apps/web/lib/pairing.ts) |
+| Skipping, per browser | `useSetupView` in [`lib/store.ts`](../../../../apps/web/lib/store.ts) |
+| The route | [`app/setup/page.tsx`](../../../../apps/web/app/setup/page.tsx) |
+
+**Verified against a real server and a real daemon**
+
+| Checked | Result |
+|---|---|
+| Signing in with no computer lands on `/setup` | pass |
+| "Connect" mints a real pairing and polls it | pass — `POST /api/machines/pairings`, then `GET` every 1.5s |
+| Eight seconds with no answer offers retry **and** install help | pass |
+| A daemon claiming the request **after** that offers approval anyway | pass — see the bug below |
+| The approval prompt names the computer | pass — "Approve DESKTOP-GJ8NLB8?" |
+| Approving connects it and shows the final screen | pass |
+| The final screen fills in agents and version live when the daemon connects | pass — "claude, codex, agy", version `dev`, no reload |
+| Skip leaves the resume card in the Chat pane and sets the browser flag | pass |
+| The card reopens the wizard and clears the flag | pass |
+| Finishing clears the card and `/` stops redirecting | pass |
+| Reaching `/setup` with nothing outstanding | pass — says so; does not offer to connect again |
+| 375x812 | pass, no overflow |
+| Console on a clean load | clean |
+
+**Two bugs found by running it, both mine, both fixed before merge:**
+
+1. **Polling stopped at eight seconds.** Extracting the sequence into `usePairing` tied the poll to
+   the `waiting` stage, so it was torn down at the exact moment the screen says the computer "may
+   still be starting". A daemon that claimed the request at nine seconds was never noticed and the
+   person sat on "has not answered" forever. The poll now runs through `unanswered` too; only the
+   countdown belongs to `waiting`, in its own effect so "Try again" restarts it.
+2. **The final screen could not hear anything.** The wizard replaces the shell, and the shell is
+   what mounts the one websocket — so `/setup` had no socket at all and "Agents found: none
+   reported yet" would never have changed. `SetupWizard` now mounts it; still exactly one caller,
+   because that route never mounts `AppShell`.
+
+**One thing the design asked for that the backend did not serve.** The prototype named the computer
+in the approval prompt; `GET /api/machines` returns approved computers only, by design, so the
+browser had no name. Rather than drop it — an approval prompt that names nothing is a weak thing to
+ask someone to agree to — the pairing now carries `machineName`, which is where the query's own
+comment says a pending computer belongs.
+
+**Still not done:** OQ6, OQ7 and OQ8 above are unanswered, and none of this has been seen by the
+owner or run on production.

@@ -410,15 +410,23 @@
      only way to learn whether it is present is to open the sparstrowgen:// link
      and see whether anything claims the pairing — install help is the branch
      Connect takes when nothing answers, not a box that could ever be ticked. */
+  /* The owner's order, 2026-09-20: Profile, then Workspace, then Machines.
+     Creating the account is not a step — it happened before setup opened. Nor
+     is "Ready": finishing the last step IS ready, and a step you cannot act on
+     is not a step. Only Machines is in this release; the other two are drawn
+     from the `future` toggle so their place is visible, and nothing more. */
   function setupSteps() {
     var done = S.setup === "ready";
-    var steps = [{ label: "Account", at: "done" }];
-    if (S.future) steps.push({ label: "Workspace", at: "soon" }, { label: "Profile", at: "soon" });
-    steps.push({ label: "Connect", at: done ? "done" : "now" }, { label: "Ready", at: done ? "now" : "later" });
+    var steps = [];
+    if (S.future) steps.push({ label: "Profile", at: "soon" }, { label: "Workspace", at: "soon" });
+    steps.push({ label: "Machines", at: done ? "done" : "now" });
     return steps;
   }
   function stepper() {
     var steps = setupSteps();
+    // One step is not a sequence, and a progress indicator with no progress in
+    // it is decoration. It appears when there is something to be partway through.
+    if (steps.length < 2) return "";
     return '<div class="steps" aria-label="Setup steps">' + steps.map(function (s, i) {
       var mark = s.at === "done" ? I("check", 12) : String(i + 1);
       return (i ? '<span class="steprule" aria-hidden="true"></span>' : "") +
@@ -463,7 +471,8 @@
     var copy = ready
       ? { h: "You’re ready", l: "That is everything. Your computer is connected and its agents are available to every conversation." }
       : { h: "Connect this computer", l: "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here." };
-    return '<div class="setup"><div class="setup-top"><span class="wm"><span aria-hidden="true">s</span>sparstrowgen</span><span class="of">Step ' + now + " of " + steps.length + '</span></div>' +
+    return '<div class="setup"><div class="setup-top"><span class="wm"><span aria-hidden="true">s</span>sparstrowgen</span>' +
+      (steps.length > 1 && !ready ? '<span class="of">Step ' + now + " of " + steps.length + "</span>" : "") + "</div>" +
       '<div class="setup-body">' + stepper() + "<h1>" + copy.h + '</h1><p class="lede">' + copy.l + "</p>" + setupStep() +
       (ready ? "" : '<div class="skiprow"><span>You can connect a computer later. Your account is already usable.</span><button class="btn" data-act="setup-skip">Skip for now</button></div>') +
       "</div></div>";
@@ -472,8 +481,8 @@
   /* The compact rendering of the same list, for a setup that was skipped or
      interrupted. It reopens the wizard rather than duplicating its steps. */
   function setupCard() {
-    var steps = [{ label: "Account verified", done: true }, { label: "Connect this computer", done: false }];
-    if (S.future) steps.splice(1, 0, { label: "Name your workspace", done: false });
+    var steps = [{ label: "Connect this computer", done: false }];
+    if (S.future) steps.unshift({ label: "Add your profile", done: false }, { label: "Name your workspace", done: false });
     var done = steps.filter(function (s) { return s.done; }).length;
     return '<div class="setupcard"><button class="iconbtn x" data-act="setup-dismiss" aria-label="Hide setup">' + I("x", 14) + "</button>" +
       "<h3>Finish setting up</h3><div class=\"of\">" + done + " of " + steps.length + " done</div><ul>" + steps.map(function (s) {

@@ -437,6 +437,64 @@ export function useMachines() {
   return useQuery({ queryKey: keys.machines, queryFn: api.machines });
 }
 
+export type SetupStep = {
+  id: "machines";
+  /** The word in the stepper. */
+  label: string;
+  /** The sentence in the resume card. */
+  task: string;
+  done: boolean;
+};
+
+export type Setup = {
+  steps: SetupStep[];
+  done: number;
+  total: number;
+  /** Nothing outstanding. Not the same as "known": see `settled`. */
+  complete: boolean;
+  /** The answer is based on a loaded machines list rather than a guess. Until
+   *  this is true, nothing should route anyone anywhere or claim a step is
+   *  undone — an empty list while the query is pending looks identical to an
+   *  account with no computer (docs/Bugs.md B-46). */
+  settled: boolean;
+};
+
+/** The one list of setup steps. The wizard renders it full-screen and the card
+ *  in the Chat pane renders it compact; neither decides for itself what is
+ *  outstanding (docs/Decisions.md D-046).
+ *
+ *  The owner's order is Profile, then Workspace, then Machines — but Profile
+ *  and Workspace are out of scope for the approved release, so only Machines
+ *  exists here. They are added to this array when they are built, and both
+ *  surfaces pick them up without being touched.
+ *
+ *  Progress is DERIVED today: "has this account a computer" is already in the
+ *  machines list, so nothing new is stored. That stops being enough the moment
+ *  a step is an account fact rather than a fact about this computer — naming a
+ *  workspace is not something to re-answer per browser — and at that point this
+ *  function starts reading the account instead. That change lands here and
+ *  neither surface notices. */
+export function useSetup(): Setup {
+  const machines = useMachines();
+  const connected = (machines.data ?? []).length > 0;
+  const steps: SetupStep[] = [
+    {
+      id: "machines",
+      label: "Machines",
+      task: "Connect this computer",
+      done: connected,
+    },
+  ];
+  const done = steps.filter((s) => s.done).length;
+  return {
+    steps,
+    done,
+    total: steps.length,
+    complete: done === steps.length,
+    settled: machines.isSuccess,
+  };
+}
+
 /** Opens the one websocket. Mounted exactly once, by the app shell: `connect`
  *  makes a socket per call, so a second caller would mean a second connection. */
 export function useRealtime() {

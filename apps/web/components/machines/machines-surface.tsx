@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, MonitorSmartphone, PlugZap, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { api } from "@/lib/api";
 import { keys, useMachines } from "@/lib/queries";
+import { usePairing, type Pairing } from "@/lib/pairing";
 import type { Machine, Provider } from "@/lib/chat-types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -23,35 +23,29 @@ import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
    a profile page. On a phone those are the two screens the tray switches
    between (D-044). */
 
-const machineKey = keys.machines;
-type PairingStage = "waiting" | "unanswered" | "approval";
-type PairingState = { id: string; uri: string; stage: PairingStage };
 function status(machine: Machine) { return machine.online ? "Online" : "Offline"; }
 // Blocked needs a person to act. Waitable resolves itself, so it stays muted like Offline. A value this build does not know is muted too: an older app must not call it a fault.
 function providerTone(availability: Provider["availability"]): StatusTone { return availability === "available" ? "success" : availability === "blocked" ? "warning" : "neutral"; }
 
-function PairingPanel({ state, retry, approve, approving, notNow, declining }: { state: PairingState; retry: () => void; approve: () => void; approving: boolean; notNow: () => void; declining: boolean }) {
-  if (state.stage === "approval") return <section className="mt-5 border px-4 py-4"><h2 className="text-sm font-medium">Approve this computer?</h2><p className="mt-1 text-sm text-muted-foreground">It will be able to run coding agents for your account.</p><div className="mt-4 flex gap-2"><Button size="sm" onClick={approve} disabled={approving || declining}>{approving ? "Connecting…" : "Approve computer"}</Button><Button size="sm" variant="outline" onClick={notNow} disabled={approving || declining}>Not now</Button></div></section>;
-  const unanswered = state.stage === "unanswered";
-  return <section className="mt-5 border px-4 py-4"><div className="flex items-start gap-3"><StatusIcon tone={unanswered ? "warning" : "progress"} size="md" className="mt-0.5"/><div><h2 className="text-sm font-medium">{unanswered ? "This computer has not answered yet" : "Looking for this computer"}</h2><p className="mt-1 text-sm text-muted-foreground">{unanswered ? "It may still be starting. Retry, or install the Windows component if it is not on this computer yet." : "Approve the browser prompt to open sparstrowgen on this computer."}</p></div></div>{unanswered && <div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={retry}><RefreshCw/>Retry</Button><Button size="sm" variant="outline" nativeButton={false} render={<Link href="/install"/>}><Download/>Install component</Button></div>}</section>;
+/* Adding another computer, once one is already connected. The sequence itself
+   lives in `usePairing` and is shared with first-run setup (D-046) — this is
+   only its wrapping on this screen. */
+function PairingPanel({ pair, onConnected }: { pair: Pairing; onConnected: () => void }) {
+  if (pair.stage === "approval") return <section className="mt-5 border px-4 py-4"><h2 className="text-sm font-medium">{pair.machineName ? `Approve ${pair.machineName}?` : "Approve this computer?"}</h2><p className="mt-1 text-sm text-muted-foreground">It will be able to run coding agents for your account.</p><div className="mt-4 flex gap-2"><Button size="sm" onClick={() => void pair.approve().then((ok) => { if (ok) { toast.success("Computer connected"); onConnected(); } })} disabled={pair.approving}>{pair.approving ? "Connecting…" : "Approve computer"}</Button><Button size="sm" variant="outline" onClick={() => pair.notNow()} disabled={pair.approving}>Not now</Button></div></section>;
+  if (pair.stage === "error") return <section className="mt-5 border px-4 py-4"><div className="flex items-start gap-3"><StatusIcon tone="danger" size="md" className="mt-0.5"/><div><h2 className="text-sm font-medium">This computer could not be added</h2><p className="mt-1 text-sm text-muted-foreground">{pair.error}</p></div></div><div className="mt-4"><Button size="sm" variant="outline" onClick={() => pair.begin()}><RefreshCw/>Try again</Button></div></section>;
+  const unanswered = pair.stage === "unanswered";
+  return <section className="mt-5 border px-4 py-4"><div className="flex items-start gap-3"><StatusIcon tone={unanswered ? "warning" : "progress"} size="md" className="mt-0.5"/><div><h2 className="text-sm font-medium">{unanswered ? "This computer has not answered yet" : "Looking for this computer"}</h2><p className="mt-1 text-sm text-muted-foreground">{unanswered ? "It may still be starting, or it may not be installed here. Nothing is broken either way — try again, or install it first." : "Approve the browser prompt to open sparstrowgen on this computer."}</p></div></div>{unanswered && <div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => pair.retry()}><RefreshCw/>Retry</Button><Button size="sm" variant="outline" nativeButton={false} render={<Link href="/install"/>}><Download/>Install component</Button></div>}</section>;
 }
 
 /** The whole section. `id` is the computer the route named; without one the
  *  page shows the first computer on a desktop and nothing on a phone, where the
  *  list is a screen in its own right. */
 export function MachinesSurface({ id }: { id?: string }) {
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const list = useMachines();
-  const create = useMutation({ mutationFn: api.startPairing });
-  const approve = useMutation({ mutationFn: api.approvePairing });
-  const decline = useMutation({ mutationFn: api.declinePairing });
-  const [pairing, setPairing] = useState<PairingState | null>(null);
-  const launch = (uri: string) => { window.location.assign(uri); };
-  async function begin() { try { const next = await create.mutateAsync(); setPairing({ id: next.pairing.id, uri: next.launchUri, stage: "waiting" }); launch(next.launchUri); } catch (error) { toast.error("Could not start pairing", { description: (error as Error).message }); } }
-  async function connect() { if (!pairing) return; try { await approve.mutateAsync(pairing.id); setPairing(null); await queryClient.invalidateQueries({ queryKey: machineKey }); toast.success("Computer connected"); } catch (error) { toast.error("Could not connect this computer", { description: (error as Error).message }); } }
-  async function notNow() { if (!pairing) return; try { await decline.mutateAsync(pairing.id); } catch (error) { toast.error("Could not dismiss this computer", { description: (error as Error).message }); return; } setPairing(null); await queryClient.invalidateQueries({ queryKey: machineKey }); }
-  useEffect(() => { if (!pairing || pairing.stage === "approval") return; const timeout = window.setTimeout(() => setPairing((current) => current?.stage === "waiting" ? { ...current, stage: "unanswered" } : current), 8_000); const poll = window.setInterval(() => void (async () => { try { const current = await api.pairing(pairing.id); if (current.status === "claimed") setPairing((prior) => prior ? { ...prior, stage: "approval" } : prior); else if (current.status === "approved") { setPairing(null); await queryClient.invalidateQueries({ queryKey: machineKey }); toast.success("This computer is already connected"); } else if (current.status === "rejected") setPairing(null); } catch (error) { setPairing(null); toast.error("Pairing stopped", { description: (error as Error).message }); } })(), 1_500); return () => { window.clearTimeout(timeout); window.clearInterval(poll); }; }, [pairing, queryClient]);
+  const pair = usePairing();
+  const running = pair.stage !== "idle";
+  const begin = () => pair.begin();
 
   const machines = list.data ?? [];
   // A desktop shows the list and the profile side by side, so landing on the
@@ -59,12 +53,12 @@ export function MachinesSurface({ id }: { id?: string }) {
   const activeId = id ?? (isMobile ? undefined : machines[0]?.id);
 
   const pane = <>
-    <PaneHeader title="Machines" action={<Button variant="ghost" size="icon" className="size-7" onClick={() => void begin()} disabled={create.isPending} aria-label="Add computer"><Plus className="size-4"/></Button>}/>
-    <MachinePane list={list.data} pending={list.isPending} failed={list.isError} error={list.error} retry={() => void list.refetch()} begin={() => void begin()} activeId={activeId}/>
+    <PaneHeader title="Machines" action={<Button variant="ghost" size="icon" className="size-7" onClick={begin} disabled={running} aria-label="Add computer"><Plus className="size-4"/></Button>}/>
+    <MachinePane list={list.data} pending={list.isPending} failed={list.isError} error={list.error} retry={() => void list.refetch()} begin={begin} activeId={activeId}/>
   </>;
 
-  return <AppShell section="machines" pane={pane} detail={id !== undefined || pairing !== null}>
-    <MachineMain id={activeId} machines={machines} pending={list.isPending} failed={list.isError} begin={() => void begin()} pairing={pairing && <PairingPanel state={pairing} retry={() => launch(pairing.uri)} approve={() => void connect()} approving={approve.isPending} notNow={() => void notNow()} declining={decline.isPending}/>}/>
+  return <AppShell section="machines" pane={pane} detail={id !== undefined || running}>
+    <MachineMain id={activeId} machines={machines} pending={list.isPending} failed={list.isError} begin={begin} pairing={running && <PairingPanel pair={pair} onConnected={() => void list.refetch()}/>}/>
   </AppShell>;
 }
 
@@ -93,7 +87,7 @@ function MachineDetail({ machine }: { machine: Machine }) {
   // The list carries every field the profile shows, but this keeps the open
   // computer fresh on its own and is what a deep link loads.
   const query = useQuery({ queryKey: ["machines", machine.id], queryFn: () => api.machine(machine.id), initialData: machine });
-  const remove = useMutation({ mutationFn: api.disconnectMachine, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: machineKey }); router.push("/machines"); } });
+  const remove = useMutation({ mutationFn: api.disconnectMachine, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: keys.machines }); router.push("/machines"); } });
   const data = query.data;
   return <>
     <AppHeader title={data.name} back={{ href: "/machines", label: "Back to computers" }} subtitle={<span className="block text-xs leading-4 text-muted-foreground">Version {data.version}</span>}>

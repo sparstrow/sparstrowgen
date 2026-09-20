@@ -1121,3 +1121,30 @@ account fact — naming a workspace is not something to re-answer per browser. P
 would have cost almost nothing because every piece of it is built. It has nowhere to put a second
 step. **Rejected:** D, a Bluetooth-style discovery list — a list implies more rows may arrive, and
 only one computer can ever appear, the one the browser is running on.
+
+## D-047 — The setup steps are Profile, Workspace, Machines, and only Machines is built
+
+**2026-09-20, the owner, on seeing the wizard prototype:** "step 1 should be profile with adding
+avatar, setting name, bio, then step 2 should be workspace, and step 3 is machines."
+
+Creating the account is **not** a step. It happened before setup opened — you are signed in by the
+time you get there — and a step you cannot act on is not a step. Nor is "Ready": finishing the last
+step *is* ready, so it is the screen after the sequence rather than an entry in it. The prototype
+originally drew both and was wrong on both counts.
+
+**Only Machines exists in this release.** Profile and Workspace are named here because the order is
+now decided and `useSetup` is built to take them, not because they are in scope — the approved
+release lists "Multiple workspaces, workspace invitations and workspace management" as out of
+scope, and Phase 1 says finish one story before starting the next. The prototype shows them behind
+`?future=1`, dashed and labelled *(later)*, so their place is visible without pretending they are
+built.
+
+**The stepper is hidden below two steps.** With Machines alone it would read "Step 1 of 1", which is
+a progress indicator with no progress in it. It appears when there is something to be partway
+through. Same for the "Step n of m" in the top bar, which also disappears on the final screen —
+counting a current step when every step is done produced "Step 0 of 3".
+
+**Where progress is remembered follows from the order.** Connecting a computer is a fact about the
+computer this browser runs on, so skipping is remembered per browser (D-046). Naming a workspace or
+setting an avatar is not — those are account facts. So the browser flag is right *today* and stops
+being right at Profile, which is step 1. `useSetup` is the single place that changes.
