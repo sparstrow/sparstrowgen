@@ -296,20 +296,6 @@ Two related things also unproved, and worth knowing before they surprise someone
 **Closes when:** the second deploy to Coolify either works or does not. If it does not, the fallback
 is a Coolify pre-deployment command rather than a compose service.
 
-## G-21 — The chat surface does not work at phone width
-
-**Noticed:** 2026-09-11, verifying the account screens in a browser
-**Closed:** 2026-09-20
-
-At 375x812 the sidebar kept its fixed 288px and the transcript was squeezed into what was left, so
-the conversation pane wrapped to one or two words a line and the account menu opened off-screen.
-
-The owner chose the layout on 2026-09-19 (D-044): the sections move to a bottom tray, the
-conversation list becomes the screen you land on, and a conversation is the screen below it with a
-back arrow. Wired in #48 and **verified on production at 390 wide** with his own conversations —
-the list fills the screen, a conversation replaces it, the composer sits on the bottom edge with the
-tray out of its way, and nothing overflows sideways ([`Unverified.md`](Unverified.md) U-23).
-
 ## G-22 — Coolify v4.3.18 imports a Compose required-value message as the value
 
 **Noticed:** 2026-09-12, first production deployment to Coolify v4.3.18
