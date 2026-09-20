@@ -35,6 +35,23 @@ type Pairing struct {
 
 var ErrPairingUnavailable = errors.New("that pairing request is no longer available")
 
+// ErrMachineBelongsToAnotherAccount stops a computer being taken from the
+// account it is already connected to (docs/Bugs.md B-43).
+//
+// The pairing link opens the daemon that is already installed, which offers the
+// credential it holds. Before this existed, a credential belonging to a
+// different account simply failed the same-account lookup in ClaimPairing and
+// fell through to CreateMachine — so the second account got the computer, the
+// daemon renamed the new credential over the old one, and the first account
+// silently lost it. Nobody was told, at any step.
+//
+// Moving a computer between accounts is a reasonable thing to want. It is not a
+// reasonable thing to do as a side effect of pressing "Add computer" in the
+// wrong tab, and the person pressing it cannot see what the other account is
+// about to lose. So it is refused and has to be done deliberately: disconnect
+// it on the account that has it, then pair it again.
+var ErrMachineBelongsToAnotherAccount = errors.New("that computer is already connected to another account")
+
 func machineFrom(row db.Machine) Machine {
 	m := Machine{ID: uuidToString(row.ID), Name: row.DisplayName, Approved: row.ApprovedAt.Valid, CreatedAt: row.CreatedAt.Time, AutomaticUpdates: row.AutomaticUpdates}
 	if row.DaemonVersion != nil {
@@ -117,6 +134,24 @@ func (s *Store) ClaimPairing(ctx context.Context, tokenHash, credentialHash, cur
 				return Pairing{}, "", false, err
 			}
 			return pairingFrom(p), uuidToString(existing.ID), true, nil
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Pairing{}, "", false, err
+		}
+		// Not this account's computer. Before issuing a new credential, find out
+		// whether it is somebody else's: credential_hash is unique across
+		// machines, so a row here is another account's live computer and this
+		// claim would take it (B-43). A revoked one finds nothing, which is
+		// what lets a disconnected computer be paired again.
+		//
+		// Raw SQL rather than a generated query, matching the pairing lookup
+		// above, because it has to run inside this transaction.
+		var owner pgtype.UUID
+		switch err := tx.QueryRow(ctx,
+			"SELECT user_id FROM machines WHERE credential_hash=$1 AND approved_at IS NOT NULL AND revoked_at IS NULL",
+			currentHash,
+		).Scan(&owner); {
+		case err == nil:
+			return Pairing{}, "", false, ErrMachineBelongsToAnotherAccount
 		case !errors.Is(err, pgx.ErrNoRows):
 			return Pairing{}, "", false, err
 		}

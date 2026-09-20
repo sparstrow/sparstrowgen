@@ -158,6 +158,14 @@ func (a *API) daemonPair(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errors.New("that pairing request has expired or was already used"), 409)
 		return
 	}
+	// 409 rather than 403: nothing is wrong with the credential this computer
+	// holds, and the daemon must never read this as "your credential is dead"
+	// and delete it — that would lose the very pairing this refusal protects
+	// (docs/Bugs.md B-43).
+	if errors.Is(err, store.ErrMachineBelongsToAnotherAccount) {
+		a.fail(w, errors.New("this computer is already connected to another sparstrowgen account. Disconnect it there first, then add it here"), 409)
+		return
+	}
 	if err != nil {
 		a.fail(w, err, 500)
 		return
