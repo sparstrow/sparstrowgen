@@ -327,34 +327,69 @@ left Paper and Violet, Slate and Amber, and Mono and Neutral alone, with the mod
 
 ## U-21 — The signed-in screens show every status as a colour, an icon and a word
 
-**From:** D-040 and B-41, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the
-testing account in the Browser pane (CLAUDE.md §1)
-**How:** Sign in, in light and dark, and check each place carries all three: (1) Machines lists an online
-computer with a green tick and "Online", an offline one with a grey dash and "Offline"; (2) a computer's
-profile does the same under its name, shows a green tick and "Available" for an available agent and an
-amber triangle with the reason for one that is not installed, and a grey dash for one that is waiting;
-(3) Add computer shows a blue turning arc while it looks for the computer, then an amber triangle if it
-has not answered, and no icon on "Approve this computer?"; (4) Settings → Updates shows, per computer,
-a green tick for "latest version", a blue "i" for "available", an amber clock for "waiting", a blue arc while
-installing, a red octagon for a failure, and a grey dash while offline; (5) in Chat, the provider strip
-shows an amber triangle and "Not installed" for a missing agent and stays quiet while the computer is
-asleep, and the notice above the composer is amber with a triangle; (6) a failed turn shows the red
-octagon and a red title; (7) the folder picker's "not inside a git repository" hint has an amber
-triangle; (8) a wrong password shows a red octagon and the message, and a resent confirmation shows a
-green tick; (9) a success, info, warning and error toast each carry their icon; (10) red words are
-readable, including the Disconnect button and a destructive menu item. Passing: all ten, and the arc
-does not turn with the system's reduced-motion setting on.
-**Status:** open. Seen 2026-09-19 in a signed-out dev server, on a scratch page rendering the real
-components and tokens (deleted afterwards): all seven tones inline, as a badge and as a quiet sentence,
-in light and dark, with the icon on the first line of a wrapped sentence; the provider strip with a
-blocked and a waiting provider; the composer notice; and the form error. Type-checked and linted. Not
-seen: any of the real screens above, the failed-turn and folder-picker notices, and reduced motion.
+**From:** D-040 and B-41, 2026-09-19 · **Who can run it:** agent on production; some rows need the owner
+**Status:** **partly verified 2026-09-20**, on `app.sparstrow.com` with a real connected computer
+(the agent's own, paired that night) and again with it stopped. Icon classes and computed colours
+were read from the DOM rather than judged by eye.
+
+| Row | Result |
+|---|---|
+| (1) Machines list: online | **pass** — green tick and "Online" |
+| (1) Machines list: offline | **pass** — `circle-minus` in `text-muted-foreground`, the grey dash, and "Offline" |
+| (2) Profile: status under the name, and "Available" per agent | **pass** — green tick and "Available" for claude, codex and agy; "Offline" under the name when stopped, and "Waiting for this computer to connect and report its providers" |
+| (2) Profile: amber triangle for a provider that is not installed, grey dash for one waiting | **not seen** — all three agents are installed on this computer, so neither state could be produced |
+| (3) Add computer: blue arc, amber triangle, no icon on "Approve this computer?" | **not run, deliberately** — clicking it hands the pairing link to the owner's installed daemon, which is exactly what B-43 does. Safe to run once #52 is deployed |
+| (4) Settings → Updates, the six states | **not reachable** — the test computer is a development build, so the page correctly shows "Development build" and automatic updates as unavailable, and none of the six appear |
+| (5) Chat: amber notice above the composer | **pass** — `triangle-alert` in `text-warning`, with the composer and Send both disabled |
+| (5) Chat: the strip stays quiet while the computer is asleep | **pass, after a fix** — it was rendering an empty bordered band (B-44) |
+| (5) Chat: amber triangle and "Not installed" on a provider chip | **not seen** — needs an agent that is not installed |
+| (6) A failed turn: red octagon and a red title | **not run** — needs a turn to fail, which spends the owner's real quota |
+| (7) Folder picker: amber triangle on the "not inside a git repository" hint | **not run** |
+| (8) Wrong password, resent confirmation | **not run** — this agent does not type into password fields |
+| (9) Toasts carry their icons | **not run** |
+| (10) Red words are readable | **pass, measured** — `--destructive-text` is 6.41:1 on Mono light and 6.04:1 on Soft light, its worst case, against every ground. The Disconnect button was seen in light and dark |
+| Reduced motion stops the arc | **not run** |
+
+**What is left** is mostly states that need a computer missing an agent, a release build, or a turn
+that fails. The cheapest way to close several at once is a second test computer without all three
+CLIs installed.
 
 ## U-22 — The light themes show the darker provider colours and stay recognisable
 
-**From:** D-041 and B-39, 2026-09-19 · **Who can run it:** owner, or the agent once he has signed the testing account in the Browser pane
-**How:** Sign in, choose a light theme (Mono, Paper, Slate and Soft), and open a conversation that has had a claude, a codex and an agy turn. Passing: the agent name above each reply, the provider strip marks, the switch notice and the conversation list are readable, each provider is still told apart by colour, a code block's comments and types are readable, and a blocked usage window's text is a deeper red. Dark themes look as they did.
-**Status:** open. Seen 2026-09-19: the new values read back from the running app's stylesheet in light and dark, and the contrast table for all eight themes. The screens above need a signed-in session.
+**From:** D-041 and B-39, 2026-09-19 · **Who can run it:** agent
+**Status:** **verified 2026-09-20**, on `app.sparstrow.com` in light mode, against a conversation
+carrying both a claude and a codex turn and a conversation list carrying all three provider marks.
+
+Contrast was **measured, not judged**: each token was resolved through the live stylesheet, painted
+to a canvas so `oklch()` became real sRGB, composited over its ground where the token is translucent,
+and scored with the WCAG formula. (Two earlier attempts were wrong — reading `oklch()` strings as
+RGB, then ignoring alpha — and were thrown away when `--foreground` on `--background` came back as
+1.5:1 instead of 17.65:1.)
+
+Worst case per token across Mono, Paper, Slate and Soft, on the page background, the pane and the
+muted ground:
+
+| Token | Worst ratio | |
+|---|---|---|
+| `--provider-claude` | 4.60 | pass |
+| `--provider-codex` | 4.51 | pass |
+| `--provider-agy` | 4.55 | pass |
+| `--code-comment` | 4.54 | pass |
+| `--code-type` | 4.55 | pass |
+| `--capacity-out` | 4.52 | pass |
+| `--success-text` | 6.28 | pass |
+| `--warning-text` | 5.85 | pass |
+| `--info-text` | 7.30 | pass |
+| `--destructive-text` | 5.52 | pass |
+| `--muted-foreground` | 5.43 | pass |
+| `--foreground` | 15.20 | pass |
+
+Everything clears 4.5:1 on every light surface, with Soft the tightest throughout. The three
+providers sit at nearly the same lightness by design, so they are told apart by hue — claude warm,
+agy blue, codex almost neutral — plus their own marks.
+
+`--border` (1.05:1) and `--input` (1.14:1) are still faint, which is
+[`KnownGaps.md`](KnownGaps.md) G-39 and not part of this check.
 
 ## U-23 — The chat surface works at phone width, and on a desktop inside the new shell
 
@@ -381,14 +416,30 @@ This closes [`KnownGaps.md`](KnownGaps.md) G-21.
 ## U-24 — The design system artifact still describes the old shell
 
 **From:** the shell wiring (#48), 2026-09-19 · **Who can run it:** agent
-**Status:** open — **known drift, recorded rather than fixed**, per CLAUDE.md's design rules.
+**Status:** open — **known drift, deliberately not fixed at 1am.** Recorded rather than rushed,
+because this artifact is what every agent reads before writing UI, and a wrong one is worse than an
+incomplete one.
 
 `apps/web` gained `components/shell/` — `Rail`, `SectionTray`, `AppShell`, `AppHeader`, `PaneHeader`
 and `LiveStatus` — and lost `components/ui/sidebar.tsx` and `components/product-sidebar.tsx`. The
-[artifact](https://claude.ai/artifact/Lyougp9xy958FaBcXWQFyS) still documents the shadcn `Sidebar`
-as the app's navigation and knows nothing about the rail, the pin, the pane or the bottom tray.
+artifact still carries a `SidebarNav` component whose README describes the shadcn sidebar, ending
+"The `sidebar-*` tokens are aliases here; the live app has not defined them yet" — which is now
+permanently true, because the component that would have used them is deleted.
 
-**The step:** add a Shell section to the artifact covering those five components — their props, the
-60/224/212/56 measurements, the 768px breakpoint, and the phone's list-then-detail behaviour — and
-delete `Sidebar` from it, noting that its `--sidebar-*` tokens were never defined in this app. Also
-add `--pane` if the pane's `bg-muted/40` is ever tuned into a token of its own.
+**How the artifact is actually built** (confirmed 2026-09-20, so the next session does not have to
+work it out):
+
+- It is **spec-driven**, not hand-edited. The generators are `build.mjs`, `bundle.src.js`,
+  `spec.txt`, `gen-tokens.mjs` and `icons.json` in the **session scratchpad**, not in the repo.
+- `spec.txt` holds one `@@ Name|Group|height|subtitle` block per component, each with a `--readme`
+  and a `--preview` section; `bundle.src.js` holds the React implementations and the export map that
+  becomes `window.SparstrowgenDS`. `build.mjs` reads both, plus the provider mark paths straight out
+  of `apps/web/components/chat/provider-icon.tsx`, and writes `ds/project/`.
+- **The generators live only in a session scratchpad, so they may not survive.** If they are gone,
+  they have to be rebuilt from the published `bundle.js` before anything can be added.
+
+**The step:** retire `SidebarNav`; add `Rail` (60px, hover overlay, the pin at 224px),
+`SectionTray` (the phone's bottom navigation), `AppHeader` and `PaneHeader` (both 56px), and
+`LiveStatus`; note the 768px breakpoint and the phone's list-then-detail behaviour; update the
+component list and the "Live gaps" section in `project/README.md`; bump `lastChange` in
+`project/design-system.json`.
