@@ -310,7 +310,13 @@ Deliberately not fixed here. It needs a real decision about what the sidebar doe
 CSS patch. Nothing about it is a surprise once seen, which is why it is written down rather than
 guessed at.
 
-**Closes when:** the chat surface has a phone layout the owner has chosen.
+**The owner chose one on 2026-09-19** (D-044): list-then-detail, with the three sections in a bottom
+tray. It was wired into `apps/web` the same day — the fixed 288px sidebar is gone, the conversation
+list is the shell's pane and fills the screen below 768px, and the transcript is the screen below it.
+
+**Closes when:** the chat surface is seen working at phone width. Machines and Settings were
+verified there; Chat needs a signed-in session, which only the owner can create
+([`Unverified.md`](Unverified.md) U-23).
 
 ## G-22 — Coolify v4.3.18 imports a Compose required-value message as the value
 

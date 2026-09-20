@@ -26,6 +26,8 @@ export const keys = {
   session: ["session"] as const,
   appearance: ["appearance"] as const,
   providers: ["providers"] as const,
+  daemon: ["daemon"] as const,
+  machines: ["machines"] as const,
   conversations: (q: string) => ["conversations", q] as const,
   conversation: (id: string) => ["conversation", id] as const,
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
@@ -401,10 +403,53 @@ export function useStopTurn() {
  *  arrives every few characters, and refetching a whole transcript on each one
  *  would be absurd. Conversation-level changes invalidate, because they are
  *  rare and the server's version is authoritative. */
-export function useRealtime(onDaemon: (online: boolean, tooOld?: boolean) => void) {
+/** What the app knows about its two connections.
+ *
+ *  `serverConnected` is this browser's own socket: when it is down we are not
+ *  being told anything, so nothing else here can be trusted to be current.
+ *  `online` is the owner's computer, which only the server can report. They are
+ *  separate facts and the header says different words for each — claiming a
+ *  computer is online while we cannot hear the server would be a lie the app
+ *  has no way to notice. */
+export type DaemonState = { online: boolean; tooOld: boolean; serverConnected: boolean };
+
+const DAEMON_INITIAL: DaemonState = { online: false, tooOld: false, serverConnected: false };
+
+/** Read by every surface that shows the live status. This is server state, so
+ *  it lives in the Query cache and the socket patches it — never mirrored into
+ *  Zustand (AGENTS.md §3). */
+export function useDaemon(): DaemonState {
+  const { data } = useQuery({
+    queryKey: keys.daemon,
+    // Nothing fetches it; the socket is its only writer. queryFn exists so the
+    // cache entry has a shape before the first event arrives.
+    queryFn: () => DAEMON_INITIAL,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return data ?? DAEMON_INITIAL;
+}
+
+/** The paired computers. Loaded on every page now, not only on Machines: the
+ *  header's live status names the computer, so it needs the list wherever it is
+ *  shown. Realtime `machines` events invalidate it. */
+export function useMachines() {
+  return useQuery({ queryKey: keys.machines, queryFn: api.machines });
+}
+
+/** Opens the one websocket. Mounted exactly once, by the app shell: `connect`
+ *  makes a socket per call, so a second caller would mean a second connection. */
+export function useRealtime() {
   const qc = useQueryClient();
 
   useEffect(() => {
+    const setDaemon = (patch: Partial<DaemonState>) =>
+      qc.setQueryData<DaemonState>(keys.daemon, (prev) => ({
+        ...(prev ?? DAEMON_INITIAL),
+        ...patch,
+      }));
+    const onDaemon = (online: boolean, tooOld = false) =>
+      setDaemon({ online, tooOld: online && tooOld });
     const patchEntries = (
       conversationId: string,
       fn: (entries: Entry[]) => Entry[],
@@ -492,8 +537,10 @@ export function useRealtime(onDaemon: (online: boolean, tooOld?: boolean) => voi
 
     return connect(handle, (open) => {
       // The socket being up says the server is reachable. Whether the owner's
-      // machine is reachable is a separate fact the server tells us.
-      if (!open) onDaemon(false);
+      // machine is reachable is a separate fact the server tells us — and while
+      // the socket is down we are told nothing, so the computer stops counting
+      // as reachable until the server says otherwise again.
+      setDaemon(open ? { serverConnected: true } : { serverConnected: false, online: false, tooOld: false });
     });
-  }, [qc, onDaemon]);
+  }, [qc]);
 }

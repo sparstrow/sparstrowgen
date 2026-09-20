@@ -987,3 +987,23 @@ table across all eight themes: at least 5.2:1 on every surface and on the tint. 
 signed-in app (U-21).
 
 **Release note:** Fixed: red error text and destructive buttons are now easier to read.
+
+## B-42 — Four buttons that are really links lost their button semantics
+
+**Found:** 2026-09-19, wiring the app shell, in the browser console on a signed-out
+`/settings`
+
+`Button` from Base UI renders a real `<button>` unless it is told otherwise. Four places
+pass `render={<Link/>}` to make a button that navigates, and only the two in
+`updates-surface.tsx` also passed `nativeButton={false}`. The other four logged a Base UI
+warning on every render and, more to the point, produced an `<a>` that had been stripped of
+native button behaviour without being given it back — the case the warning exists for.
+
+**Fixed** by passing `nativeButton={false}` at all four: the Sign in buttons on
+[`settings-surface.tsx`](../apps/web/components/settings/settings-surface.tsx) and
+[`appearance-surface.tsx`](../apps/web/components/settings/appearance-surface.tsx), Install
+component on [`machines-surface.tsx`](../apps/web/components/machines/machines-surface.tsx),
+and the Machines link on [`install/page.tsx`](../apps/web/app/install/page.tsx).
+
+**Release note:** Buttons that take you somewhere else now behave the same way as every other
+button, including for keyboard and screen-reader users.

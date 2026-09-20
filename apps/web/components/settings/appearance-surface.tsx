@@ -33,7 +33,7 @@ export function AppearanceSurface() {
       <div className="max-w-md">
         <h2 className="text-xl font-semibold tracking-tight">Appearance</h2>
         <p className="mt-2 text-sm text-muted-foreground">Sign in to choose how sparstrowgen looks. Your choice is saved to your account.</p>
-        <Button className="mt-5" render={<Link href="/"/>}>Sign in</Button>
+        <Button className="mt-5" nativeButton={false} render={<Link href="/"/>}>Sign in</Button>
       </div>
     </SettingsShell>;
   }

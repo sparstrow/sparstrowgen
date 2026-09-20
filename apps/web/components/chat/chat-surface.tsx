@@ -10,9 +10,9 @@ import {
   useConversation,
   useConversations,
   useCreateConversation,
+  useDaemon,
   useDeleteConversation,
   useProviders,
-  useRealtime,
   useRenameConversation,
   useSendMessage,
   useSetFolder,
@@ -29,8 +29,8 @@ import { Composer } from "./composer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { ProductSidebar } from "@/components/product-sidebar";
+import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { formatTokens, formatUsd } from "./provider-meta";
 
 /* Server state is TanStack Query's; view state is Zustand's; websocket events
@@ -102,16 +102,17 @@ export function ChatSurface() {
   const clearDraft = useChatView((s) => s.clearDraft);
 
   const [pickingFolder, setPickingFolder] = useState(false);
-  const [daemonOnline, setDaemonOnline] = useState(false);
-  // The connected computer is too old to be sent work (spec US3).
-  const [daemonTooOld, setDaemonTooOld] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const onDaemon = useCallback((online: boolean, tooOld = false) => {
-    setDaemonOnline(online);
-    setDaemonTooOld(online && tooOld);
-  }, []);
-  useRealtime(onDaemon);
+  // Whether the computer can be reached, and whether it is too old to be sent
+  // work (spec US3). Both are the server's to report, so they come from the
+  // Query cache the socket patches rather than from local state — the header
+  // shows them on every page now, not only here.
+  const { online: daemonOnline, tooOld: daemonTooOld } = useDaemon();
+
+  // On a phone the list and the conversation are two screens, so having one
+  // open is what "show the conversation" means.
+  const isMobile = useIsMobile();
 
   const { data: providers = [] } = useProviders();
   const conversations = useConversations(search);
@@ -140,13 +141,14 @@ export function ChatSurface() {
   useEffect(scrollToBottom, [selected?.entries.length, selectedId, scrollToBottom]);
 
   // Open the first conversation once, so the app does not start on an empty
-  // pane when there is something to read.
+  // pane when there is something to read. Not on a phone: there the list is a
+  // screen of its own, and opening something would skip straight past it.
   const list = conversations.data;
   useEffect(() => {
-    if (selectedId || !list?.length || search) return;
+    if (isMobile || selectedId || !list?.length || search) return;
     const first = list.find((c) => !c.archived);
     if (first) select(first.id);
-  }, [list, selectedId, search, select]);
+  }, [list, selectedId, search, select, isMobile]);
 
   // A turn in flight needs a ticking clock: on codex nothing else moves until
   // the whole answer lands. The clock only runs while one is in flight, and
@@ -312,84 +314,105 @@ export function ChatSurface() {
 
   const inFlightProvider = providers.find((p) => p.id === inFlight?.provider);
 
+  const pane = (
+    <>
+      <PaneHeader
+        title="Chat"
+        action={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={() => void handleCreate()}
+            aria-label="New conversation"
+          >
+            <Plus className="size-4" />
+          </Button>
+        }
+      />
+      <ConversationList
+        conversations={conversations.data ?? []}
+        selectedId={selectedId}
+        loading={conversations.isPending}
+        onSelect={select}
+        onCreate={() => void handleCreate()}
+        onRename={(id, title) => rename.mutate({ id, patch: { title } })}
+        onDelete={(id) => {
+          remove.mutate(id);
+          if (selectedId === id) select(null);
+        }}
+        onSetArchived={(id, archived) => {
+          archive.mutate({ id, patch: { archived } });
+          toast(archived ? "Conversation archived" : "Conversation restored", {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                archive.mutate({ id, patch: { archived: !archived } }),
+            },
+          });
+        }}
+      />
+    </>
+  );
+
   if (conversations.isError) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <PlugZap className="size-8 text-muted-foreground" aria-hidden />
-        <p className="text-sm font-medium">Can&apos;t reach the sparstrowgen server</p>
-        <p className="max-w-md text-sm text-muted-foreground">
-          {(conversations.error as Error).message}
-        </p>
-        <p className="max-w-md text-xs text-muted-foreground">
-          Start it with <code className="font-mono">make server</code>, and check
-          Postgres is up with <code className="font-mono">make db</code>.
-        </p>
-        <Button size="sm" onClick={() => void conversations.refetch()}>
-          <RefreshCw className="size-4" />
-          Try again
-        </Button>
-      </div>
+      <AppShell section="chat" pane={pane} detail={false}>
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <PlugZap className="size-8 text-muted-foreground" aria-hidden />
+          <p className="text-sm font-medium">Can&apos;t reach the sparstrowgen server</p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {(conversations.error as Error).message}
+          </p>
+          <p className="max-w-md text-xs text-muted-foreground">
+            Start it with <code className="font-mono">make server</code>, and check
+            Postgres is up with <code className="font-mono">make db</code>.
+          </p>
+          <Button size="sm" onClick={() => void conversations.refetch()}>
+            <RefreshCw className="size-4" />
+            Try again
+          </Button>
+        </div>
+      </AppShell>
     );
   }
 
   return (
     <TooltipProvider>
-      <SidebarProvider className="h-full" defaultOpen>
-        <ProductSidebar current="chat" />
-        <SidebarInset className="min-w-0 rounded-none">
-      <div className="flex h-full">
-        <ConversationList
-          conversations={conversations.data ?? []}
-          selectedId={selectedId}
-          loading={conversations.isPending}
-          onSelect={select}
-          onCreate={() => void handleCreate()}
-          onRename={(id, title) => rename.mutate({ id, patch: { title } })}
-          onDelete={(id) => {
-            remove.mutate(id);
-            if (selectedId === id) select(null);
-          }}
-          onSetArchived={(id, archived) => {
-            archive.mutate({ id, patch: { archived } });
-            toast(archived ? "Conversation archived" : "Conversation restored", {
-              action: {
-                label: "Undo",
-                onClick: () =>
-                  archive.mutate({ id, patch: { archived: !archived } }),
-              },
-            });
-          }}
-        />
-
-        <main className="flex min-w-0 flex-1 flex-col">
-          <ProviderStrip providers={usableProviders} />
-
+      <AppShell
+        section="chat"
+        pane={pane}
+        detail={selectedId !== null}
+        trayInDetail={false}
+      >
+        <main className="flex min-h-0 flex-1 flex-col">
           {selected ? (
             <>
-              <header className="group/header flex shrink-0 items-center gap-3 border-b px-6 py-3">
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-sm font-medium">
-                    <ConversationName
-                      title={selected.title}
-                      className="block truncate"
-                    />
-                  </h1>
-                  {/* The folder is what the agent can see, so the place it is
-                      displayed is the place to change it — rather than a
-                      setting somewhere you would have to know about. */}
+              <AppHeader
+                title={
+                  <ConversationName title={selected.title} className="block truncate" />
+                }
+                back={{ onClick: () => select(null), label: "Back to conversations" }}
+                subtitle={
+                  /* The folder is what the agent can see, so the place it is
+                     displayed is the place to change it — rather than a
+                     setting somewhere you would have to know about. */
                   <button
                     type="button"
                     onClick={() => setPickingFolder(true)}
                     title={selected.folder}
-                    className="mt-0.5 flex max-w-full items-center gap-1.5 rounded text-xs text-muted-foreground hover:text-foreground"
+                    className="flex max-w-full items-center gap-1.5 rounded text-xs leading-4 text-muted-foreground hover:text-foreground"
                   >
                     <FolderOpen className="size-3.5 shrink-0" aria-hidden />
                     <span className="truncate">{selected.folder}</span>
                     <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover/header:opacity-100" aria-hidden />
                   </button>
+                }
+              >
+                <div className="hidden md:block">
+                  <ViewToggle value={transcriptView} onChange={setTranscriptView} />
                 </div>
-                <ViewToggle value={transcriptView} onChange={setTranscriptView} />
-                <div className="shrink-0 text-right font-mono text-xs text-muted-foreground">
+                <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
                   {/* Only claude states a dollar figure, so zero spend on a
                       conversation answered by the others means "not reported",
                       not "free". Showing it only when there is one keeps that
@@ -397,7 +420,9 @@ export function ChatSurface() {
                   {selected.spendUsd > 0 && <div>{formatUsd(selected.spendUsd)}</div>}
                   <div>{formatTokens(selected.tokens)} tokens</div>
                 </div>
-              </header>
+              </AppHeader>
+
+              <ProviderStrip providers={usableProviders} />
 
               <ScrollArea ref={scrollRef} className="min-h-0 flex-1">
                 <div className="mx-auto max-w-3xl px-6 py-8">
@@ -485,9 +510,7 @@ export function ChatSurface() {
             </div>
           )}
         </main>
-      </div>
-        </SidebarInset>
-      </SidebarProvider>
+      </AppShell>
     </TooltipProvider>
   );
 }
