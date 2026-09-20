@@ -140,6 +140,12 @@ export function ProviderStrip({ providers }: { providers: Provider[] }) {
     return () => clearInterval(t);
   }, []);
 
+  // A computer that is not connected reports no providers, and an empty strip
+  // is a 17px band with a border and nothing in it — a line across the screen
+  // that says nothing. The header already says the computer is offline and the
+  // composer says what that means, so this simply steps out of the way.
+  if (providers.length === 0) return null;
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2">
       {providers.map((p) => (
