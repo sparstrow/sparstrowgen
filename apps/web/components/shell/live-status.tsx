@@ -30,7 +30,7 @@ function describe(
   if (!serverConnected)
     return { tone: "progress", full: "Reconnecting…", short: "Reconnecting…" };
   if (known && names.length === 0)
-    return { tone: "neutral", full: "No computer connected", short: "None" };
+    return { tone: "neutral", full: "No computer connected", short: "No computer" };
 
   // One computer is named; several are counted, because the server reports one
   // "is a computer reachable" fact for the account rather than one per machine,

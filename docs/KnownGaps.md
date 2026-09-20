@@ -299,24 +299,16 @@ is a Coolify pre-deployment command rather than a compose service.
 ## G-21 — The chat surface does not work at phone width
 
 **Noticed:** 2026-09-11, verifying the account screens in a browser
+**Closed:** 2026-09-20
 
-At 375×812 the sidebar keeps its fixed 288px and the transcript is squeezed into what is left, so
-the conversation pane wraps to one or two words a line and the account menu opens off-screen. The
-sign-in and sign-up screens are fine — they are a centred column — so this is the chat surface
-only, and it predates the account work.
+At 375x812 the sidebar kept its fixed 288px and the transcript was squeezed into what was left, so
+the conversation pane wrapped to one or two words a line and the account menu opened off-screen.
 
-Deliberately not fixed here. It needs a real decision about what the sidebar does on a phone
-(drawer, or a list-then-detail view), and that is a design question for the owner rather than a
-CSS patch. Nothing about it is a surprise once seen, which is why it is written down rather than
-guessed at.
-
-**The owner chose one on 2026-09-19** (D-044): list-then-detail, with the three sections in a bottom
-tray. It was wired into `apps/web` the same day — the fixed 288px sidebar is gone, the conversation
-list is the shell's pane and fills the screen below 768px, and the transcript is the screen below it.
-
-**Closes when:** the chat surface is seen working at phone width. Machines and Settings were
-verified there; Chat needs a signed-in session, which only the owner can create
-([`Unverified.md`](Unverified.md) U-23).
+The owner chose the layout on 2026-09-19 (D-044): the sections move to a bottom tray, the
+conversation list becomes the screen you land on, and a conversation is the screen below it with a
+back arrow. Wired in #48 and **verified on production at 390 wide** with his own conversations —
+the list fills the screen, a conversation replaces it, the composer sits on the bottom edge with the
+tray out of its way, and nothing overflows sideways ([`Unverified.md`](Unverified.md) U-23).
 
 ## G-22 — Coolify v4.3.18 imports a Compose required-value message as the value
 
