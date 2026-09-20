@@ -1075,3 +1075,31 @@ composer's amber notice says what that means, so nothing is lost.
 
 **Release note:** When your computer is offline, the conversation no longer shows an empty bar where
 the agent list used to be.
+
+## B-46 — A person who has never connected a computer was told theirs was unreachable
+
+**Found:** 2026-09-20, reading the Chat surface before building first-run setup.
+
+Every brand-new account reaches Chat with no computer at all. `daemonOnline` is false in that
+state for the same reason it is false when a connected computer is asleep, and the composer read
+only that one flag, so it said:
+
+> Your machine is unreachable, so nothing new can be sent.
+
+They have no machine. It is not unreachable; it does not exist. The sentence blames a network
+problem for a setup step that was never taken, and it points nowhere — a person who has just
+signed up is told something is broken rather than what to do next.
+
+The header did not have this problem: `LiveStatus.describe` already separates the two facts and
+says "No computer connected" (D-045). Only the composer conflated them.
+
+**Fixed** in [`chat-surface.tsx`](../apps/web/components/chat/chat-surface.tsx): the reason now
+tests the machines list first and says nothing is connected yet, naming Machines as the place to
+connect one. The list has to have actually loaded — `machines.isSuccess` — because an empty array
+while the query is pending would tell someone who does have a computer that they have none.
+
+Found while building first-run setup, which is what makes this state common rather than rare
+(spec US2: "the product explains why new agent work cannot run and where to connect a computer").
+
+**Release note:** Before you have connected a computer, the message box now says so and points you
+to Machines, instead of saying your computer could not be reached.

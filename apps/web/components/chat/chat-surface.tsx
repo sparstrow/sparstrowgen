@@ -12,6 +12,7 @@ import {
   useCreateConversation,
   useDaemon,
   useDeleteConversation,
+  useMachines,
   useProviders,
   useRenameConversation,
   useSendMessage,
@@ -109,6 +110,13 @@ export function ChatSurface() {
   // Query cache the socket patches rather than from local state — the header
   // shows them on every page now, not only here.
   const { online: daemonOnline, tooOld: daemonTooOld } = useDaemon();
+
+  // "Unreachable" and "you have never connected one" are different facts and
+  // must not share a sentence (docs/Bugs.md B-46). Only once the list has
+  // actually loaded, because `[]` while pending would tell a person with a
+  // computer that they have none.
+  const machines = useMachines();
+  const noComputerYet = machines.isSuccess && (machines.data?.length ?? 0) === 0;
 
   // On a phone the list and the conversation are two screens, so having one
   // open is what "show the conversation" means.
@@ -480,11 +488,13 @@ export function ChatSurface() {
                 pending={pending}
                 disabled={!daemonOnline || daemonTooOld || inFlight !== null}
                 disabledReason={
-                  !daemonOnline
-                    ? "Your machine is unreachable, so nothing new can be sent. Everything already said stays readable."
-                    : daemonTooOld
-                      ? "Your computer's sparstrowgen is too old for this app, so nothing new can be sent. Update it in Settings → Updates. Everything already said stays readable."
-                      : undefined
+                  noComputerYet
+                    ? "You have not connected a computer yet, so there is nothing to run agents on. Connect one in Machines. Everything already said stays readable."
+                    : !daemonOnline
+                      ? "Your machine is unreachable, so nothing new can be sent. Everything already said stays readable."
+                      : daemonTooOld
+                        ? "Your computer's sparstrowgen is too old for this app, so nothing new can be sent. Update it in Settings → Updates. Everything already said stays readable."
+                        : undefined
                 }
                 value={draft}
                 onChange={(v) => selectedId && setDraft(selectedId, v)}
