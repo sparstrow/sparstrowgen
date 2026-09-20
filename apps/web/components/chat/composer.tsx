@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { ArrowUp, Check, ChevronDown, Square, Undo2 } from "lucide-react";
+import { cn } from "cn";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
 import { providerStyle, formatTokens } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
@@ -21,6 +22,8 @@ type Props = {
   pending: PendingSwitch | null;
   disabled: boolean;
   disabledReason?: string;
+  /** Amber by default. `neutral` for a state that is not a fault — see below. */
+  disabledTone?: "warning" | "neutral";
   value: string;
   onChange: (v: string) => void;
   onSelect: (provider: ProviderId, model: Model) => void;
@@ -41,6 +44,7 @@ export function Composer({
   pending,
   disabled,
   disabledReason,
+  disabledTone = "warning",
   value,
   onChange,
   onSelect,
@@ -101,9 +105,21 @@ export function Composer({
       {disabled && disabledReason && (
         <div className="mx-auto max-w-3xl px-4 pt-3">
           {/* Nothing new can be sent until a person or the computer changes:
-              worth an amber notice, and not a fault, so not red. */}
-          <p className="rounded-lg border border-warning/30 bg-warning-fill/50 px-3.5 py-2 text-sm">
-            <Status tone="warning" quiet>
+              worth an amber notice, and not a fault, so not red.
+
+              Unless nothing is connected at all. Then it is not a notice about
+              something going wrong, it is a step not taken yet (docs/Bugs.md
+              B-46) — so it loses the colour that means "attention needed" and
+              keeps only the sentence and the place to go. */}
+          <p
+            className={cn(
+              "rounded-lg border px-3.5 py-2 text-sm",
+              disabledTone === "warning"
+                ? "border-warning/30 bg-warning-fill/50"
+                : "bg-muted/55",
+            )}
+          >
+            <Status tone={disabledTone} quiet>
               {disabledReason}
             </Status>
           </p>

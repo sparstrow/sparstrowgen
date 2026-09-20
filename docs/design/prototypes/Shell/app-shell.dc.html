@@ -155,6 +155,9 @@
   .send { width: 32px; height: 32px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); display: inline-flex; align-items: center; justify-content: center; flex: none; }
   .cbox.off { opacity: .6; }
   .notice { margin: 12px 0 8px; border: 1px solid color-mix(in oklab, var(--warning) 30%, transparent); background: color-mix(in oklab, var(--warning-fill) 50%, transparent); border-radius: var(--r-lg); padding: 8px 14px; font-size: 14px; }
+  /* Not having connected a computer yet is a step not taken, not a fault, so it
+     does not get the amber that means "something needs your attention". */
+  .notice.calm { border-color: var(--border); background: color-mix(in oklab, var(--muted) 55%, transparent); }
   .bigempty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--muted-foreground); max-width: 28rem; margin: 0 auto; }
   .bigempty .ic { color: var(--muted-foreground); }
   .bigempty h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--foreground); }
@@ -184,7 +187,52 @@
     /* Chat's detail has the composer at the bottom, so the tray steps out of its way. */
     #app[data-mview="detail"][data-section="chat"] .tray { display: none; }
     .composer { padding-bottom: 12px; }
+    .setup-body { padding: 24px 16px 40px; }
+    .setup h1 { font-size: 19px; line-height: 25px; }
+    .steps { gap: 4px; margin-bottom: 22px; }
+    .step .lbl2 { display: none; }
+    .steprule { width: 12px; }
+    .acts .btn { flex: 1; justify-content: center; }
   }
+  /* First-run setup (docs/Decisions.md D-046). One list of steps rendered twice:
+     .setup is the full-screen wizard a new account walks, .setupcard is the same
+     list compacted into the running app so a skipped one can be finished there. */
+  .setup { height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+  .setup-top { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border); }
+  .setup-top .wm { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.01em; }
+  .setup-top .of { font-size: 12px; color: var(--muted-foreground); }
+  .setup-body { width: 100%; max-width: 38rem; margin: 0 auto; padding: 40px 24px 48px; }
+  .steps { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 30px; }
+  .step { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+  .step .n { width: 22px; height: 22px; border-radius: 999px; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; background: var(--muted); }
+  .step[data-at="done"] .n { background: var(--success); color: var(--background); }
+  .step[data-at="now"] .n { background: var(--primary); color: var(--primary-foreground); }
+  .step[data-at="now"] { color: var(--foreground); font-weight: 500; }
+  .step[data-at="soon"] { opacity: .65; }
+  .step[data-at="soon"] .n { border: 1px dashed var(--border); background: none; }
+  .steprule { width: 22px; height: 1px; background: var(--border); flex: none; }
+  .setup h1 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.02em; text-align: center; }
+  .setup .lede { margin: 8px auto 0; max-width: 32rem; text-align: center; color: var(--muted-foreground); }
+  .setup .card { margin-top: 26px; padding: 18px 20px; }
+  .setup .card h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .setup .card p { margin: 3px 0 0; color: var(--muted-foreground); }
+  .setup .headrow { display: flex; align-items: flex-start; gap: 12px; }
+  .setup .headrow > .ic, .setup .headrow > .status { margin-top: 1px; flex: none; }
+  .facts { margin: 16px 0 0; border-top: 1px solid var(--border); padding-top: 14px; display: grid; grid-template-columns: auto 1fr; gap: 9px 24px; font-size: 13px; }
+  .facts dt { margin: 0; color: var(--muted-foreground); }
+  .facts dd { margin: 0; }
+  .acts { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .skiprow { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted-foreground); }
+
+  .setupcard { position: relative; margin: 8px 8px 2px; border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px; background: var(--background); }
+  .setupcard h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .setupcard .of { margin-top: 1px; font-size: 12px; color: var(--muted-foreground); }
+  .setupcard ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .setupcard li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .setupcard li.is-done .w { color: var(--muted-foreground); text-decoration: line-through; }
+  .setupcard .btn { margin-top: 12px; width: 100%; justify-content: center; }
+  .setupcard .x { position: absolute; top: 6px; right: 6px; }
+
   .toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--foreground); color: var(--background); padding: 8px 14px; border-radius: var(--r-lg); font-size: 13px; z-index: 60; max-width: 90%; }
 </style>
 </head>
@@ -204,6 +252,12 @@
     theme: pick(Q.get("theme"), ["light", "dark"], "light"),
     width: pick(Q.get("width"), ["desktop", "narrow"], "desktop"),
     pinned: Q.get("pin") === "1",
+    // First-run setup (D-046). "off" is the ordinary app; every other value is
+    // the wizard, on the one step that exists today. `resume` is what a skipped
+    // setup leaves behind in the running app.
+    setup: pick(Q.get("setup"), ["off", "idle", "waiting", "unanswered", "approval", "ready", "loading", "error"], "off"),
+    resume: Q.get("resume") === "1",
+    future: Q.get("future") === "1",
     mview: "list",
     sel: { chat: "c1", machines: "m1", settings: "appearance" },
     convs: D.conversations.slice(), archivedOpen: false, search: "", toast: "",
@@ -227,7 +281,7 @@
   function online() { return S.computer === "online"; }
   function live() { return '<span class="live">' + live0() + "</span>"; }
   function live0() {
-    if (S.ui === "empty" && S.section === "machines") return St("neutral", "No computer connected", { role: "status" });
+    if (S.resume || (S.ui === "empty" && S.section === "machines")) return St("neutral", '<span class="full">No computer connected</span><span class="short">No computer</span>', { role: "status" });
     var f = function (full, short) { return '<span class="full">' + full + '</span><span class="short">' + short + "</span>"; };
     if (S.computer === "online") return St("success", f(primary.name + " online", "Online"), { role: "status" });
     if (S.computer === "reconnecting") return St("progress", f("Reconnecting to " + primary.name + "…", "Reconnecting…"), { role: "status" });
@@ -255,6 +309,10 @@
   function paneHead(title, action) { return '<div class="pane-h"><span>' + title + '</span><span class="ph-r"><span class="pane-live">' + live() + "</span>" + action + "</span></div>"; }
   function panechat() {
     var head = paneHead("Chat", '<button class="iconbtn" data-act="newchat" aria-label="New conversation">' + I("plus") + "</button>");
+    // A setup that was skipped or interrupted is finished from here (D-046).
+    // It sits above the conversations and below the section's own header,
+    // because it is about the account rather than about any conversation.
+    if (S.resume) head += setupCard();
     if (S.ui === "loading") return head + skelRows(6);
     if (S.ui === "error") return head + errPane("Conversations");
     if (S.ui === "empty") return head + '<div class="pempty">' + I("messages-square", 24) + "<div>No conversations yet. Start one and it will be saved here.</div>" + '<button class="btn primary" data-act="newchat">' + I("plus", 14) + "New conversation</button></div>";
@@ -285,7 +343,13 @@
 
   /* ---------------------------------------------------------------- main */
   function chatTitle() { var c = S.convs.concat(D.archived).filter(function (x) { return x.id === S.sel.chat; })[0]; return c ? (c.title || "New conversation") : "Chat"; }
+  /* A setup that was skipped leaves the account with no computer at all, which
+     is a different fact from a connected one being asleep (docs/Bugs.md B-46).
+     Nothing is reachable, so nothing reports providers either — and an empty
+     strip is a line across the screen that says nothing (B-45). */
+  function noComputer() { return S.resume; }
   function strip() {
+    if (noComputer()) return "";
     return '<div class="strip" aria-label="Providers">' + D.providers.map(function (p) {
       var asleep = !online(), blocked = p.availability === "blocked" && !asleep;
       var body = asleep ? '<span class="r">' + (S.computer === "reconnecting" ? "Reconnecting" : "Machine unreachable") + "</span>" : blocked ? St("warning", p.reason, { size: 12 }) : '<span class="r">' + esc(p.headroom) + "</span>";
@@ -293,8 +357,11 @@
     }).join("") + "</div>";
   }
   function composer(c) {
-    var off = !online();
-    return '<div class="composer">' + (off ? '<div class="notice">' + St("warning", "Your machine is " + (S.computer === "reconnecting" ? "reconnecting" : "unreachable") + ", so nothing new can be sent. Everything already said stays readable.", { quiet: true }) + "</div>" : "") +
+    var none = noComputer(), off = none || !online();
+    var why = none
+      ? "You have not connected a computer yet, so there is nothing to run agents on. Connect one in Machines. Everything already said stays readable."
+      : "Your machine is " + (S.computer === "reconnecting" ? "reconnecting" : "unreachable") + ", so nothing new can be sent. Everything already said stays readable.";
+    return '<div class="composer">' + (off ? '<div class="notice' + (none ? " calm" : "") + '">' + St(none ? "neutral" : "warning", why, { quiet: true }) + "</div>" : "") +
       '<div class="cbox' + (off ? " off" : "") + '"><span class="pick">' + M(c.provider, 16) + c.provider + " <small>" + esc(c.model) + '</small></span><span class="ph">' + (off ? "Unavailable" : "Message " + c.provider + "…") + '</span><button class="send" data-act="fake" data-v="Sending is inert in the prototype" aria-label="Send"' + (off ? " disabled" : "") + ">" + I("arrow-up") + "</button></div></div>";
   }
   function mainchat() {
@@ -335,6 +402,94 @@
     }).join("") + "</nav>";
   }
 
+  /* ------------------------------------------------------- first-run setup */
+  /* One list of steps, two renderings (D-046). `SETUP_STEPS` is the list both
+     read; nothing below decides for itself what is outstanding.
+
+     "Install" is deliberately NOT a step. The daemon dials out only, so the
+     only way to learn whether it is present is to open the sparstrowgen:// link
+     and see whether anything claims the pairing — install help is the branch
+     Connect takes when nothing answers, not a box that could ever be ticked. */
+  /* The owner's order, 2026-09-20: Profile, then Workspace, then Machines.
+     Creating the account is not a step — it happened before setup opened. Nor
+     is "Ready": finishing the last step IS ready, and a step you cannot act on
+     is not a step. Only Machines is in this release; the other two are drawn
+     from the `future` toggle so their place is visible, and nothing more. */
+  function setupSteps() {
+    var done = S.setup === "ready";
+    var steps = [];
+    if (S.future) steps.push({ label: "Profile", at: "soon" }, { label: "Workspace", at: "soon" });
+    steps.push({ label: "Machines", at: done ? "done" : "now" });
+    return steps;
+  }
+  function stepper() {
+    var steps = setupSteps();
+    // One step is not a sequence, and a progress indicator with no progress in
+    // it is decoration. It appears when there is something to be partway through.
+    if (steps.length < 2) return "";
+    return '<div class="steps" aria-label="Setup steps">' + steps.map(function (s, i) {
+      var mark = s.at === "done" ? I("check", 12) : String(i + 1);
+      return (i ? '<span class="steprule" aria-hidden="true"></span>' : "") +
+        '<span class="step" data-at="' + s.at + '"' + (s.at === "now" ? ' aria-current="step"' : "") + '><span class="n">' + mark + '</span><span class="lbl2">' + s.label +
+        (s.at === "soon" ? " <small>(later)</small>" : "") + "</span></span>";
+    }).join("") + "</div>";
+  }
+
+  /* The one step that exists, in each state it can actually be in. A refused
+     pairing is absent on purpose: the browser cannot currently tell it apart
+     from a computer that never answered (docs/KnownGaps.md G-40), so drawing it
+     would be designing something the backend cannot serve. */
+  function setupStep() {
+    var s = S.setup;
+    if (s === "loading") return '<div class="card" style="padding:20px" aria-busy="true"><div class="skel" style="height:15px;width:45%"></div><div class="skel" style="height:12px;width:70%;margin-top:10px"></div><div class="skel" style="height:32px;width:170px;margin-top:20px"></div></div>';
+    if (s === "error") return '<div class="card"><div class="headrow">' + St("danger", "", { size: 18 }) + "<div><h2>Setup could not be started</h2><p>sparstrowgen could not be reached, so no request was made. Your account is fine and nothing was connected.</p></div></div>" +
+      '<div class="acts"><button class="btn primary" data-act="setup" data-v="idle">' + I("refresh-cw", 14) + "Try again</button></div></div>";
+    if (s === "ready") {
+      return '<div class="card"><div class="headrow">' + St("success", "", { size: 18 }) + "<div><h2>" + esc(primary.name) + " is connected</h2><p>It stays connected when you close this tab, and starts again when you sign in to Windows.</p></div></div>" +
+        '<dl class="facts"><dt>Agents found</dt><dd>' + D.providers.map(function (p) { return esc(p.label); }).join(", ") + "</dd><dt>Version</dt><dd>" + esc(primary.version) + "</dd></dl>" +
+        '<div class="acts"><button class="btn primary" data-act="setup-finish">' + I("message-square-text", 14) + "Start your first conversation</button><button class=\"btn\" data-act=\"setup-machines\">See this computer</button></div></div>";
+    }
+    if (s === "approval") {
+      return '<div class="card"><div class="headrow">' + St("success", "", { size: 18 }) + "<div><h2>Approve this computer?</h2><p>It will be able to run coding agents for your account. You can disconnect it at any time.</p></div></div>" +
+        '<dl class="facts"><dt>Computer</dt><dd>' + esc(primary.name) + "</dd><dt>Version</dt><dd>" + esc(primary.version) + "</dd><dt>Agents found</dt><dd>" + D.providers.map(function (p) { return esc(p.label); }).join(", ") + "</dd></dl>" +
+        '<div class="acts"><button class="btn primary" data-act="setup" data-v="ready">Approve computer</button><button class="btn" data-act="setup" data-v="idle">Not now</button></div></div>';
+    }
+    if (s === "waiting") {
+      return '<div class="card"><div class="headrow">' + St("progress", "", { size: 18 }) + "<div><h2>Looking for this computer</h2><p>Approve the browser prompt to open sparstrowgen on this computer. This usually takes a second or two.</p></div></div></div>";
+    }
+    if (s === "unanswered") {
+      return '<div class="card"><div class="headrow">' + St("warning", "", { size: 18 }) + "<div><h2>This computer has not answered yet</h2><p>It may still be starting, or it may not be installed here. Nothing is broken either way — try again, or install it first.</p></div></div>" +
+        '<div class="acts"><button class="btn primary" data-act="setup" data-v="waiting">' + I("refresh-cw", 14) + 'Try again</button><button class="btn" data-act="setup-install">' + I("download", 14) + "Install for Windows</button></div></div>";
+    }
+    return '<div class="card"><div class="headrow">' + I("monitor-smartphone", 18) + "<div><h2>Open sparstrowgen on this computer</h2><p>Your browser will ask for permission to open it. There is no code to copy, and nothing connects in to your computer — it dials out to us.</p></div></div>" +
+      '<div class="acts"><button class="btn primary" data-act="setup" data-v="waiting">Connect this computer</button><button class="btn" data-act="setup-install">' + I("download", 14) + "I have not installed it yet</button></div></div>";
+  }
+  function setupScreen() {
+    var steps = setupSteps(), now = 0;
+    steps.forEach(function (s, i) { if (s.at === "now") now = i + 1; });
+    var ready = S.setup === "ready";
+    var copy = ready
+      ? { h: "You’re ready", l: "That is everything. Your computer is connected and its agents are available to every conversation." }
+      : { h: "Connect this computer", l: "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here." };
+    return '<div class="setup"><div class="setup-top"><span class="wm"><span aria-hidden="true">s</span>sparstrowgen</span>' +
+      (steps.length > 1 && !ready ? '<span class="of">Step ' + now + " of " + steps.length + "</span>" : "") + "</div>" +
+      '<div class="setup-body">' + stepper() + "<h1>" + copy.h + '</h1><p class="lede">' + copy.l + "</p>" + setupStep() +
+      (ready ? "" : '<div class="skiprow"><span>You can connect a computer later. Your account is already usable.</span><button class="btn" data-act="setup-skip">Skip for now</button></div>') +
+      "</div></div>";
+  }
+
+  /* The compact rendering of the same list, for a setup that was skipped or
+     interrupted. It reopens the wizard rather than duplicating its steps. */
+  function setupCard() {
+    var steps = [{ label: "Connect this computer", done: false }];
+    if (S.future) steps.unshift({ label: "Add your profile", done: false }, { label: "Name your workspace", done: false });
+    var done = steps.filter(function (s) { return s.done; }).length;
+    return '<div class="setupcard"><button class="iconbtn x" data-act="setup-dismiss" aria-label="Hide setup">' + I("x", 14) + "</button>" +
+      "<h3>Finish setting up</h3><div class=\"of\">" + done + " of " + steps.length + " done</div><ul>" + steps.map(function (s) {
+        return '<li class="' + (s.done ? "is-done" : "") + '">' + St(s.done ? "success" : "pending", esc(s.label), { size: 14 }) + "</li>";
+      }).join("") + '</ul><button class="btn primary" data-act="setup" data-v="idle">Connect this computer</button></div>';
+  }
+
   /* ---------------------------------------------------------------- render */
   function render() {
     document.documentElement.classList.toggle("dark", S.theme === "dark");
@@ -344,24 +499,48 @@
     app.setAttribute("data-pinned", S.pinned);
     app.setAttribute("data-section", S.section);
     app.setAttribute("data-mview", S.mview);
-    app.innerHTML = '<div class="frame"><div class="shell">' + rail() + '<div class="pane-col">' + pane() + '</div><div class="main">' + head() + main + "</div></div>" + tray() + "</div>" + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
+    // The wizard takes the whole window: no rail, no pane, no tray. There is
+    // nowhere else to be during first-run setup, so there is nothing to show.
+    var body = S.setup === "off"
+      ? '<div class="frame"><div class="shell">' + rail() + '<div class="pane-col">' + pane() + '</div><div class="main">' + head() + main + "</div></div>" + tray() + "</div>"
+      : setupScreen();
+    app.innerHTML = body + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
     if (keep) { var qs = [].slice.call(document.querySelectorAll(".q")).filter(function (x) { return x.offsetParent !== null; }); var q = qs[0]; if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
     renderBar();
-    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width, pin: S.pinned ? "1" : "0" });
+    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width, pin: S.pinned ? "1" : "0", setup: S.setup, resume: S.resume ? "1" : "0", future: S.future ? "1" : "0" });
     try { history.replaceState(null, "", "?" + u.toString()); } catch (e) {}
   }
   function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-ctl="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
   function renderBar() {
-    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "empty", "loading", "error"]) + grp("Computer", "computer", ["online", "offline", "reconnecting"]) + grp("Theme", "theme", ["light", "dark"]) + grp("Width", "width", ["desktop", "narrow"]);
+    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "empty", "loading", "error"]) + grp("Computer", "computer", ["online", "offline", "reconnecting"]) + grp("Theme", "theme", ["light", "dark"]) + grp("Width", "width", ["desktop", "narrow"]) +
+      grp("Setup", "setup", ["off", "idle", "waiting", "unanswered", "approval", "ready", "loading", "error"]) +
+      '<span class="grp"><b>Resume card</b><button data-tgl="resume" aria-pressed="' + S.resume + '">' + (S.resume ? "shown" : "hidden") + '</button></span>' +
+      '<span class="grp"><b>Later steps</b><button data-tgl="future" aria-pressed="' + S.future + '">' + (S.future ? "shown" : "hidden") + "</button></span>";
   }
-  var toastT;
+  var toastT, waitT;
   function toast(m) { S.toast = m; render(); clearTimeout(toastT); toastT = setTimeout(function () { S.toast = ""; render(); }, 2200); }
 
   document.addEventListener("click", function (e) {
     var c = e.target.closest("[data-ctl]");
     if (c) { S[c.dataset.ctl] = c.dataset.v; render(); return; }
+    var t = e.target.closest("[data-tgl]");
+    if (t) { S[t.dataset.tgl] = !S[t.dataset.tgl]; render(); return; }
     var b = e.target.closest("[data-act]"); if (!b) return;
     var a = b.dataset.act, v = b.dataset.v;
+    // The wizard's own steps. Waiting becomes unanswered after eight seconds in
+    // the real app; here it is on a short timer so the branch can be watched.
+    if (a === "setup") {
+      S.setup = v;
+      if (v === "ready") { S.resume = false; S.computer = "online"; }
+      clearTimeout(waitT);
+      if (v === "waiting") waitT = setTimeout(function () { if (S.setup === "waiting") { S.setup = "unanswered"; render(); } }, 2600);
+      render(); return;
+    }
+    if (a === "setup-skip") { S.setup = "off"; S.resume = true; S.section = "chat"; S.computer = "offline"; render(); return; }
+    if (a === "setup-finish") { S.setup = "off"; S.resume = false; S.section = "chat"; render(); return; }
+    if (a === "setup-machines") { S.setup = "off"; S.resume = false; S.section = "machines"; S.mview = "detail"; render(); return; }
+    if (a === "setup-dismiss") { S.resume = false; render(); return; }
+    if (a === "setup-install") { toast("Install opens the Windows download page in the real app"); return; }
     if (a === "section") { S.section = v; S.mview = "list"; }
     else if (a === "pick") { if (S.section === "chat") S.sel.chat = v; else if (S.section === "machines") S.sel.machines = v; else S.sel.settings = v; S.mview = "detail"; }
     else if (a === "newchat") { var id = "n" + Date.now(); S.convs.unshift({ id: id, provider: "claude", model: "Opus 4.6", title: "", folder: "sparstrowgen", updated: "Just now" }); S.sel.chat = id; S.ui = "populated"; S.mview = "detail"; }

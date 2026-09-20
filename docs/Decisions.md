@@ -1084,3 +1084,67 @@ prototype raised about what "live" means.
 computer is reachable" fact for the account, not one per machine, so naming the first would be a
 guess about which one it meant. One computer is named; several are counted from the machines list.
 Still open for the owner if he wants it tied to the open conversation's computer instead.
+
+## D-046 — First-run setup is one list of steps rendered twice, and "install" is not one of them
+
+**2026-09-20, from the owner's choice between four directions**
+([shots](design/shots/2026-09-20-first-run-setup/README.md)).
+
+He picked two of the four and said why: **A** — a dedicated full-screen wizard — "is what we want
+when a new account is being setup, we would add lot more steps like adding workspace, account
+details etc", and **B** — a card inside the running app — "is needed when there is some of the
+setup in the wizard is skipped or the app is being quit in between".
+
+**They are one thing rendered two ways, not two features.** A is the full-screen rendering of the
+setup steps and B is the compact one. Both read the same `useSetupSteps()` hook and neither decides
+for itself what is outstanding. Two surfaces each computing "what is left" independently is how a
+checklist ends up claiming a step is undone after the wizard completed it — and with more steps
+coming, the number of ways they can disagree grows with every step added.
+
+**Install is a branch inside Connect, not a step of its own.** The chosen image showed "1 Install"
+already ticked. Nothing had checked it and nothing can: the daemon dials out only, so the sole way
+to learn whether the component is present is to open the `sparstrowgen://` link and see whether
+anything claims the pairing within eight seconds (`Capabilities.md`). A tick there asserts something
+we have no way to know, and an unanswered link still cannot be told apart from a slow or blocked one
+(`KnownGaps.md` G-40). So the steps are what the person does, and install help is what Connect shows
+when nothing answers.
+
+**Progress is derived today and account state later, behind one hook.** The only step that exists
+now is connecting a computer, and "has this account got one" is already in the machines list — so
+nothing new is stored, and Skip sets a per-browser flag like the rail pin (D-043). That per-browser
+choice is right *for this step*, because the daemon runs on the computer the browser is on and the
+same question on a phone is a genuinely different one. It stops being right the moment a step is an
+account fact — naming a workspace is not something to re-answer per browser. Putting both behind
+`useSetupSteps()` means that move changes the hook and neither surface.
+
+**Rejected:** C, sign-in opening the existing Machines section with pairing already running, which
+would have cost almost nothing because every piece of it is built. It has nowhere to put a second
+step. **Rejected:** D, a Bluetooth-style discovery list — a list implies more rows may arrive, and
+only one computer can ever appear, the one the browser is running on.
+
+## D-047 — The setup steps are Profile, Workspace, Machines, and only Machines is built
+
+**2026-09-20, the owner, on seeing the wizard prototype:** "step 1 should be profile with adding
+avatar, setting name, bio, then step 2 should be workspace, and step 3 is machines."
+
+Creating the account is **not** a step. It happened before setup opened — you are signed in by the
+time you get there — and a step you cannot act on is not a step. Nor is "Ready": finishing the last
+step *is* ready, so it is the screen after the sequence rather than an entry in it. The prototype
+originally drew both and was wrong on both counts.
+
+**Only Machines exists in this release.** Profile and Workspace are named here because the order is
+now decided and `useSetup` is built to take them, not because they are in scope — the approved
+release lists "Multiple workspaces, workspace invitations and workspace management" as out of
+scope, and Phase 1 says finish one story before starting the next. The prototype shows them behind
+`?future=1`, dashed and labelled *(later)*, so their place is visible without pretending they are
+built.
+
+**The stepper is hidden below two steps.** With Machines alone it would read "Step 1 of 1", which is
+a progress indicator with no progress in it. It appears when there is something to be partway
+through. Same for the "Step n of m" in the top bar, which also disappears on the final screen —
+counting a current step when every step is done produced "Step 0 of 3".
+
+**Where progress is remembered follows from the order.** Connecting a computer is a fact about the
+computer this browser runs on, so skipping is remembered per browser (D-046). Naming a workspace or
+setting an avatar is not — those are account facts. So the browser flag is right *today* and stops
+being right at Profile, which is step 1. `useSetup` is the single place that changes.

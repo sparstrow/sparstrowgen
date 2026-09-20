@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChatSurface } from "@/components/chat/chat-surface";
 import { SignIn, SignInChecking, SignInUnreachable } from "@/components/auth/sign-in";
-import { useSession } from "@/lib/queries";
+import { useSession, useSetup } from "@/lib/queries";
+import { useSetupView } from "@/lib/store";
 
 /* Which of the things this app is right now: checking, unreachable, signed out,
  * or signed in.
@@ -18,8 +21,35 @@ import { useSession } from "@/lib/queries";
  * see and renders accordingly, and every answer it gets is one the server
  * enforced (docs/Decisions.md D-025).
  */
+/* Someone who has never connected a computer meets setup rather than a Chat
+   that cannot send (spec US2, D-046). Three things have to be true first, and
+   all three are guards against sending the wrong person there:
+
+     signed in      — otherwise there is no account to set up
+     settled        — the machines list has actually loaded; an empty list while
+                      the query is pending is indistinguishable from an account
+                      with no computer (docs/Bugs.md B-46)
+     not skipped    — read from this browser, and `loaded` says it was really
+                      read rather than assumed
+
+   It is an effect rather than a render-time redirect because Chat is the right
+   thing to show while any of those is still unknown. */
+function useFirstRunRedirect(signedIn: boolean) {
+  const router = useRouter();
+  const setup = useSetup();
+  const { skipped, loaded, loadSkipped } = useSetupView();
+
+  useEffect(() => loadSkipped(), [loadSkipped]);
+
+  const send = signedIn && loaded && !skipped && setup.settled && !setup.complete;
+  useEffect(() => {
+    if (send) router.replace("/setup");
+  }, [send, router]);
+}
+
 export default function Home() {
   const session = useSession();
+  useFirstRunRedirect(session.data?.signedIn === true);
 
   if (session.isPending) return <SignInChecking />;
 

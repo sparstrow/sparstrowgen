@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "proto",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "4181", "--directory", "docs/design/prototypes"],
+      "port": 4181,
+      "autoPort": false
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "web", "dev"],

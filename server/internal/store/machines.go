@@ -31,6 +31,11 @@ type Pairing struct {
 	Status    string    `json:"status"`
 	MachineID string    `json:"machineId,omitempty"`
 	ExpiresAt time.Time `json:"expiresAt"`
+	// The computer that claimed this request, so the browser can name what it is
+	// asking about. It is not in the machines list and must not be: that list is
+	// approved computers only (see ListMachines), and this one is the pairing in
+	// progress. Empty until a daemon claims the request.
+	MachineName string `json:"machineName,omitempty"`
 }
 
 var ErrPairingUnavailable = errors.New("that pairing request is no longer available")
@@ -96,7 +101,26 @@ func (s *Store) Pairing(ctx context.Context, userID, pairingID string) (Pairing,
 	if err != nil {
 		return Pairing{}, err
 	}
-	return pairingFrom(row), nil
+	out := pairingFrom(row)
+	// Name the computer the browser is about to approve. Scoped to this account
+	// and to this pairing's own machine, so it can only ever name a computer
+	// that claimed a request this account minted.
+	//
+	// Raw SQL rather than a generated query because the machine is not approved
+	// yet, which every generated machine lookup deliberately excludes.
+	if row.MachineID.Valid {
+		var name string
+		switch err := s.pool.QueryRow(ctx,
+			"SELECT display_name FROM machines WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL",
+			row.MachineID, u,
+		).Scan(&name); {
+		case err == nil:
+			out.MachineName = name
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Pairing{}, err
+		}
+	}
+	return out, nil
 }
 
 // ClaimPairing atomically spends an opaque launch request. A second daemon with

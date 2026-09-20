@@ -118,6 +118,10 @@ export type Pairing = {
   status: "pending" | "claimed" | "approved" | "rejected";
   machineId?: string;
   expiresAt: string;
+  /** The computer that claimed this request. Absent until one does, and never
+   *  in the machines list — that is approved computers only. It is what the
+   *  approval prompt names, so the person can see what they are approving. */
+  machineName?: string;
 };
 
 export type UserMessage = {
