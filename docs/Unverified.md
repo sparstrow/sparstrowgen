@@ -358,27 +358,22 @@ seen: any of the real screens above, the failed-turn and folder-picker notices, 
 
 ## U-23 — The chat surface works at phone width, and on a desktop inside the new shell
 
-**Who can run it:** the owner, because it needs a signed-in session and this agent never
-types a password or creates an account (`CLAUDE.md`, the testing account).
+**From:** D-042 to D-045 and the shell wiring, 2026-09-19 · **Who can run it:** agent, on production
+**Status:** **verified 2026-09-20**, on `app.sparstrow.com` with the owner's own session and his real
+conversations, after #48 merged and deployed. Measured in the browser rather than eyeballed.
 
-Everything else in the new shell was verified in a browser at 1280 and 375 — the rail and its
-pin, the pane, the 56px header, the bottom tray, list-then-detail and the back arrow on
-Machines and Settings, no horizontal overflow, and a clean production build. Chat could not
-be: `/` shows the sign-in screen until a session exists, so `ChatSurface` never rendered.
+At 390 wide: the conversation list fills the screen (rows 358px, search 306px) with the tray at the
+foot of the viewport and nothing opened for you; opening a conversation replaces the screen, the tray
+is gone from the page entirely, the back arrow says "Back to conversations", the composer sits on the
+bottom edge with nothing under it, and the header keeps the title and folder while dropping
+Rendered/Raw and the token count. No horizontal overflow.
 
-**The step.** The dev stack for this worktree is already running (`scripts\dev.ps1`, server on
-:8082, web on :3002, database on :5435). Open `http://localhost:3002`, create the account it
-asks for, and open the confirmation link the server log prints:
-`Select-String -Path "$env:TEMP\sg-server.log" -Pattern 'http.*token='`. Then check, at a
-phone width and at a desktop width:
+At 1440 wide: rail 60, pane 211, header 56 across the rest, carrying the title, the folder,
+Rendered/Raw, "15.4k tokens" and the live status on one line; the first conversation opens by itself.
+The browser's websocket opens in 143ms and stays open, so the status is reporting a live connection
+rather than a stale guess.
 
-| | |
-|---|---|
-| Phone, `/` | The conversation list fills the screen with the tray under it, and nothing is opened for you |
-| Phone, a conversation | It fills the screen, the tray is gone, the back arrow returns to the list, and the composer sits on the bottom edge with nothing under it |
-| Phone, the header | Title and folder fit on one line; the Rendered/Raw toggle and the token count are not shown |
-| Desktop, `/` | Rail, conversations, transcript side by side, and the first conversation opens by itself |
-| Desktop, the header | Title, folder, Rendered/Raw, tokens and the live status all on the 56px line |
-| Either, the live status | It says the computer's name and "online" while the daemon is up, and "Reconnecting…" if the server is stopped |
+**Found and fixed in the same pass:** the live status's short form read "None" on a phone, which says
+nothing. It now reads "No computer".
 
-**Closes** [`KnownGaps.md`](KnownGaps.md) G-21 when the phone rows pass.
+This closes [`KnownGaps.md`](KnownGaps.md) G-21.
