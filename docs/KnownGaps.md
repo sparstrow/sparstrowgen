@@ -455,3 +455,26 @@ identifiable without the outline.
 - **If wrong:** someone with low vision may find the boundary of an empty field hard to see on a light theme.
 - **Clears when:** the owner wants heavier outlines, in which case `--input` in `globals.css` goes to about
   `oklch(0.2 0 0 / 48%)` and the design system artifact follows. Separators (`--border`) are arguable and can stay.
+
+## G-40 — A refused pairing looks like a computer that never answered
+
+**Kind:** caveat
+**Raised:** 2026-09-20, fixing B-43
+
+When a claim is refused because the computer belongs to another account, the daemon gets the
+explanation and writes it to its own log, where nobody is looking. The pairing stays `pending`, so
+the browser waits eight seconds and then says "This computer has not answered yet. It may still be
+starting." That is the wrong story: it answered immediately and was turned away.
+
+Carrying the reason to the browser needs the refusal recorded against the pairing — a column, or a
+`rejected` status the poll can distinguish — and the Machines screen has to say something useful
+when it sees one. Left alone because the harm B-43 caused is gone either way, and inventing a schema
+change was not the right thing to do unattended.
+
+- **If wrong:** somebody retries, reinstalls, or asks why their computer is broken, when the answer
+  is "disconnect it on the other account first".
+- **Clears when:** the pairing carries its refusal and the Machines screen shows it.
+
+**Also unexplained:** the owner's own click produced nothing at all — no prompt, no launch — though
+the `sparstrowgen://` handler is registered and points at an installed `sparstrowgen.exe`. Not
+reproduced; it needs to be known which browser it was.

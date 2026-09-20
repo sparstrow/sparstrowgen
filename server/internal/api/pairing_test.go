@@ -342,13 +342,60 @@ func TestAddingAComputerThatIsAlreadyConnectedChangesNothing(t *testing.T) {
 		t.Errorf("machines after adding it again = %+v, want the one computer, still online", list)
 	}
 
-	// Another account presenting the owner's credential is an ordinary new
-	// pairing for that account, never a way to reach the owner's computer.
+	// Another account presenting the owner's credential is refused
+	// (docs/Bugs.md B-43).
+	//
+	// This assertion used to be the opposite, on the reasoning that the second
+	// account gets a NEW machine and a NEW credential and so never reaches the
+	// owner's computer. That much is true, and it is not what goes wrong. The
+	// daemon that presented the credential is the owner's installed one — the
+	// sparstrowgen:// link opens whatever is installed — and on approval it
+	// renames the credential it was just issued over the one it holds. The
+	// owner's account then silently loses the computer to an account that only
+	// meant to add one.
+	//
+	// The server is the only place that can stop it: the daemon cannot tell
+	// "you are being moved to another account" from "your credential was
+	// revoked, here is a fresh one", because both look like being handed a new
+	// credential while holding an old one.
 	other := r.secondAccount()
 	_, otherRequest := other.startPairing()
 	status, theirs := other.claimWith(otherRequest, "SHARED-PC", credential)
-	if status != http.StatusOK || theirs.AlreadyPaired || theirs.Credential == "" || theirs.MachineID == machineID {
-		t.Errorf("another account's claim with the owner's credential: status %d, reply %+v", status, theirs)
+	if status != http.StatusConflict {
+		t.Errorf("another account claiming with the owner's credential: status %d, want 409; reply %+v", status, theirs)
+	}
+	if list := r.machines(); len(list) != 1 || list[0].ID != machineID || !list[0].Online {
+		t.Errorf("the owner's machines after the refusal = %+v, want his one computer, still online", list)
+	}
+	if list := other.machines(); len(list) != 0 {
+		t.Errorf("the second account's machines after the refusal = %+v, want none", list)
+	}
+}
+
+// A refusal must not block the legitimate reason a daemon holds a credential
+// the server will not honour: it was disconnected, and is being paired again.
+func TestAComputerCanBePairedAgainAfterItIsDisconnected(t *testing.T) {
+	r := newRig(t)
+	machineID, credential, _ := r.pairComputer("DESKTOP-RIVER")
+
+	if res := r.do(http.MethodDelete, "/api/machines/"+machineID, nil); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("disconnect: %s", res.Status)
+	}
+
+	// The same computer, still holding the credential that was just revoked.
+	id, request := r.startPairing()
+	status, out := r.claimWith(request, "DESKTOP-RIVER", credential)
+	if status != http.StatusOK || out.AlreadyPaired || out.Credential == "" {
+		t.Fatalf("pairing a disconnected computer again: status %d, reply %+v", status, out)
+	}
+	if out.MachineID == machineID {
+		t.Errorf("machineId = the revoked machine; want a new one")
+	}
+	if res := r.post("/api/machines/pairings/"+id+"/approve", map[string]any{}); res.StatusCode != http.StatusOK {
+		t.Fatalf("approve: %s", res.Status)
+	}
+	if list := r.machines(); len(list) != 1 || list[0].ID != out.MachineID {
+		t.Errorf("machines after pairing again = %+v, want the new computer only", list)
 	}
 }
 
