@@ -416,14 +416,30 @@ This closes [`KnownGaps.md`](KnownGaps.md) G-21.
 ## U-24 — The design system artifact still describes the old shell
 
 **From:** the shell wiring (#48), 2026-09-19 · **Who can run it:** agent
-**Status:** open — **known drift, recorded rather than fixed**, per CLAUDE.md's design rules.
+**Status:** open — **known drift, deliberately not fixed at 1am.** Recorded rather than rushed,
+because this artifact is what every agent reads before writing UI, and a wrong one is worse than an
+incomplete one.
 
 `apps/web` gained `components/shell/` — `Rail`, `SectionTray`, `AppShell`, `AppHeader`, `PaneHeader`
 and `LiveStatus` — and lost `components/ui/sidebar.tsx` and `components/product-sidebar.tsx`. The
-[artifact](https://claude.ai/artifact/Lyougp9xy958FaBcXWQFyS) still documents the shadcn `Sidebar`
-as the app's navigation and knows nothing about the rail, the pin, the pane or the bottom tray.
+artifact still carries a `SidebarNav` component whose README describes the shadcn sidebar, ending
+"The `sidebar-*` tokens are aliases here; the live app has not defined them yet" — which is now
+permanently true, because the component that would have used them is deleted.
 
-**The step:** add a Shell section to the artifact covering those five components — their props, the
-60/224/212/56 measurements, the 768px breakpoint, and the phone's list-then-detail behaviour — and
-delete `Sidebar` from it, noting that its `--sidebar-*` tokens were never defined in this app. Also
-add `--pane` if the pane's `bg-muted/40` is ever tuned into a token of its own.
+**How the artifact is actually built** (confirmed 2026-09-20, so the next session does not have to
+work it out):
+
+- It is **spec-driven**, not hand-edited. The generators are `build.mjs`, `bundle.src.js`,
+  `spec.txt`, `gen-tokens.mjs` and `icons.json` in the **session scratchpad**, not in the repo.
+- `spec.txt` holds one `@@ Name|Group|height|subtitle` block per component, each with a `--readme`
+  and a `--preview` section; `bundle.src.js` holds the React implementations and the export map that
+  becomes `window.SparstrowgenDS`. `build.mjs` reads both, plus the provider mark paths straight out
+  of `apps/web/components/chat/provider-icon.tsx`, and writes `ds/project/`.
+- **The generators live only in a session scratchpad, so they may not survive.** If they are gone,
+  they have to be rebuilt from the published `bundle.js` before anything can be added.
+
+**The step:** retire `SidebarNav`; add `Rail` (60px, hover overlay, the pin at 224px),
+`SectionTray` (the phone's bottom navigation), `AppHeader` and `PaneHeader` (both 56px), and
+`LiveStatus`; note the 768px breakpoint and the phone's list-then-detail behaviour; update the
+component list and the "Live gaps" section in `project/README.md`; bump `lastChange` in
+`project/design-system.json`.
