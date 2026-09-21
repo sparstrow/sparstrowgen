@@ -27,7 +27,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio
 `
 
 type CreateUserParams struct {
@@ -50,6 +50,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -118,8 +120,17 @@ func (q *Queries) DeleteEveryUser(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deleteUserAvatar = `-- name: DeleteUserAvatar :exec
+DELETE FROM user_avatars WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserAvatar(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserAvatar, userID)
+	return err
+}
+
 const getUser = `-- name: GetUser :one
-SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE id = $1
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -134,12 +145,45 @@ func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
 
+const getUserAvatar = `-- name: GetUserAvatar :one
+SELECT content_type, bytes, updated_at FROM user_avatars WHERE user_id = $1
+`
+
+type GetUserAvatarRow struct {
+	ContentType string             `json:"content_type"`
+	Bytes       []byte             `json:"bytes"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserAvatar(ctx context.Context, userID pgtype.UUID) (GetUserAvatarRow, error) {
+	row := q.db.QueryRow(ctx, getUserAvatar, userID)
+	var i GetUserAvatarRow
+	err := row.Scan(&i.ContentType, &i.Bytes, &i.UpdatedAt)
+	return i, err
+}
+
+const getUserAvatarUpdatedAt = `-- name: GetUserAvatarUpdatedAt :one
+SELECT updated_at FROM user_avatars WHERE user_id = $1
+`
+
+// Just the timestamp. It decides whether an avatar exists and what its cache
+// key is, and it is read far more often than the image itself — so it never
+// pulls the bytes along with it.
+func (q *Queries) GetUserAvatarUpdatedAt(ctx context.Context, userID pgtype.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getUserAvatarUpdatedAt, userID)
+	var updated_at pgtype.Timestamptz
+	err := row.Scan(&updated_at)
+	return updated_at, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -154,12 +198,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const getUserByEmailForChange = `-- name: GetUserByEmailForChange :one
-SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1 FOR UPDATE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio FROM users WHERE email = $1 FOR UPDATE
 `
 
 // Resetting a forgotten password: the same lock as GetUserForChange, found by
@@ -176,12 +222,14 @@ func (q *Queries) GetUserByEmailForChange(ctx context.Context, email string) (Us
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const getUserByEmailForSignIn = `-- name: GetUserByEmailForSignIn :one
-SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE email = $1 FOR SHARE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio FROM users WHERE email = $1 FOR SHARE
 `
 
 // Signing in, holding the row against a password change.
@@ -204,12 +252,14 @@ func (q *Queries) GetUserByEmailForSignIn(ctx context.Context, email string) (Us
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const getUserForChange = `-- name: GetUserForChange :one
-SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent FROM users WHERE id = $1 FOR UPDATE
+SELECT id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio FROM users WHERE id = $1 FOR UPDATE
 `
 
 // Changing the password, excluding everything else on this row.
@@ -230,6 +280,8 @@ func (q *Queries) GetUserForChange(ctx context.Context, id pgtype.UUID) (User, e
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -238,7 +290,7 @@ const setUserAppearance = `-- name: SetUserAppearance :one
 UPDATE users
 SET appearance_mode = $2, appearance_surface = $3, appearance_accent = $4, updated_at = now()
 WHERE id = $1
-RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio
 `
 
 type SetUserAppearanceParams struct {
@@ -267,14 +319,35 @@ func (q *Queries) SetUserAppearance(ctx context.Context, arg SetUserAppearancePa
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
+}
+
+const setUserAvatar = `-- name: SetUserAvatar :exec
+INSERT INTO user_avatars (user_id, content_type, bytes, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE
+SET content_type = EXCLUDED.content_type, bytes = EXCLUDED.bytes, updated_at = now()
+`
+
+type SetUserAvatarParams struct {
+	UserID      pgtype.UUID `json:"user_id"`
+	ContentType string      `json:"content_type"`
+	Bytes       []byte      `json:"bytes"`
+}
+
+// One avatar per account, replaced in place.
+func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) error {
+	_, err := q.db.Exec(ctx, setUserAvatar, arg.UserID, arg.ContentType, arg.Bytes)
+	return err
 }
 
 const setUserEmail = `-- name: SetUserEmail :one
 UPDATE users SET email = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio
 `
 
 type SetUserEmailParams struct {
@@ -294,6 +367,8 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -301,7 +376,7 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 const setUserPassword = `-- name: SetUserPassword :one
 UPDATE users SET password_hash = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio
 `
 
 type SetUserPasswordParams struct {
@@ -321,6 +396,42 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 		&i.AppearanceMode,
 		&i.AppearanceSurface,
 		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
+	)
+	return i, err
+}
+
+const setUserProfile = `-- name: SetUserProfile :one
+UPDATE users
+SET display_name = $2, bio = $3, updated_at = now()
+WHERE id = $1
+RETURNING id, email, password_hash, created_at, updated_at, appearance_mode, appearance_surface, appearance_accent, display_name, bio
+`
+
+type SetUserProfileParams struct {
+	ID          pgtype.UUID `json:"id"`
+	DisplayName string      `json:"display_name"`
+	Bio         string      `json:"bio"`
+}
+
+// Name and bio together, for the same reason appearance saves all three at
+// once: the form submits both, so a tab holding a stale value cannot merge half
+// of it into the account.
+func (q *Queries) SetUserProfile(ctx context.Context, arg SetUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserProfile, arg.ID, arg.DisplayName, arg.Bio)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AppearanceMode,
+		&i.AppearanceSurface,
+		&i.AppearanceAccent,
+		&i.DisplayName,
+		&i.Bio,
 	)
 	return i, err
 }

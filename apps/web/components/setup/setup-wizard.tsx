@@ -10,7 +10,8 @@ import { useSetupView } from "@/lib/store";
 import { usePairing } from "@/lib/pairing";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusIcon } from "@/components/ui/status";
+import { ProfileFields } from "@/components/settings/profile-fields";
+import { StatusIcon, type StatusTone } from "@/components/ui/status";
 
 /* First-run setup: the full-screen rendering of the setup steps (D-046).
    No rail, no pane, no tray — there is nowhere else to be while it runs.
@@ -69,7 +70,7 @@ function Card({
   facts,
   actions,
 }: {
-  tone?: "progress" | "warning" | "success" | "danger";
+  tone?: StatusTone;
   icon?: React.ReactNode;
   title: string;
   children: React.ReactNode;
@@ -125,9 +126,18 @@ export function SetupWizard() {
   const connected = machines.data ?? [];
   const newest = connected[connected.length - 1];
   const ready = finished && !!newest;
-  const currentId = ready ? null : (setup.steps.find((s) => !s.done)?.id ?? null);
+
+  // A step passed over for now. Not persisted and not the same as skipping
+  // setup: "I will name myself later, let me connect the computer" leaves the
+  // step outstanding, so the resume card still lists it.
+  const [passed, setPassed] = useState<Set<string>>(new Set());
   const steps = ready ? setup.steps.map((s) => ({ ...s, done: true })) : setup.steps;
+  const current = ready ? null : (steps.find((s) => !s.done && !passed.has(s.id)) ?? null);
+  const currentId = current?.id ?? null;
   const stepNumber = steps.findIndex((s) => s.id === currentId) + 1;
+  // Every step either done or passed over, with nothing connected: there is no
+  // step to show, so the last screen is the honest one.
+  const nothingLeft = !ready && current === null;
 
   function leave(to: string) {
     unskip();
@@ -135,7 +145,7 @@ export function SetupWizard() {
   }
 
   let body: React.ReactNode;
-  if (machines.isPending) {
+  if (!setup.settled && !machines.isError) {
     body = (
       <section className="mt-6 space-y-3 rounded-lg border px-5 py-5" aria-busy="true">
         <Skeleton className="h-4 w-2/5" />
@@ -158,6 +168,26 @@ export function SetupWizard() {
         {pair.error ?? (machines.error as Error)?.message}. Your account is fine and nothing was
         connected.
       </Card>
+    );
+  } else if (currentId === "profile") {
+    // The editor is the same component Settings → Account uses, so there is one
+    // profile form in the app rather than two that drift. Saving a name makes
+    // this step done, which moves the wizard on by itself — there is no
+    // "current step" kept anywhere to get out of step with the account.
+    body = (
+      <section className="mt-6 rounded-lg border px-5 py-5">
+        <ProfileFields />
+        <p className="mt-5 border-t pt-4 text-sm text-muted-foreground">
+          Only the name matters, and you can change it whenever you like.{" "}
+          <button
+            type="button"
+            className="underline underline-offset-2 hover:text-foreground"
+            onClick={() => setPassed((p) => new Set(p).add("profile"))}
+          >
+            Do this later
+          </button>
+        </p>
+      </section>
     );
   } else if (ready) {
     body = (
@@ -242,15 +272,17 @@ export function SetupWizard() {
         again, or install it first.
       </Card>
     );
-  } else if (setup.complete) {
-    // Reached by hand, or finished in another tab. Offering to connect again
-    // under the heading "Connect this computer" would read as though the last
+  } else if (nothingLeft) {
+    // Either setup is genuinely finished — reached by hand, or completed in
+    // another tab — or every remaining step was passed over just now. Offering
+    // to connect under "Connect this computer" would read as though the last
     // attempt had not worked. Adding a SECOND computer is a real thing to want,
-    // but Machines is where that lives — this route is first-run setup.
+    // but Machines is where that lives; this route is first-run setup.
+    const left = steps.filter((s) => !s.done);
     body = (
       <Card
-        tone="success"
-        title="Setup is already finished"
+        tone={left.length ? "info" : "success"}
+        title={left.length ? "Nothing more for now" : "Setup is already finished"}
         actions={
           <>
             <Button onClick={() => leave("/")}>
@@ -258,12 +290,14 @@ export function SetupWizard() {
               Go to Chat
             </Button>
             <Button variant="outline" onClick={() => leave("/machines")}>
-              Add another computer
+              {left.some((s) => s.id === "machines") ? "Connect a computer" : "Add another computer"}
             </Button>
           </>
         }
       >
-        Everything here is done. Nothing needs connecting again.
+        {left.length
+          ? `You can still ${left.map((s) => s.task.toLowerCase()).join(" and ")} — it is waiting for you in Chat.`
+          : "Everything here is done. Nothing needs connecting again."}
       </Card>
     );
   } else {
@@ -286,6 +320,26 @@ export function SetupWizard() {
     );
   }
 
+  // The words belong to whichever step is showing, so the heading never
+  // describes one thing while the card below it does another.
+  const title =
+    ready || nothingLeft
+      ? {
+          heading: "You’re ready",
+          lede: ready
+            ? "That is everything. Your computer is connected and its agents are available to every conversation."
+            : "You can pick up anything left over from inside the app, whenever you want to.",
+        }
+      : currentId === "profile"
+        ? {
+            heading: "Your profile",
+            lede: "A name and a picture, so sparstrowgen refers to you as you rather than as your email address.",
+          }
+        : {
+            heading: "Connect this computer",
+            lede: "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here.",
+          };
+
   return (
     <main className="flex h-full flex-col overflow-y-auto">
       <div className="flex h-14 flex-none items-center justify-between border-b px-5">
@@ -302,19 +356,17 @@ export function SetupWizard() {
       <div className="mx-auto w-full max-w-xl px-6 pt-10 pb-12">
         <Stepper steps={steps} currentId={currentId} />
         <h1 className="text-center text-[22px] leading-7 font-semibold tracking-tight">
-          {ready || setup.complete ? "You’re ready" : "Connect this computer"}
+          {title.heading}
         </h1>
         <p className="mx-auto mt-2 max-w-md text-center text-sm text-muted-foreground">
-          {ready || setup.complete
-            ? "That is everything. Your computer is connected and its agents are available to every conversation."
-            : "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here."}
+          {title.lede}
         </p>
 
         {body}
 
-        {!ready && !setup.complete && (
+        {!ready && !nothingLeft && (
           <div className="mt-5 flex items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
-            <span>You can connect a computer later. Your account is already usable.</span>
+            <span>You can finish this later. Your account is already usable.</span>
             <Button
               variant="outline"
               size="sm"

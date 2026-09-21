@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import { AccountMenu } from "@/components/auth/account-menu";
+import { useProfile, useSession } from "@/lib/queries";
 import { useShellView } from "@/lib/store";
 
 /* The primary navigation, in two shapes for two shapes of screen.
@@ -43,6 +44,13 @@ export function Rail({ current }: { current: Section }) {
   // browser corrects it. Doing this in an effect rather than in the store's
   // initial state keeps the server and client markup identical.
   useEffect(loadPin, [loadPin]);
+
+  // The name when there is one, the email until then. The rail is the one place
+  // the app says who is signed in, so it never falls back to the word
+  // "Account" — that answers nothing.
+  const profile = useProfile();
+  const session = useSession();
+  const who = profile.data?.displayName?.trim() || session.data?.email || "Account";
 
   return (
     <div
@@ -112,7 +120,9 @@ export function Rail({ current }: { current: Section }) {
         <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2.5">
           <AccountMenu />
           <Label pinned={pinned}>
-            <span className="text-xs text-muted-foreground">Account</span>
+            <span className="min-w-0 truncate text-xs text-muted-foreground" title={who}>
+              {who}
+            </span>
           </Label>
         </div>
       </aside>

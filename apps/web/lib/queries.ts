@@ -25,6 +25,7 @@ import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-ty
 export const keys = {
   session: ["session"] as const,
   appearance: ["appearance"] as const,
+  profile: ["profile"] as const,
   providers: ["providers"] as const,
   daemon: ["daemon"] as const,
   machines: ["machines"] as const,
@@ -437,8 +438,40 @@ export function useMachines() {
   return useQuery({ queryKey: keys.machines, queryFn: api.machines });
 }
 
+/** This account's name, description and whether it has a picture. Read
+ *  wherever a person is shown, so it is one query the socket invalidates. */
+export function useProfile() {
+  return useQuery({ queryKey: keys.profile, queryFn: api.profile });
+}
+
+export function useSaveProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.saveProfile,
+    // The server answers with the saved profile, so the cache takes it rather
+    // than re-fetching what we were just handed.
+    onSuccess: (saved) => qc.setQueryData(keys.profile, saved),
+  });
+}
+
+export function useSaveAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.saveAvatar,
+    onSuccess: (saved) => qc.setQueryData(keys.profile, saved),
+  });
+}
+
+export function useRemoveAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.removeAvatar,
+    onSuccess: (saved) => qc.setQueryData(keys.profile, saved),
+  });
+}
+
 export type SetupStep = {
-  id: "machines";
+  id: "profile" | "machines";
   /** The word in the stepper. */
   label: string;
   /** The sentence in the resume card. */
@@ -461,28 +494,35 @@ export type Setup = {
 
 /** The one list of setup steps. The wizard renders it full-screen and the card
  *  in the Chat pane renders it compact; neither decides for itself what is
- *  outstanding (docs/Decisions.md D-046).
+ *  outstanding (docs/Decisions.md D-046, D-047).
  *
- *  The owner's order is Profile, then Workspace, then Machines — but Profile
- *  and Workspace are out of scope for the approved release, so only Machines
- *  exists here. They are added to this array when they are built, and both
- *  surfaces pick them up without being touched.
+ *  The owner's order is Profile, then Workspace, then Machines. Workspace is
+ *  not built — it needs its own spec — so the list is Profile and Machines, and
+ *  Workspace slots in here when it exists without either surface being touched.
  *
- *  Progress is DERIVED today: "has this account a computer" is already in the
- *  machines list, so nothing new is stored. That stops being enough the moment
- *  a step is an account fact rather than a fact about this computer — naming a
- *  workspace is not something to re-answer per browser — and at that point this
- *  function starts reading the account instead. That change lands here and
- *  neither surface notices. */
+ *  Every step's doneness is DERIVED from what the account already has, so
+ *  nothing tracks progress separately and nothing can disagree with reality: a
+ *  profile is done when it has a name, and computers when there is one. A
+ *  person who set their name on another device arrives with step one already
+ *  complete, without anything having been synchronised. */
 export function useSetup(): Setup {
   const machines = useMachines();
-  const connected = (machines.data ?? []).length > 0;
+  const profile = useProfile();
   const steps: SetupStep[] = [
+    {
+      id: "profile",
+      label: "Profile",
+      task: "Add your name and picture",
+      // A name is the one part that makes a difference to anyone else, so it is
+      // what "done" means. A picture and a description are optional and always
+      // will be — requiring them would make skipping the only way past.
+      done: (profile.data?.displayName ?? "") !== "",
+    },
     {
       id: "machines",
       label: "Machines",
       task: "Connect this computer",
-      done: connected,
+      done: (machines.data ?? []).length > 0,
     },
   ];
   const done = steps.filter((s) => s.done).length;
@@ -491,7 +531,10 @@ export function useSetup(): Setup {
     done,
     total: steps.length,
     complete: done === steps.length,
-    settled: machines.isSuccess,
+    // Every query behind a step has to have answered. Until then an empty
+    // profile and an empty machines list look exactly like an account that has
+    // neither (docs/Bugs.md B-46).
+    settled: machines.isSuccess && profile.isSuccess,
   };
 }
 
@@ -536,6 +579,12 @@ export function useRealtime() {
           // values on the event: the account is the one source of truth.
           void qc.invalidateQueries({ queryKey: keys.appearance });
           void qc.invalidateQueries({ queryKey: keys.session });
+          break;
+
+        case "profile":
+          // The name and picture are in the shell on every page, so a tab that
+          // was open while they changed would otherwise keep the old ones.
+          void qc.invalidateQueries({ queryKey: keys.profile });
           break;
 
         case "conversation":

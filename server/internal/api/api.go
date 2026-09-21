@@ -1,4 +1,4 @@
-// Package api is the HTTP and websocket surface the browser talks to.
+﻿// Package api is the HTTP and websocket surface the browser talks to.
 package api
 
 import (
@@ -113,7 +113,7 @@ func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
 // upgrader refuses a websocket from anywhere but the configured origin.
 //
 // A cookie is sent on a websocket handshake exactly as on any other request,
-// and the same-origin policy does NOT apply to websockets — so without this
+// and the same-origin policy does NOT apply to websockets â€” so without this
 // check any page a person happened to visit could open a socket to this
 // server, be authenticated by their own cookie, and read every conversation.
 //
@@ -192,6 +192,14 @@ func (a *API) Routes() http.Handler {
 		r.Post("/api/auth/password", a.changePassword)
 		r.Get("/api/appearance", a.getAppearance)
 		r.Post("/api/appearance", a.setAppearance)
+		r.Get("/api/profile", a.getProfile)
+		r.Post("/api/profile", a.setProfile)
+		// The picture is its own resource because it is bytes, not JSON, and
+		// because the browser fetches it with an <img> rather than with the
+		// profile. No id in the path: it is always the signed-in account's.
+		r.Get("/api/profile/avatar", a.getAvatar)
+		r.Post("/api/profile/avatar", a.putAvatar)
+		r.Delete("/api/profile/avatar", a.deleteAvatar)
 
 		r.Get("/ws", a.browserSocket)
 	})
@@ -201,7 +209,7 @@ func (a *API) Routes() http.Handler {
 // cors answers exactly one origin, and only with credentials allowed.
 //
 // "*" cannot legally be combined with credentials, and a browser enforces that
-// — but the deeper point is that the list of origins allowed to act as a signed
+// â€” but the deeper point is that the list of origins allowed to act as a signed
 // in person should be one, named in the deployment, rather than everything.
 //
 // Vary: Origin because the answer differs per request, and a cache that misses
@@ -323,7 +331,7 @@ func (a *API) patchConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Fetched first, for its owner, so a patch naming no field still answers
-	// 404 for a conversation that is not this account's — rather than 200 with
+	// 404 for a conversation that is not this account's â€” rather than 200 with
 	// an empty conversation.
 	c, err := a.store.Get(r.Context(), user.ID, id)
 	if err == nil && body.Title != nil {
@@ -376,7 +384,7 @@ func (a *API) switchCost(w http.ResponseWriter, r *http.Request) {
 }
 
 // estimateTokens is chars/4, the standard rough ratio. It is an estimate and
-// the UI says so — but it is derived from the actual text that would be sent,
+// the UI says so â€” but it is derived from the actual text that would be sent,
 // which a flat per-message figure was not.
 func estimateTokens(entries []protocol.Entry) int64 {
 	var chars int
@@ -387,7 +395,7 @@ func estimateTokens(entries []protocol.Entry) int64 {
 }
 
 // ---------------------------------------------------------------------------
-// sending a message — where a turn begins
+// sending a message â€” where a turn begins
 // ---------------------------------------------------------------------------
 
 func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
@@ -429,8 +437,8 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The replay marker is written HERE — at the moment the catch-up is paid
-	// for — never when the provider was selected. Selecting is free, and the
+	// The replay marker is written HERE â€” at the moment the catch-up is paid
+	// for â€” never when the provider was selected. Selecting is free, and the
 	// transcript should say what happened, not what was contemplated.
 	//
 	// The condition is what this provider has not seen, and nothing else.
@@ -461,7 +469,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Name it from what is being said, before the conversation is broadcast
-	// below — so the name travels with the same event rather than needing a
+	// below â€” so the name travels with the same event rather than needing a
 	// second one. Only ever fills a blank (docs/Decisions.md D-024).
 	//
 	// A failure here is logged and not returned: the message is what was asked
@@ -551,7 +559,7 @@ func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
 	// Saying "not yours" would confirm that a turn id is live.
 	if t == nil || t.UserID != user.ID {
 		// The click and the turn ending race by nature, so this is an ordinary
-		// outcome rather than something to alarm anyone about — but it is not a
+		// outcome rather than something to alarm anyone about â€” but it is not a
 		// success either, because nothing was stopped.
 		a.fail(w, errTurnNotRunning, http.StatusConflict)
 		return
@@ -645,7 +653,7 @@ func (a *API) handleDaemonMessage(userID string, msg protocol.DaemonMessage) {
 // because that machine has gone.
 //
 // Only a message carrying a turn id ever finished a turn, and the process that
-// would have sent one no longer exists — so without this the agent entry stays
+// would have sent one no longer exists â€” so without this the agent entry stays
 // an empty placeholder and the composer stays locked, including after a
 // refresh (docs/Bugs.md B-8). Other accounts' turns run on other machines and
 // are untouched.
