@@ -438,8 +438,23 @@ work it out):
 - **The generators live only in a session scratchpad, so they may not survive.** If they are gone,
   they have to be rebuilt from the published `bundle.js` before anything can be added.
 
+**The drift has grown since** (2026-09-21, first-run setup and the profile). Also missing, and in
+the same register so that one pass closes all of it:
+
+| Added to `apps/web` | What the artifact needs to say |
+|---|---|
+| `components/ui/avatar.tsx` | A person in a circle: the picture when there is one, initials otherwise, never an empty circle. Sizes 7 (rail, menu) and 16 (profile form). |
+| `components/setup/setup-wizard.tsx` | The full-screen first-run surface, and its `Stepper` — hidden below two steps, because a progress indicator with no progress in it is decoration. |
+| `components/setup/setup-card.tsx` | The compact rendering of the same steps, in the Chat pane. |
+| `components/settings/profile-fields.tsx` | The one profile editor, used by both Settings → Account and the wizard. |
+| `Composer` | Now takes `disabledTone`: amber for a fault, neutral for a step not taken (B-46). |
+
+**No new tokens** were introduced by any of it, which is the part worth checking rather than
+assuming — every surface above uses `background`, `muted`, `border`, `primary`, `success` and the
+status colours that the artifact already documents.
+
 **The step:** retire `SidebarNav`; add `Rail` (60px, hover overlay, the pin at 224px),
-`SectionTray` (the phone's bottom navigation), `AppHeader` and `PaneHeader` (both 56px), and
-`LiveStatus`; note the 768px breakpoint and the phone's list-then-detail behaviour; update the
-component list and the "Live gaps" section in `project/README.md`; bump `lastChange` in
-`project/design-system.json`.
+`SectionTray` (the phone's bottom navigation), `AppHeader` and `PaneHeader` (both 56px),
+`LiveStatus`, and the five rows above; note the 768px breakpoint and the phone's list-then-detail
+behaviour; update the component list and the "Live gaps" section in `project/README.md`; bump
+`lastChange` in `project/design-system.json`.
