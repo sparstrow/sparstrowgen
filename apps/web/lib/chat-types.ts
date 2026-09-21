@@ -113,6 +113,18 @@ export type ComputerUpdates = {
   status: UpdateStatus;
 };
 
+/** Who a person is, as opposed to how they sign in. Per account, like
+ *  appearance, so it follows them to every browser. */
+export type Profile = {
+  /** Empty means not set — fall back to the email address. There is
+   *  deliberately no second way to be absent. */
+  displayName: string;
+  bio: string;
+  /** Absent when there is no picture. Doubles as the picture's cache key, so
+   *  replacing one is a new URL. */
+  avatarUpdatedAt?: string;
+};
+
 export type Pairing = {
   id: string;
   status: "pending" | "claimed" | "approved" | "rejected";

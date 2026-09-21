@@ -110,4 +110,13 @@ type User struct {
 	AppearanceMode    string             `json:"appearance_mode"`
 	AppearanceSurface string             `json:"appearance_surface"`
 	AppearanceAccent  string             `json:"appearance_accent"`
+	DisplayName       string             `json:"display_name"`
+	Bio               string             `json:"bio"`
+}
+
+type UserAvatar struct {
+	UserID      pgtype.UUID        `json:"user_id"`
+	ContentType string             `json:"content_type"`
+	Bytes       []byte             `json:"bytes"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

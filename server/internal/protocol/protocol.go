@@ -348,6 +348,11 @@ const (
 	// other browser it is signed in to converges on it rather than keeping the
 	// look it happened to load with.
 	EventAppearance = "appearance"
+	// EventProfile says this account's name, description or picture changed.
+	// Same reasoning as EventAppearance: the name is shown in the shell on every
+	// page, so a tab that was open while it changed would keep showing the old
+	// one until it happened to be reloaded.
+	EventProfile = "profile"
 )
 
 type ClientEvent struct {

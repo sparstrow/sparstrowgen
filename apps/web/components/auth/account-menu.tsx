@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { KeyRound, LogOut, MonitorSmartphone, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSession, useSignOut } from "@/lib/queries";
+import { useProfile, useSession, useSignOut } from "@/lib/queries";
+import { api } from "@/lib/api";
+import { initials } from "@/lib/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { ChangePassword } from "./change-password";
 
 /* The account, which is one account.
@@ -29,7 +33,16 @@ import { ChangePassword } from "./change-password";
 export function AccountMenu() {
   const [changing, setChanging] = useState(false);
   const session = useSession();
+  const profile = useProfile();
   const signOut = useSignOut();
+
+  // The picture if there is one, otherwise initials. Never an empty circle:
+  // that reads as something failing to load rather than as a choice nobody
+  // made. The email is the fallback for the letters, so this says something
+  // even before a name is set.
+  const src = api.avatarUrl(profile.data?.avatarUpdatedAt);
+  const letters = initials(profile.data?.displayName, session.data?.email);
+  const name = profile.data?.displayName?.trim() || session.data?.email;
 
   return (
     <>
@@ -45,19 +58,32 @@ export function AccountMenu() {
             />
           }
         >
-          <UserRound className="size-4" />
+          <Avatar src={src} initials={letters} className="size-7" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           {/* Not a menu item — there is nothing to click. It is a label saying
               whose account this is. */}
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="truncate text-sm" title={session.data?.email}>
-              {session.data?.email ?? "Signed in"}
+            <Avatar src={src} initials={letters} className="size-7" />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-sm" title={name}>
+                {name ?? "Signed in"}
+              </span>
+              {/* Only when the name is not already the address, so the two
+                  lines never say the same thing twice. */}
+              {profile.data?.displayName?.trim() ? (
+                <span className="truncate text-xs text-muted-foreground" title={session.data?.email}>
+                  {session.data?.email}
+                </span>
+              ) : null}
             </span>
           </div>
           <DropdownMenuSeparator />
 
+          <DropdownMenuItem render={<Link href="/settings/account" />}>
+            <UserRound className="size-4" />
+            Edit profile
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setChanging(true)}>
             <KeyRound className="size-4" />
             Change password

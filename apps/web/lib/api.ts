@@ -8,6 +8,7 @@ import type {
   ProviderId,
   Machine,
   Pairing,
+  Profile,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -193,6 +194,43 @@ export const api = {
    *  account later. */
   async saveAppearance(appearance: Appearance): Promise<Appearance> {
     return post(`${BASE}/api/appearance`, appearance);
+  },
+
+  /** Who this account says it is: a name to be called by, a line about
+   *  themselves, and whether there is a picture. Never the picture's bytes —
+   *  those are fetched by the browser with an <img>, not carried in JSON. */
+  async profile(): Promise<Profile> {
+    return json(await request(`${BASE}/api/profile`, { cache: "no-store" }));
+  },
+
+  /** Name and description together, like appearance and for the same reason. */
+  async saveProfile(profile: Pick<Profile, "displayName" | "bio">): Promise<Profile> {
+    return post(`${BASE}/api/profile`, profile);
+  },
+
+  /** The raw image, with its type in Content-Type. Not multipart: there is one
+   *  file and no fields beside it. */
+  async saveAvatar(blob: Blob): Promise<Profile> {
+    const res = await request(`${BASE}/api/profile/avatar`, {
+      method: "POST",
+      headers: { "Content-Type": blob.type },
+      body: blob,
+    });
+    return json(res);
+  },
+
+  async removeAvatar(): Promise<Profile> {
+    return json(await request(`${BASE}/api/profile/avatar`, { method: "DELETE" }));
+  },
+
+  /** Where an <img> points to load this account's own picture.
+   *
+   *  The upload time is in the query string so that replacing the picture is a
+   *  new URL: the response is cacheable, and without this a browser would keep
+   *  showing the old one. `at` is null when there is no picture, and then there
+   *  is nothing to point at. */
+  avatarUrl(at: string | null | undefined): string | null {
+    return at ? `${BASE}/api/profile/avatar?v=${encodeURIComponent(at)}` : null;
   },
 
   /** Exchanges an email and password for a session cookie. The cookie is
@@ -396,6 +434,9 @@ export type ServerEvent =
   | { type: "machines" }
   // This account's appearance changed in another tab or on another device.
   | { type: "appearance" }
+  // Its name, description or picture changed. The name is in the shell on every
+  // page, so a tab open while it changed would keep showing the old one.
+  | { type: "profile" }
   | { type: "conversation"; conversation: Conversation }
   | { type: "entry_added"; conversationId: string; entry: Entry }
   | { type: "entry_delta"; conversationId: string; entryId: string; text: string }

@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import { ChevronRight, Download, KeyRound, Palette } from "lucide-react";
+import { ChevronRight, Download, KeyRound, Palette, UserRound } from "lucide-react";
 import { cn } from "cn";
 import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
 
-export type SettingsPageId = "password" | "appearance" | "updates";
+export type SettingsPageId = "account" | "password" | "appearance" | "updates";
 
 type Entry = { id: SettingsPageId; label: string; href: string; icon: ComponentType<{ className?: string }> };
 
 // Only what is built. A group earns a place here when it has a page.
 const groups: { label: string; entries: Entry[] }[] = [
   { label: "Account", entries: [
+    { id: "account", label: "Account", href: "/settings/account", icon: UserRound },
     { id: "password", label: "Password", href: "/settings/password", icon: KeyRound },
     { id: "appearance", label: "Appearance", href: "/settings/appearance", icon: Palette },
   ] },
@@ -48,7 +49,12 @@ export function SettingsShell({ current, children }: { current: SettingsPageId |
       <AppHeader title={entry.label} back={{ href: "/settings", label: "Back to settings" }}/>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 md:px-10 md:py-8">
-          <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span>{group.label}</span><ChevronRight aria-hidden="true" className="size-3 shrink-0"/><span>{entry.label}</span></div>
+          {/* "Account > Account" tells nobody anything. A page named after its
+              own group shows the group once. */}
+          <div className="mb-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+            <span>{group.label}</span>
+            {group.label !== entry.label ? <><ChevronRight aria-hidden="true" className="size-3 shrink-0"/><span>{entry.label}</span></> : null}
+          </div>
           {children}
         </div>
       </div>

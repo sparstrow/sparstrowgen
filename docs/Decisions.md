@@ -1148,3 +1148,51 @@ counting a current step when every step is done produced "Step 0 of 3".
 computer this browser runs on, so skipping is remembered per browser (D-046). Naming a workspace or
 setting an avatar is not — those are account facts. So the browser flag is right *today* and stops
 being right at Profile, which is step 1. `useSetup` is the single place that changes.
+
+## D-048 — An avatar is bytes in Postgres, in its own table, squared by the browser
+
+**2026-09-21, building the profile.** There is no object storage anywhere in this
+system — the file story in `Capabilities.md` is the daemon writing into the folder a
+conversation runs in, which is unrelated. So an avatar needed somewhere to live.
+
+**Postgres, not a bucket.** Adding S3 or MinIO for avatars means a service to provision, a
+credential to rotate and a lifecycle to maintain, against the owner's standing "no manual upkeep"
+rule (D-035). These are one small square image per account; in the database they are in the
+database's backup rather than needing their own. If a bucket arrives for another reason, this moves
+behind the same store methods.
+
+**Its own table, not a column on `users`.** That row is read with `SELECT *` on every
+authenticated request to resolve the session. Image bytes on it would be dragged through every one
+of those reads for something almost nothing needs. `GetUserAvatarUpdatedAt` exists for the same
+reason: knowing whether there IS a picture is asked far more often than the picture is wanted.
+
+**The browser squares and shrinks it first.** Phone cameras produce several megabytes and the
+picture is displayed at 28px. The browser centre-crops to a square, scales to 256 and re-encodes as
+WebP; the server's 512KB cap is the backstop for a client that did not, not the expected size.
+Measured on a real upload: a 900x500 PNG of 27.8KB was stored as a 256px WebP of 4.8KB.
+
+**The accepted types are a closed list, not `image/*`.** An SVG is a document that can carry
+script, and serving one back from our own origin would run it there. PNG, JPEG and WebP only, with
+`X-Content-Type-Options: nosniff` and `Cache-Control: private` on the way out — a shared cache
+handing one account's picture to the next request would be a leak.
+
+**Upload is POST, though PUT is what replacing one resource means.** See D-049.
+
+## D-049 — Every route uses a method the CORS preflight allows, and a test says so
+
+**2026-09-21, found by running the avatar upload in a browser.** The route was `PUT
+/api/profile/avatar`. Every Go test passed, `curl` worked, and the feature was impossible to use:
+the CORS middleware allows `GET,POST,PATCH,DELETE,OPTIONS`, so the browser's preflight refused PUT
+before the request was ever sent. `curl` does not preflight, and the Go tests call the handler
+directly, so nothing in the suite could see it.
+
+The route now uses POST, which is what every other write in this API uses — a smaller change than
+widening the allowed methods for one endpoint.
+
+The lasting part is the test, not the fix: `TestEveryRouteUsesAMethodTheBrowserIsAllowedToSend`
+walks the chi router and fails if any browser-facing route is served on a method the preflight does
+not allow. Verified to fail by putting PUT back. Adding a route with a new method now fails there
+until the CORS list is changed deliberately.
+
+This is the second time a check that only a browser can run caught something a green suite could
+not (the first: the setup wizard having no websocket). It is the case for rule 6.

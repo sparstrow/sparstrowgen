@@ -84,3 +84,31 @@ UPDATE users
 SET appearance_mode = $2, appearance_surface = $3, appearance_accent = $4, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: SetUserProfile :one
+-- Name and bio together, for the same reason appearance saves all three at
+-- once: the form submits both, so a tab holding a stale value cannot merge half
+-- of it into the account.
+UPDATE users
+SET display_name = $2, bio = $3, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: SetUserAvatar :exec
+-- One avatar per account, replaced in place.
+INSERT INTO user_avatars (user_id, content_type, bytes, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE
+SET content_type = EXCLUDED.content_type, bytes = EXCLUDED.bytes, updated_at = now();
+
+-- name: GetUserAvatar :one
+SELECT content_type, bytes, updated_at FROM user_avatars WHERE user_id = $1;
+
+-- name: DeleteUserAvatar :exec
+DELETE FROM user_avatars WHERE user_id = $1;
+
+-- name: GetUserAvatarUpdatedAt :one
+-- Just the timestamp. It decides whether an avatar exists and what its cache
+-- key is, and it is read far more often than the image itself — so it never
+-- pulls the bytes along with it.
+SELECT updated_at FROM user_avatars WHERE user_id = $1;
