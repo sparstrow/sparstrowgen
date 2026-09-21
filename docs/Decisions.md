@@ -1122,7 +1122,7 @@ would have cost almost nothing because every piece of it is built. It has nowher
 step. **Rejected:** D, a Bluetooth-style discovery list — a list implies more rows may arrive, and
 only one computer can ever appear, the one the browser is running on.
 
-## D-047 — The setup steps are Profile, Workspace, Machines, and only Machines is built
+## D-047 — The setup steps are Profile, Workspace, Machines
 
 **2026-09-20, the owner, on seeing the wizard prototype:** "step 1 should be profile with adding
 avatar, setting name, bio, then step 2 should be workspace, and step 3 is machines."
@@ -1132,8 +1132,10 @@ time you get there — and a step you cannot act on is not a step. Nor is "Ready
 step *is* ready, so it is the screen after the sequence rather than an entry in it. The prototype
 originally drew both and was wrong on both counts.
 
-**Only Machines exists in this release.** Profile and Workspace are named here because the order is
-now decided and `useSetup` is built to take them, not because they are in scope — the approved
+**Profile and Machines are built; Workspace is not.** When this was written only Machines existed,
+and Profile was named here because the order was decided rather than because it was in scope — the
+owner asked for it the next day and it landed in #58 (D-048). Workspace still needs its own spec,
+and stays out — the approved
 release lists "Multiple workspaces, workspace invitations and workspace management" as out of
 scope, and Phase 1 says finish one story before starting the next. The prototype shows them behind
 `?future=1`, dashed and labelled *(later)*, so their place is visible without pretending they are
