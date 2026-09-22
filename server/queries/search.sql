@@ -8,8 +8,10 @@
 -- is explicable rather than mysterious. A title match returns none — the reason
 -- for that hit is already on screen.
 --
--- One account's conversations only. The account filter wraps the whole match,
--- so no OR branch can reach past it.
+-- One workspace's conversations, and only for an account that is in it. Both
+-- filters wrap the whole match, so no OR branch can reach past either of them.
+-- Searching across every workspace at once would undo the separation the
+-- workspaces are for (D-050): a search in Personal must not surface work.
 SELECT
     sqlc.embed(c),
     (
@@ -22,7 +24,11 @@ SELECT
         LIMIT 1
     ) AS excerpt
 FROM conversations c
-WHERE c.user_id = @user_id
+WHERE c.workspace_id = @workspace_id
+  AND EXISTS (
+        SELECT 1 FROM workspace_members m
+        WHERE m.workspace_id = c.workspace_id AND m.user_id = @user_id
+  )
   AND (
         c.title ILIKE '%' || @q::text || '%'
      OR c.folder ILIKE '%' || @q::text || '%'

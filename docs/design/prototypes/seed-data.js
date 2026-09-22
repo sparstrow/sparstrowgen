@@ -2,6 +2,9 @@
    states below are the ones the real app shows. Update this file, never a copy of it inside a prototype. */
 window.SPG_SEED = {
   account: { email: "agent@sparstrow.com" },
+  // Separate areas of work inside one account (D-050). The owner's own split:
+  // "I would create one personal and one work related workspace."
+  workspaces: ["Personal", "Client work"],
   conversations: [
     { id: "c1", provider: "claude", model: "Opus 4.6", title: "Fix flaky reconnect test", folder: "sparstrowgen", updated: "2 hours ago", tokens: 24100, spendUsd: 0.42 },
     { id: "c2", provider: "codex", model: "GPT-5.6 Sol", title: "Move the invoice export to a job", folder: "billing-api", updated: "Yesterday", tokens: 8300, spendUsd: 0 },
@@ -62,7 +65,8 @@ window.SPG_SEED = {
       { id: "claude", label: "claude", availability: "waitable", reason: "Machine unreachable" } ] },
   ],
   settings: [
-    { group: "Account", pages: [ { id: "password", label: "Password", icon: "key-round" }, { id: "appearance", label: "Appearance", icon: "palette" } ] },
+    { group: "Account", pages: [ { id: "account", label: "Account", icon: "circle-user" }, { id: "password", label: "Password", icon: "key-round" }, { id: "appearance", label: "Appearance", icon: "palette" } ] },
+    { group: "Workspaces", pages: [ { id: "workspaces", label: "Workspaces", icon: "folder-open" } ] },
     { group: "Computers", pages: [ { id: "updates", label: "Updates", icon: "download" } ] },
   ],
 };

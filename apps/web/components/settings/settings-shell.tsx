@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
-import { ChevronRight, Download, KeyRound, Palette, UserRound } from "lucide-react";
+import { ChevronRight, Download, FolderOpen, KeyRound, Palette, UserRound } from "lucide-react";
 import { cn } from "cn";
 import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
 
-export type SettingsPageId = "account" | "password" | "appearance" | "updates";
+export type SettingsPageId = "account" | "password" | "appearance" | "workspaces" | "updates";
 
 type Entry = { id: SettingsPageId; label: string; href: string; icon: ComponentType<{ className?: string }> };
 
@@ -16,6 +16,12 @@ const groups: { label: string; entries: Entry[] }[] = [
     { id: "account", label: "Account", href: "/settings/account", icon: UserRound },
     { id: "password", label: "Password", href: "/settings/password", icon: KeyRound },
     { id: "appearance", label: "Appearance", href: "/settings/appearance", icon: Palette },
+  ] },
+  // Its own group, not one more row under Account. A workspace is not a fact
+  // about the person the way a name or a password is — it is where the work
+  // is kept, and there will be more here (membership) than one row (D-050).
+  { label: "Workspaces", entries: [
+    { id: "workspaces", label: "Workspaces", href: "/settings/workspaces", icon: FolderOpen },
   ] },
   { label: "Computers", entries: [{ id: "updates", label: "Updates", href: "/settings/updates", icon: Download }] },
 ];

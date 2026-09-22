@@ -25,8 +25,14 @@ func (r *rig) secondAccount() *rig {
 	if err != nil {
 		r.t.Fatalf("create a second account: %v", err)
 	}
+	// Its own workspace, which is the point: two accounts never share one, so
+	// naming the other's id is the thing that has to answer nothing.
+	workspace, err := r.store.CreateWorkspace(context.Background(), user.ID, "Personal")
+	if err != nil {
+		r.t.Fatalf("create the second account's workspace: %v", err)
+	}
 	other := &rig{t: r.t, api: r.api, store: r.store, http: r.http,
-		client: newJarClient(r.t), userID: user.ID, mail: r.mail}
+		client: newJarClient(r.t), userID: user.ID, workspaceID: workspace.ID, mail: r.mail}
 	if res := other.post("/api/auth/login", map[string]any{
 		"email": testSecond, "password": testPassword,
 	}); res.StatusCode != http.StatusOK {
@@ -43,7 +49,13 @@ func TestAnotherAccountCannotReachTheOwnersConversations(t *testing.T) {
 	}
 	other := r.secondAccount()
 
-	for _, path := range []string{"/api/conversations", "/api/conversations?q=" + url.QueryEscape("private plan")} {
+	// From inside its own workspace it sees nothing, which is the ordinary
+	// case. The list is per workspace now (D-050), so the interesting request
+	// is the next block: naming the owner's workspace id directly.
+	for _, path := range []string{
+		"/api/conversations?workspace=" + other.workspaceID,
+		"/api/conversations?workspace=" + other.workspaceID + "&q=" + url.QueryEscape("private plan"),
+	} {
 		res := other.get(path)
 		if res.StatusCode != http.StatusOK {
 			t.Fatalf("GET %s: %s", path, res.Status)
@@ -55,8 +67,32 @@ func TestAnotherAccountCannotReachTheOwnersConversations(t *testing.T) {
 		}
 	}
 
+	// A workspace id is not permission either. Ids travel in URLs and
+	// screenshots, so naming the owner's answers exactly like a workspace that
+	// never existed rather than returning its contents.
+	for _, path := range []string{
+		"/api/conversations?workspace=" + r.workspaceID,
+		"/api/conversations?workspace=" + r.workspaceID + "&q=" + url.QueryEscape("private plan"),
+		"/api/folders/recent?workspace=" + r.workspaceID,
+	} {
+		if res := other.get(path); res.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s by another account: %s, want 404", path, res.Status)
+		}
+	}
+	if res := other.post("/api/conversations", map[string]any{"workspaceId": r.workspaceID}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("starting a conversation in the owner's workspace: %s, want 404", res.Status)
+	}
+	if res := other.do(http.MethodPatch, "/api/workspaces/"+r.workspaceID, map[string]any{"name": "mine now"}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("renaming the owner's workspace: %s, want 404", res.Status)
+	}
+	var spaces []protocol.Workspace
+	decodeInto(t, other.get("/api/workspaces"), &spaces)
+	if len(spaces) != 1 || spaces[0].ID != other.workspaceID {
+		t.Errorf("another account's workspace list = %+v, want only its own", spaces)
+	}
+
 	var folders map[string][]string
-	decodeInto(t, other.get("/api/folders/recent"), &folders)
+	decodeInto(t, other.get("/api/folders/recent?workspace="+other.workspaceID), &folders)
 	if len(folders["folders"]) != 0 {
 		t.Errorf("another account sees the owner's folders: %v", folders["folders"])
 	}

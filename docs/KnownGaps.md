@@ -464,3 +464,59 @@ change was not the right thing to do unattended.
 **Also unexplained:** the owner's own click produced nothing at all — no prompt, no launch — though
 the `sparstrowgen://` handler is registered and points at an installed `sparstrowgen.exe`. Not
 reproduced; it needs to be known which browser it was.
+
+## G-41 — Workspaces cannot be deleted, and there is no way out of one
+
+**Kind:** caveat
+**Raised:** 2026-09-21, building workspaces (D-050)
+
+A workspace can be made and renamed, and that is all. Nothing removes one.
+
+Deleting a workspace would take every conversation in it, which makes it the most destructive thing
+in the app — more so than deleting a conversation, because it is one press for an unknown number of
+them. Doing it properly means saying what is about to go before it goes ("Contoso holds 14
+conversations"), and that count is a query and a screen this delivery did not have a design for.
+Shipping a Delete that did not say is worse than not shipping one, so Settings → Workspaces says
+plainly that it is not possible yet rather than leaving people hunting for it.
+
+- **If wrong:** somebody makes a workspace by mistake, or finishes with one, and it sits in their
+  switcher for good.
+- **Clears when:** deletion exists with the count in the confirmation, or the owner says archiving
+  one is enough and that ships instead.
+
+## G-42 — On a phone, the workspace is switched from Settings
+
+**Kind:** caveat
+**Raised:** 2026-09-21, building workspaces (D-050)
+
+The switcher lives at the top of the rail, and below 768px there is no rail — the three sections
+become the bottom tray (D-044), which has no room for a fourth thing and should not have one. So on
+a phone the way to another workspace is Settings → Workspaces → Open.
+
+It works and it is two taps further than it should be. The right answer is probably the workspace
+name in the pane header on a phone, where it would also say which workspace the list belongs to —
+but that is a persistent piece of navigation, which is the owner's call to look at first (AGENTS.md
+§4), and this delivery did not put it in front of him.
+
+- **If wrong:** somebody on a phone thinks their conversations have gone, because they are in the
+  other workspace and nothing on screen says which one they are in.
+- **Clears when:** the phone layout says which workspace is open and offers the switch, or the owner
+  decides Settings is where it belongs.
+
+## G-43 — Live events are addressed to an account, not to a workspace
+
+**Kind:** caveat
+**Raised:** 2026-09-21, building workspaces (D-050)
+
+`hub.BroadcastTo(userID)` sends an event to every browser one ACCOUNT has open, whichever workspace
+each of them is looking at. That is exactly right today, because a workspace has one member, and it
+is the reason `protocol.Conversation` now carries `workspaceId`: the browser uses it to patch only
+the list the conversation actually belongs to.
+
+It stops being right the day somebody else is invited in. Then an event about a shared workspace has
+to reach every MEMBER, and the hub has no way to address that — it would need the workspace's
+members resolved at send time, which is a query on a path that currently does none.
+
+- **If wrong:** nothing today. With a second member, that person's browser would hear nothing about
+  work in a workspace they are in, until they reloaded.
+- **Clears when:** invitations exist, and broadcasting takes a workspace as well as an account.

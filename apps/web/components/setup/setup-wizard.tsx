@@ -11,6 +11,7 @@ import { usePairing } from "@/lib/pairing";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProfileFields } from "@/components/settings/profile-fields";
+import { WorkspaceFields } from "@/components/workspaces/workspace-fields";
 import { StatusIcon, type StatusTone } from "@/components/ui/status";
 
 /* First-run setup: the full-screen rendering of the setup steps (D-046).
@@ -24,8 +25,7 @@ import { StatusIcon, type StatusTone } from "@/components/ui/status";
 
 function Stepper({ steps, currentId }: { steps: SetupStep[]; currentId: string | null }) {
   // One step is not a sequence, and a progress indicator with no progress in it
-  // is decoration. It appears when there is something to be partway through —
-  // which is when Profile and Workspace are built.
+  // is decoration. It appears when there is something to be partway through.
   if (steps.length < 2) return null;
   return (
     <ol className="mb-7 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-2">
@@ -189,6 +189,19 @@ export function SetupWizard() {
         </p>
       </section>
     );
+  } else if (currentId === "workspace") {
+    // The same editor Settings → Workspaces uses. Creating the first one makes
+    // this step done, which moves the wizard on by itself — and because the
+    // account genuinely has a workspace afterwards, nothing here has to
+    // remember that it happened.
+    //
+    // No "Do this later" on this one. Every conversation is in a workspace, so
+    // there is nothing to show somebody who passes over it.
+    body = (
+      <section className="mt-6 rounded-lg border px-5 py-5">
+        <WorkspaceFields />
+      </section>
+    );
   } else if (ready) {
     body = (
       <Card
@@ -335,7 +348,12 @@ export function SetupWizard() {
             heading: "Your profile",
             lede: "A name and a picture, so sparstrowgen refers to you as you rather than as your email address.",
           }
-        : {
+        : currentId === "workspace"
+          ? {
+              heading: "Your first workspace",
+              lede: "A workspace keeps one body of work apart from another — personal in one, client work in the next. Everything you do lives in one of them.",
+            }
+          : {
             heading: "Connect this computer",
             lede: "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here.",
           };
@@ -364,20 +382,33 @@ export function SetupWizard() {
 
         {body}
 
+        {/* Skipping is offered for everything except the one step the app
+            cannot run without. There is nothing to skip TO while the account
+            has no workspace, so the row says what is needed instead of
+            offering a way out that would land on an empty Chat. */}
         {!ready && !nothingLeft && (
           <div className="mt-5 flex items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
-            <span>You can finish this later. Your account is already usable.</span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => {
-                skip();
-                router.push("/");
-              }}
-            >
-              Skip for now
-            </Button>
+            {setup.blocked ? (
+              <span>
+                A workspace is the one thing that cannot wait — every conversation is kept in one.
+                The rest of setup can.
+              </span>
+            ) : (
+              <>
+                <span>You can finish this later. Your account is already usable.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    skip();
+                    router.push("/");
+                  }}
+                >
+                  Skip for now
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>

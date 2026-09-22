@@ -17,7 +17,8 @@ import {
   type Session,
 } from "./api";
 import type { Appearance } from "./api";
-import type { Conversation, Entry, Model, Provider, ProviderId } from "./chat-types";
+import type { Conversation, Entry, Model, Provider, ProviderId, Workspace } from "./chat-types";
+import { useWorkspaceView } from "./store";
 
 /* Every read of server state goes through here, and every realtime event
    patches this cache rather than a second copy of the data (AGENTS.md §3). */
@@ -29,7 +30,12 @@ export const keys = {
   providers: ["providers"] as const,
   daemon: ["daemon"] as const,
   machines: ["machines"] as const,
-  conversations: (q: string) => ["conversations", q] as const,
+  workspaces: ["workspaces"] as const,
+  // The workspace is part of the key, not a filter applied afterwards: two
+  // workspaces are two different lists, and caching them under one key would
+  // show the last one's conversations for a moment after every switch.
+  conversations: (workspaceId: string, q: string) =>
+    ["conversations", workspaceId, q] as const,
   conversation: (id: string) => ["conversation", id] as const,
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
 };
@@ -248,13 +254,106 @@ export function useProviders() {
   });
 }
 
-export function useConversations(search: string) {
+// ---------------------------------------------------------------------------
+// workspaces
+// ---------------------------------------------------------------------------
+
+/** Every workspace this account can reach (docs/Decisions.md D-050).
+ *
+ *  An empty list is a real answer, not a failure: it is what a brand-new
+ *  account has until first-run setup's second step makes the first one. */
+export function useWorkspaces() {
+  const session = useSession();
   return useQuery({
-    queryKey: keys.conversations(search),
-    queryFn: () => api.conversations(search),
+    queryKey: keys.workspaces,
+    queryFn: api.workspaces,
+    enabled: session.data?.signedIn ?? false,
+    // Changes arrive over the websocket, so polling would duplicate a push.
+    staleTime: Infinity,
+  });
+}
+
+/** Which workspace this browser is looking at, resolved against what actually
+ *  exists.
+ *
+ *  The remembered id is a hint and nothing more. A workspace can be renamed,
+ *  and one day left or removed, and a browser holding an id it can no longer
+ *  reach must land somewhere real rather than on a wall of 404s — so an id that
+ *  is not in the list falls back to the first one. Null means the answer is not
+ *  known yet, or this account has no workspace at all; either way nothing
+ *  should be fetched for it. */
+export function useCurrentWorkspace(): string | null {
+  const workspaces = useWorkspaces();
+  const remembered = useWorkspaceView((s) => s.workspaceId);
+  const loaded = useWorkspaceView((s) => s.loaded);
+  const load = useWorkspaceView((s) => s.loadWorkspace);
+
+  // The server renders with nothing remembered, and only the browser can know
+  // better — the same reason the rail's pin is read this way.
+  useEffect(load, [load]);
+
+  const list = workspaces.data;
+  if (!loaded || !list || list.length === 0) return null;
+  return list.some((w) => w.id === remembered) ? remembered : list[0].id;
+}
+
+/** The one this browser is in, as the whole workspace rather than its id. */
+export function useWorkspace(): Workspace | null {
+  const id = useCurrentWorkspace();
+  const workspaces = useWorkspaces();
+  return workspaces.data?.find((w) => w.id === id) ?? null;
+}
+
+export function useCreateWorkspace() {
+  const qc = useQueryClient();
+  const setWorkspace = useWorkspaceView((s) => s.setWorkspace);
+  return useMutation({
+    mutationFn: (name: string) => api.createWorkspace(name),
+    onSuccess: (created) => {
+      qc.setQueryData<Workspace[]>(keys.workspaces, (prev) =>
+        [...(prev ?? []), created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      // Making one is how you say you want to be in it. Creating a workspace
+      // and staying in the old one would mean finding the new one in a menu
+      // straight afterwards.
+      setWorkspace(created.id);
+    },
+    onError: (err: Error) =>
+      toast.error("Could not create the workspace", { description: err.message }),
+  });
+}
+
+export function useRenameWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.renameWorkspace(id, name),
+    onSuccess: (saved) => {
+      qc.setQueryData<Workspace[]>(keys.workspaces, (prev) =>
+        (prev ?? [])
+          .map((w) => (w.id === saved.id ? saved : w))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    },
+    onError: (err: Error) =>
+      toast.error("Could not rename the workspace", { description: err.message }),
+  });
+}
+
+export function useConversations(search: string) {
+  const workspaceId = useCurrentWorkspace();
+  return useQuery({
+    queryKey: keys.conversations(workspaceId ?? "", search),
+    queryFn: () => api.conversations(workspaceId!, search),
+    // Nothing to list until we know which workspace. An account with none is
+    // on its way to the setup wizard, not looking at an empty sidebar.
+    enabled: workspaceId !== null,
     // Keeps the previous list on screen while a new search resolves, instead of
-    // flashing empty on every keystroke.
-    placeholderData: (prev) => prev,
+    // flashing empty on every keystroke. Only within one workspace: the key
+    // includes the workspace, and carrying the old list across a SWITCH would
+    // briefly show the other one's conversations, which is the one thing
+    // workspaces exist to prevent.
+    placeholderData: (prev, query) =>
+      query?.queryKey[1] === workspaceId ? prev : undefined,
   });
 }
 
@@ -270,16 +369,28 @@ export function useConversation(id: string | null) {
 // mutations
 // ---------------------------------------------------------------------------
 
-/** Invalidate every conversation list, whatever search term keyed it. */
-function invalidateLists(qc: QueryClient) {
-  return qc.invalidateQueries({ queryKey: ["conversations"] });
+/** Invalidate conversation lists, whatever search term keyed them.
+ *
+ *  Scoped to one workspace when the caller knows which — a change in Work has
+ *  nothing to say about the list in Personal. Given no workspace it refreshes
+ *  all of them, which is right for a change we cannot place. */
+function invalidateLists(qc: QueryClient, workspaceId?: string) {
+  return qc.invalidateQueries({
+    queryKey: workspaceId ? ["conversations", workspaceId] : ["conversations"],
+  });
 }
 
 export function useCreateConversation() {
   const qc = useQueryClient();
+  const workspaceId = useCurrentWorkspace();
   return useMutation({
-    mutationFn: (input: { provider?: ProviderId; model?: Model; folder?: string }) =>
-      api.create(input),
+    mutationFn: (input: { provider?: ProviderId; model?: Model; folder?: string }) => {
+      // Never a default on the server's side (D-050). If this is reached with
+      // no workspace the answer is to say so, not to put a transcript
+      // somewhere nobody was looking.
+      if (!workspaceId) throw new Error("No workspace is open yet.");
+      return api.create({ ...input, workspaceId });
+    },
     onSuccess: (created) => {
       qc.setQueryData(keys.conversation(created.id), created);
       void invalidateLists(qc);
@@ -471,12 +582,15 @@ export function useRemoveAvatar() {
 }
 
 export type SetupStep = {
-  id: "profile" | "machines";
+  id: "profile" | "workspace" | "machines";
   /** The word in the stepper. */
   label: string;
   /** The sentence in the resume card. */
   task: string;
   done: boolean;
+  /** A step setup cannot be left with outstanding. Only Workspace is: a name
+   *  and a computer can wait, but every conversation has to be somewhere. */
+  required?: boolean;
 };
 
 export type Setup = {
@@ -485,6 +599,10 @@ export type Setup = {
   total: number;
   /** Nothing outstanding. Not the same as "known": see `settled`. */
   complete: boolean;
+  /** A required step is still outstanding, so setup cannot be skipped past.
+   *  The redirect in app/page.tsx uses this to override a browser's saved
+   *  skip: an account with no workspace has nothing to be shown instead. */
+  blocked: boolean;
   /** The answer is based on a loaded machines list rather than a guess. Until
    *  this is true, nothing should route anyone anywhere or claim a step is
    *  undone — an empty list while the query is pending looks identical to an
@@ -496,9 +614,9 @@ export type Setup = {
  *  in the Chat pane renders it compact; neither decides for itself what is
  *  outstanding (docs/Decisions.md D-046, D-047).
  *
- *  The owner's order is Profile, then Workspace, then Machines. Workspace is
- *  not built — it needs its own spec — so the list is Profile and Machines, and
- *  Workspace slots in here when it exists without either surface being touched.
+ *  The owner's order, in his words: "step 1 should be profile with adding
+ *  avatar, setting name, bio, then step 2 should be workspace, and step 3 is
+ *  mahcines."
  *
  *  Every step's doneness is DERIVED from what the account already has, so
  *  nothing tracks progress separately and nothing can disagree with reality: a
@@ -508,6 +626,7 @@ export type Setup = {
 export function useSetup(): Setup {
   const machines = useMachines();
   const profile = useProfile();
+  const workspaces = useWorkspaces();
   const steps: SetupStep[] = [
     {
       id: "profile",
@@ -517,6 +636,18 @@ export function useSetup(): Setup {
       // what "done" means. A picture and a description are optional and always
       // will be — requiring them would make skipping the only way past.
       done: (profile.data?.displayName ?? "") !== "",
+    },
+    {
+      id: "workspace",
+      label: "Workspace",
+      task: "Make your first workspace",
+      // Having one, not having two. A second workspace is what makes the
+      // feature worth anything, but it is a thing to do when there is a second
+      // body of work — not a hoop on the way in.
+      done: (workspaces.data ?? []).length > 0,
+      // The only step the app cannot run without: every conversation is in a
+      // workspace, so there is nothing to skip to.
+      required: true,
     },
     {
       id: "machines",
@@ -531,10 +662,11 @@ export function useSetup(): Setup {
     done,
     total: steps.length,
     complete: done === steps.length,
+    blocked: steps.some((s) => s.required && !s.done),
     // Every query behind a step has to have answered. Until then an empty
-    // profile and an empty machines list look exactly like an account that has
-    // neither (docs/Bugs.md B-46).
-    settled: machines.isSuccess && profile.isSuccess,
+    // profile, an empty workspace list and an empty machines list look exactly
+    // like an account that has none of them (docs/Bugs.md B-46).
+    settled: machines.isSuccess && profile.isSuccess && workspaces.isSuccess,
   };
 }
 
@@ -587,6 +719,13 @@ export function useRealtime() {
           void qc.invalidateQueries({ queryKey: keys.profile });
           break;
 
+        case "workspaces":
+          // Created or renamed, here or in another tab. The list is short and
+          // the switcher shows it on every page, so it is re-read rather than
+          // patched from two shapes of event.
+          void qc.invalidateQueries({ queryKey: keys.workspaces });
+          break;
+
         case "conversation":
           qc.setQueryData<Conversation>(
             keys.conversation(ev.conversation.id),
@@ -597,7 +736,13 @@ export function useRealtime() {
                 ? { ...ev.conversation, entries: prev.entries, seenBy: prev.seenBy }
                 : prev,
           );
-          void invalidateLists(qc);
+          // Only the lists belonging to that conversation's OWN workspace.
+          // Events are addressed to an account, so a Work conversation
+          // finishing a turn arrives in a tab looking at Personal too, and
+          // invalidating everything would make that tab refetch — harmlessly
+          // today, and wrongly the moment anything is patched rather than
+          // refetched.
+          void invalidateLists(qc, ev.conversation.workspaceId);
           break;
 
         case "entry_added":

@@ -9,6 +9,7 @@ import type {
   Machine,
   Pairing,
   Profile,
+  Workspace,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -318,12 +319,41 @@ export const api = {
     }
   },
 
-  /** Every conversation, archived included — the archive is a filter, not a
-   *  separate store. A query searches titles, folders and message bodies in
-   *  Postgres and returns an excerpt for a body match. */
-  async conversations(search = ""): Promise<Conversation[]> {
-    const q = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : "";
-    return json(await request(`${BASE}/api/conversations${q}`, { cache: "no-store" }));
+  /** The workspaces this account can reach, and its role in each. An account
+   *  that has not made one yet has none: creating the first is first-run
+   *  setup's second step (docs/Decisions.md D-047). */
+  async workspaces(): Promise<Workspace[]> {
+    return json(await request(`${BASE}/api/workspaces`, { cache: "no-store" }));
+  },
+
+  async createWorkspace(name: string): Promise<Workspace> {
+    return post(`${BASE}/api/workspaces`, { name });
+  },
+
+  async renameWorkspace(id: string, name: string): Promise<Workspace> {
+    return json(
+      await request(`${BASE}/api/workspaces/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }),
+    );
+  },
+
+  /** Every conversation in ONE workspace, archived included — the archive is a
+   *  filter, not a separate store. A query searches titles, folders and message
+   *  bodies in Postgres and returns an excerpt for a body match.
+   *
+   *  The workspace is always named. There is no "whichever one" here, because
+   *  the whole point of a second workspace is that its work does not appear
+   *  beside the first's (D-050). */
+  async conversations(workspaceId: string, search = ""): Promise<Conversation[]> {
+    const q = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : "";
+    return json(
+      await request(`${BASE}/api/conversations?workspace=${encodeURIComponent(workspaceId)}${q}`, {
+        cache: "no-store",
+      }),
+    );
   },
 
   async conversation(id: string): Promise<Conversation> {
@@ -331,6 +361,7 @@ export const api = {
   },
 
   async create(input: {
+    workspaceId: string;
     folder?: string;
     provider?: ProviderId;
     model?: Model;
@@ -365,11 +396,15 @@ export const api = {
     return json(await request(`${BASE}/api/directories${q}`, { cache: "no-store" }));
   },
 
-  /** Folders already in use, most recent first. Free from conversations that
-   *  already exist, so there is no separate list to maintain. */
-  async recentFolders(): Promise<string[]> {
+  /** Folders already in use in this workspace, most recent first. Free from
+   *  conversations that already exist, so there is no separate list to
+   *  maintain — and per workspace, because the paths somebody works in say as
+   *  much about what they are doing as the conversations do. */
+  async recentFolders(workspaceId: string): Promise<string[]> {
     const body = await json<{ folders: string[] }>(
-      await request(`${BASE}/api/folders/recent`, { cache: "no-store" }),
+      await request(`${BASE}/api/folders/recent?workspace=${encodeURIComponent(workspaceId)}`, {
+        cache: "no-store",
+      }),
     );
     return body.folders;
   },
@@ -437,6 +472,9 @@ export type ServerEvent =
   // Its name, description or picture changed. The name is in the shell on every
   // page, so a tab open while it changed would keep showing the old one.
   | { type: "profile" }
+  // A workspace was created or renamed. The list is not carried: it is three
+  // rows long and refetching it is simpler than patching two shapes of change.
+  | { type: "workspaces" }
   | { type: "conversation"; conversation: Conversation }
   | { type: "entry_added"; conversationId: string; entry: Entry }
   | { type: "entry_delta"; conversationId: string; entryId: string; text: string }

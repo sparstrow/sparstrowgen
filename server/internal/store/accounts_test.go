@@ -31,7 +31,10 @@ func TestAnotherAccountsConversationIsNotFound(t *testing.T) {
 	owner := uniqueAccount(t, s)
 	other := uniqueAccount(t, s)
 
-	c, err := s.Create(ctx, owner.ID, "D:\\owner\\project", "codex", protocol.Model{ID: "m1", Label: "M One"})
+	ownerSpace := aWorkspace(t, s, owner.ID)
+	otherSpace := aWorkspace(t, s, other.ID)
+
+	c, err := s.Create(ctx, owner.ID, ownerSpace, "D:\\owner\\project", "codex", protocol.Model{ID: "m1", Label: "M One"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,17 +61,37 @@ func TestAnotherAccountsConversationIsNotFound(t *testing.T) {
 		t.Errorf("NameFrom by another account: named=%v err=%v, want neither", named, err)
 	}
 
-	for _, query := range []string{"", "private plan", "owner"} {
-		list, err := s.List(ctx, other.ID, query)
-		if err != nil {
-			t.Fatal(err)
+	// Two ways to ask, and both have to answer nothing: from inside the other
+	// account's own workspace, and — the one that matters since D-050 — by
+	// naming the OWNER's workspace id, which is what a guessed or copied id
+	// would do.
+	for _, workspace := range []struct{ what, id string }{
+		{"its own workspace", otherSpace},
+		{"the owner's workspace id", ownerSpace},
+	} {
+		for _, query := range []string{"", "private plan", "owner"} {
+			list, err := s.List(ctx, other.ID, workspace.id, query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(list) != 0 {
+				t.Errorf("List(%q) for another account in %s returned %d conversations", query, workspace.what, len(list))
+			}
 		}
-		if len(list) != 0 {
-			t.Errorf("List(%q) for another account returned %d conversations", query, len(list))
+		if folders, err := s.RecentFolders(ctx, other.ID, workspace.id, 8); err != nil || len(folders) != 0 {
+			t.Errorf("another account's recent folders in %s = %v (err %v), want none", workspace.what, folders, err)
 		}
 	}
-	if folders, err := s.RecentFolders(ctx, other.ID, 8); err != nil || len(folders) != 0 {
-		t.Errorf("another account's recent folders = %v (err %v), want none", folders, err)
+
+	// And it cannot put a conversation into a workspace it is not in either.
+	if _, err := s.Create(ctx, other.ID, ownerSpace, "D:\\elsewhere", "codex", protocol.Model{ID: "m1", Label: "M One"}); !errors.Is(err, ErrNoWorkspace) {
+		t.Errorf("creating in another account's workspace: err = %v, want ErrNoWorkspace", err)
+	}
+	if _, err := s.Workspace(ctx, other.ID, ownerSpace); !errors.Is(err, ErrNoWorkspace) {
+		t.Errorf("reading another account's workspace: err = %v, want ErrNoWorkspace", err)
+	}
+	if _, err := s.RenameWorkspace(ctx, other.ID, ownerSpace, "mine now"); !errors.Is(err, ErrNoWorkspace) {
+		t.Errorf("renaming another account's workspace: err = %v, want ErrNoWorkspace", err)
 	}
 
 	// And the owner's conversation is exactly as it was.

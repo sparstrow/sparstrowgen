@@ -15,7 +15,7 @@ const addConversationUsage = `-- name: AddConversationUsage :one
 UPDATE conversations
 SET tokens = tokens + $2, spend_ticks = spend_ticks + $3, updated_at = now()
 WHERE id = $1
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type AddConversationUsageParams struct {
@@ -41,29 +41,41 @@ func (q *Queries) AddConversationUsage(ctx context.Context, arg AddConversationU
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const createConversation = `-- name: CreateConversation :one
-INSERT INTO conversations (user_id, folder, provider, model_id, model_label)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+INSERT INTO conversations (workspace_id, user_id, folder, provider, model_id, model_label)
+SELECT $1, $2, $3, $4, $5, $6
+WHERE EXISTS (
+    SELECT 1 FROM workspace_members m
+    WHERE m.workspace_id = $1 AND m.user_id = $2
+)
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type CreateConversationParams struct {
-	UserID     pgtype.UUID `json:"user_id"`
-	Folder     string      `json:"folder"`
-	Provider   string      `json:"provider"`
-	ModelID    string      `json:"model_id"`
-	ModelLabel string      `json:"model_label"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Folder      string      `json:"folder"`
+	Provider    string      `json:"provider"`
+	ModelID     string      `json:"model_id"`
+	ModelLabel  string      `json:"model_label"`
 }
 
 // A new conversation has no name. It gets one from the first thing said in it,
 // or from the owner typing one — never from a default that only looks like a
 // title.
+//
+// The workspace is where it lives; user_id is who started it. In a workspace
+// with one member those are the same person, and in a shared one the second is
+// the fact worth keeping (D-050). The SELECT is what stops a conversation being
+// created in a workspace the account is not in: no membership, no row.
 func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error) {
 	row := q.db.QueryRow(ctx, createConversation,
+		arg.WorkspaceID,
 		arg.UserID,
 		arg.Folder,
 		arg.Provider,
@@ -84,12 +96,18 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const deleteConversation = `-- name: DeleteConversation :exec
-DELETE FROM conversations WHERE id = $1 AND user_id = $2
+DELETE FROM conversations
+WHERE id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $2
+  )
 `
 
 type DeleteConversationParams struct {
@@ -121,7 +139,12 @@ func (q *Queries) DeleteConversationProviderSessions(ctx context.Context, conver
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id FROM conversations WHERE id = $1 AND user_id = $2
+SELECT id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id FROM conversations
+WHERE id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $2
+  )
 `
 
 type GetConversationParams struct {
@@ -145,27 +168,50 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
 
-SELECT id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id FROM conversations
-WHERE user_id = $1
+SELECT id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id FROM conversations
+WHERE conversations.workspace_id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $2
+  )
 ORDER BY updated_at DESC
 `
+
+type ListConversationsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
 
 // Every statement a person's request can reach names the ACCOUNT as well as the
 // conversation. An id alone is not permission — ids travel in URLs, screenshots
 // and logs — and somebody else's conversation answers exactly like one that
 // never existed: no rows (docs/KnownGaps.md G-27).
 //
+// Since D-050 a conversation belongs to a WORKSPACE, and an account reaches a
+// workspace by being a member of it. So "names the account" is now this clause,
+// repeated deliberately rather than hidden in a view:
+//
+//	EXISTS (SELECT 1 FROM workspace_members m
+//	        WHERE m.workspace_id = conversations.workspace_id
+//	          AND m.user_id = @user_id)
+//
+// One statement, one round trip, and the same answer for a conversation in
+// somebody else's workspace as for one that never existed. Nothing resolves a
+// workspace from a header: the two statements that need one take it as a named
+// parameter, and the rest reach it through the row they were given.
+//
 // The exceptions are the daemon's path (usage, and the entry and provider-session
 // queries in their own files). A turn is only ever started by postMessage after
 // the conversation was fetched for its owner, and the turn carries that owner.
-func (q *Queries) ListConversations(ctx context.Context, userID pgtype.UUID) ([]Conversation, error) {
-	rows, err := q.db.Query(ctx, listConversations, userID)
+func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error) {
+	rows, err := q.db.Query(ctx, listConversations, arg.WorkspaceID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +232,7 @@ func (q *Queries) ListConversations(ctx context.Context, userID pgtype.UUID) ([]
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UserID,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -198,7 +245,13 @@ func (q *Queries) ListConversations(ctx context.Context, userID pgtype.UUID) ([]
 }
 
 const lockConversation = `-- name: LockConversation :one
-SELECT id FROM conversations WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT id FROM conversations
+WHERE id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $2
+  )
+FOR UPDATE
 `
 
 type LockConversationParams struct {
@@ -207,7 +260,7 @@ type LockConversationParams struct {
 }
 
 // Deleting takes the row first, so its entries cannot be removed for a
-// conversation the caller does not own. Children go before the parent because
+// conversation the caller cannot reach. Children go before the parent because
 // the foreign keys do not cascade (D-009).
 func (q *Queries) LockConversation(ctx context.Context, arg LockConversationParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, lockConversation, arg.ID, arg.UserID)
@@ -217,15 +270,19 @@ func (q *Queries) LockConversation(ctx context.Context, arg LockConversationPara
 }
 
 const nameConversation = `-- name: NameConversation :one
-UPDATE conversations SET title = $3
-WHERE id = $1 AND user_id = $2 AND title IS NULL
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+UPDATE conversations SET title = $1
+WHERE id = $2 AND title IS NULL
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $3
+  )
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type NameConversationParams struct {
+	Title  *string     `json:"title"`
 	ID     pgtype.UUID `json:"id"`
 	UserID pgtype.UUID `json:"user_id"`
-	Title  *string     `json:"title"`
 }
 
 // Naming, as opposed to renaming: this only ever fills a blank. The guard is in
@@ -233,7 +290,7 @@ type NameConversationParams struct {
 // overwritten by one derived from a message, whatever order the two arrive in.
 // No rows means it already had a name, which is an outcome and not an error.
 func (q *Queries) NameConversation(ctx context.Context, arg NameConversationParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, nameConversation, arg.ID, arg.UserID, arg.Title)
+	row := q.db.QueryRow(ctx, nameConversation, arg.Title, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -248,6 +305,7 @@ func (q *Queries) NameConversation(ctx context.Context, arg NameConversationPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -255,15 +313,20 @@ func (q *Queries) NameConversation(ctx context.Context, arg NameConversationPara
 const recentFolders = `-- name: RecentFolders :many
 SELECT folder, max(updated_at) AS last_used
 FROM conversations
-WHERE user_id = $1
+WHERE conversations.workspace_id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $2
+  )
 GROUP BY folder
 ORDER BY last_used DESC
-LIMIT $2
+LIMIT $3
 `
 
 type RecentFoldersParams struct {
-	UserID pgtype.UUID `json:"user_id"`
-	Limit  int32       `json:"limit"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Lim         int32       `json:"lim"`
 }
 
 type RecentFoldersRow struct {
@@ -274,9 +337,12 @@ type RecentFoldersRow struct {
 // Folders already in use, most recently touched first. The picker's shortcut
 // list, and the default for a new conversation — both come free from
 // conversations that already exist rather than from a preference to maintain.
-// One account's folders only: another person's paths say where their work is.
+//
+// One workspace's folders, not one account's: the whole point of a second
+// workspace is that work's paths do not turn up while you are doing something
+// personal (D-050).
 func (q *Queries) RecentFolders(ctx context.Context, arg RecentFoldersParams) ([]RecentFoldersRow, error) {
-	rows, err := q.db.Query(ctx, recentFolders, arg.UserID, arg.Limit)
+	rows, err := q.db.Query(ctx, recentFolders, arg.WorkspaceID, arg.UserID, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -296,19 +362,23 @@ func (q *Queries) RecentFolders(ctx context.Context, arg RecentFoldersParams) ([
 }
 
 const renameConversation = `-- name: RenameConversation :one
-UPDATE conversations SET title = $3, updated_at = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+UPDATE conversations SET title = $1, updated_at = now()
+WHERE id = $2
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $3
+  )
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type RenameConversationParams struct {
+	Title  *string     `json:"title"`
 	ID     pgtype.UUID `json:"id"`
 	UserID pgtype.UUID `json:"user_id"`
-	Title  *string     `json:"title"`
 }
 
 func (q *Queries) RenameConversation(ctx context.Context, arg RenameConversationParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, renameConversation, arg.ID, arg.UserID, arg.Title)
+	row := q.db.QueryRow(ctx, renameConversation, arg.Title, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -323,24 +393,29 @@ func (q *Queries) RenameConversation(ctx context.Context, arg RenameConversation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const setConversationArchived = `-- name: SetConversationArchived :one
-UPDATE conversations SET archived = $3, updated_at = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+UPDATE conversations SET archived = $1, updated_at = now()
+WHERE id = $2
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $3
+  )
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type SetConversationArchivedParams struct {
+	Archived bool        `json:"archived"`
 	ID       pgtype.UUID `json:"id"`
 	UserID   pgtype.UUID `json:"user_id"`
-	Archived bool        `json:"archived"`
 }
 
 func (q *Queries) SetConversationArchived(ctx context.Context, arg SetConversationArchivedParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, setConversationArchived, arg.ID, arg.UserID, arg.Archived)
+	row := q.db.QueryRow(ctx, setConversationArchived, arg.Archived, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -355,24 +430,29 @@ func (q *Queries) SetConversationArchived(ctx context.Context, arg SetConversati
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const setConversationFolder = `-- name: SetConversationFolder :one
-UPDATE conversations SET folder = $3, updated_at = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+UPDATE conversations SET folder = $1, updated_at = now()
+WHERE id = $2
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $3
+  )
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type SetConversationFolderParams struct {
+	Folder string      `json:"folder"`
 	ID     pgtype.UUID `json:"id"`
 	UserID pgtype.UUID `json:"user_id"`
-	Folder string      `json:"folder"`
 }
 
 func (q *Queries) SetConversationFolder(ctx context.Context, arg SetConversationFolderParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, setConversationFolder, arg.ID, arg.UserID, arg.Folder)
+	row := q.db.QueryRow(ctx, setConversationFolder, arg.Folder, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -387,32 +467,37 @@ func (q *Queries) SetConversationFolder(ctx context.Context, arg SetConversation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const setConversationProvider = `-- name: SetConversationProvider :one
 UPDATE conversations
-SET provider = $3, model_id = $4, model_label = $5, updated_at = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id
+SET provider = $1, model_id = $2, model_label = $3, updated_at = now()
+WHERE id = $4
+  AND EXISTS (
+      SELECT 1 FROM workspace_members m
+      WHERE m.workspace_id = conversations.workspace_id AND m.user_id = $5
+  )
+RETURNING id, title, folder, provider, model_id, model_label, archived, spend_ticks, tokens, created_at, updated_at, user_id, workspace_id
 `
 
 type SetConversationProviderParams struct {
-	ID         pgtype.UUID `json:"id"`
-	UserID     pgtype.UUID `json:"user_id"`
 	Provider   string      `json:"provider"`
 	ModelID    string      `json:"model_id"`
 	ModelLabel string      `json:"model_label"`
+	ID         pgtype.UUID `json:"id"`
+	UserID     pgtype.UUID `json:"user_id"`
 }
 
 func (q *Queries) SetConversationProvider(ctx context.Context, arg SetConversationProviderParams) (Conversation, error) {
 	row := q.db.QueryRow(ctx, setConversationProvider,
-		arg.ID,
-		arg.UserID,
 		arg.Provider,
 		arg.ModelID,
 		arg.ModelLabel,
+		arg.ID,
+		arg.UserID,
 	)
 	var i Conversation
 	err := row.Scan(
@@ -428,6 +513,7 @@ func (q *Queries) SetConversationProvider(ctx context.Context, arg SetConversati
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.WorkspaceID,
 	)
 	return i, err
 }

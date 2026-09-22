@@ -665,6 +665,10 @@ the model changed would be the migration this avoids.
 ownership has to move from account to workspace, and that is a real migration. That feature needs
 its own spec first, so the trade is made knowingly.
 
+*That happened on 2026-09-21: the owner asked for workspaces and said he wants other people in them
+later. Conversation ownership moved to the workspace in D-050. The machine half of this entry still
+stands.*
+
 The machine half is deliberately minimal until pairing (US2). The shared `DAEMON_TOKEN` proves "the
 owner's machine", so it is attributed to the `OWNER_EMAIL` account at connection time and refused
 until that account exists. A second account has no machine and is told so; it can never reach the
@@ -1198,3 +1202,59 @@ until the CORS list is changed deliberately.
 
 This is the second time a check that only a browser can run caught something a green suite could
 not (the first: the setup wizard having no websocket). It is the case for rule 6.
+
+## D-050 — A workspace owns the work; the account is a member of it
+
+**2026-09-21.** Rejected: `workspaces.owner_id` with no membership table; a `workspace_id` column
+that only groups rows while the account keeps owning them; and Multica's request-header workspace
+resolution.
+
+D-031 chose account ownership and said exactly what would reopen it: *"If workspaces ever become
+shared — invitations into a workspace, other members' conversations — ownership has to move from
+account to workspace, and that is a real migration. That feature needs its own spec first, so the
+trade is made knowingly."* The owner made that call: *"I would create one personal and one work
+related workspace. Keeping both of them Separate. ALso adding other people to my workspace in
+future."* So the migration happens now, once, while there is one account's work to move — not later
+with real people's transcripts in it.
+
+**What the rows say now.** `workspaces` is the thing work belongs to. `workspace_members` says who
+may reach it and as what. `conversations.workspace_id` is who owns the conversation;
+`conversations.user_id` stays and now means *who started it*, which is the useful fact in a
+workspace with two people in it and costs nothing in one with a single member.
+
+**Membership is a table on day one, though every row in it is an owner.** This is the one place
+this change deliberately builds past today's feature, and the reason is that the alternative is not
+smaller — it is the same work moved later. With `owner_id`, every scoping statement reads
+`owner_id = $me`, and the day a second person is invited every one of them has to be rewritten into
+a join, which is the migration this entry exists to do only once. With the join in place from the
+start, inviting somebody is an `INSERT` and an endpoint, and nothing already written changes. The
+`role` column allows `owner` and `member`; only `owner` rows are ever written today.
+
+**An id is still not permission, and a header is still not a workspace.** Multica resolves the
+workspace from `X-Workspace-Slug`, `?workspace_slug`, `X-Workspace-ID` or `?workspace_id`, whichever
+the caller sends, then looks up membership. That is six ways to name one thing, and its own code
+records the consequence — MUL-2600, an agent widening its blast radius by naming a different
+workspace. Here a request either addresses a conversation by id, in which case one statement joins
+membership and names the account:
+
+```sql
+SELECT c.* FROM conversations c
+JOIN workspace_members m ON m.workspace_id = c.workspace_id
+WHERE c.id = $1 AND m.user_id = $2;
+```
+
+— or it lists a workspace's work, in which case the workspace is a named parameter on that one
+route and membership is checked before anything is read. Somebody else's workspace answers exactly
+like one that never existed, which is the property G-27 bought and this must not lose.
+
+**Computers stay with the account.** D-031's machine half is unchanged: a machine is `user_id`, a
+pairing is `user_id`, and a person's computer is available in every workspace they work in rather
+than paired once per workspace — which the spec's US2 asked for in as many words. When sharing
+arrives, a conversation in a shared workspace still runs on *your own* computer; whether a computer
+can be lent to a workspace is a later decision and deliberately not prejudged here.
+
+**Which workspace you are looking at is view state.** It lives in the browser, next to the pinned
+rail and the skipped-setup flag, and it is a parameter on the queries that need it — not a column
+on `users` and not a field on the session. Two tabs on two workspaces is the normal way to use
+this, and a server-side "current workspace" makes that the broken case. The workspace a browser
+has never heard of, or has lost access to, falls back to the first one the account is a member of.

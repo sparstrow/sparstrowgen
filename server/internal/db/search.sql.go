@@ -13,7 +13,7 @@ import (
 
 const searchConversations = `-- name: SearchConversations :many
 SELECT
-    c.id, c.title, c.folder, c.provider, c.model_id, c.model_label, c.archived, c.spend_ticks, c.tokens, c.created_at, c.updated_at, c.user_id,
+    c.id, c.title, c.folder, c.provider, c.model_id, c.model_label, c.archived, c.spend_ticks, c.tokens, c.created_at, c.updated_at, c.user_id, c.workspace_id,
     (
         SELECT e.body
         FROM entries e
@@ -24,7 +24,11 @@ SELECT
         LIMIT 1
     ) AS excerpt
 FROM conversations c
-WHERE c.user_id = $2
+WHERE c.workspace_id = $2
+  AND EXISTS (
+        SELECT 1 FROM workspace_members m
+        WHERE m.workspace_id = c.workspace_id AND m.user_id = $3
+  )
   AND (
         c.title ILIKE '%' || $1::text || '%'
      OR c.folder ILIKE '%' || $1::text || '%'
@@ -40,8 +44,9 @@ ORDER BY c.updated_at DESC
 `
 
 type SearchConversationsParams struct {
-	Q      string      `json:"q"`
-	UserID pgtype.UUID `json:"user_id"`
+	Q           string      `json:"q"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
 }
 
 type SearchConversationsRow struct {
@@ -58,10 +63,12 @@ type SearchConversationsRow struct {
 // is explicable rather than mysterious. A title match returns none — the reason
 // for that hit is already on screen.
 //
-// One account's conversations only. The account filter wraps the whole match,
-// so no OR branch can reach past it.
+// One workspace's conversations, and only for an account that is in it. Both
+// filters wrap the whole match, so no OR branch can reach past either of them.
+// Searching across every workspace at once would undo the separation the
+// workspaces are for (D-050): a search in Personal must not surface work.
 func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error) {
-	rows, err := q.db.Query(ctx, searchConversations, arg.Q, arg.UserID)
+	rows, err := q.db.Query(ctx, searchConversations, arg.Q, arg.WorkspaceID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +89,7 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.Conversation.CreatedAt,
 			&i.Conversation.UpdatedAt,
 			&i.Conversation.UserID,
+			&i.Conversation.WorkspaceID,
 			&i.Excerpt,
 		); err != nil {
 			return nil, err

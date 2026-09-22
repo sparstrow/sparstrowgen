@@ -165,6 +165,9 @@ func (a *API) Routes() http.Handler {
 		r.Use(a.requireSession)
 
 		r.Get("/api/providers", a.getProviders)
+		r.Get("/api/workspaces", a.listWorkspaces)
+		r.Post("/api/workspaces", a.createWorkspace)
+		r.Patch("/api/workspaces/{id}", a.renameWorkspace)
 		r.Get("/api/machines", a.listMachines)
 		r.Post("/api/machines/pairings", a.createPairing)
 		r.Get("/api/machines/pairings/{id}", a.getPairing)
@@ -263,7 +266,11 @@ func (a *API) getProviders(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) listConversations(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
-	list, err := a.store.List(r.Context(), user.ID, r.URL.Query().Get("q"))
+	ws, ok := a.workspaceFor(w, r, r.URL.Query().Get("workspace"))
+	if !ok {
+		return
+	}
+	list, err := a.store.List(r.Context(), user.ID, ws.ID, r.URL.Query().Get("q"))
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
@@ -284,9 +291,10 @@ func (a *API) getConversation(w http.ResponseWriter, r *http.Request) {
 func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
 	var body struct {
-		Folder   string         `json:"folder"`
-		Provider string         `json:"provider"`
-		Model    protocol.Model `json:"model"`
+		WorkspaceID string         `json:"workspaceId"`
+		Folder      string         `json:"folder"`
+		Provider    string         `json:"provider"`
+		Model       protocol.Model `json:"model"`
 	}
 	// An empty body is a legitimate "new conversation with the defaults", but a
 	// malformed one is not: ignoring the error here silently fell back to the
@@ -295,10 +303,17 @@ func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, http.StatusBadRequest)
 		return
 	}
+	// Which workspace is not a default. Everything below — the folder, and the
+	// conversation itself — belongs to one, and picking it here rather than
+	// being told is how a transcript ends up in the wrong place.
+	ws, ok := a.workspaceFor(w, r, body.WorkspaceID)
+	if !ok {
+		return
+	}
 	if body.Folder == "" {
 		// The folder this account last worked in beats the directory the server
 		// process happens to have been started in (docs/Bugs.md B-3).
-		if recent, err := a.store.RecentFolders(r.Context(), user.ID, 1); err == nil && len(recent) > 0 {
+		if recent, err := a.store.RecentFolders(r.Context(), user.ID, ws.ID, 1); err == nil && len(recent) > 0 {
 			body.Folder = recent[0]
 		} else {
 			body.Folder = defaultFolder()
@@ -309,9 +324,9 @@ func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 			body.Provider, body.Model = ps[0].ID, *ps[0].Model
 		}
 	}
-	c, err := a.store.Create(r.Context(), user.ID, body.Folder, body.Provider, body.Model)
+	c, err := a.store.Create(r.Context(), user.ID, ws.ID, body.Folder, body.Provider, body.Model)
 	if err != nil {
-		a.fail(w, err, http.StatusInternalServerError)
+		a.failWorkspace(w, err)
 		return
 	}
 	a.hub.BroadcastTo(user.ID, protocol.ClientEvent{Type: protocol.EventConversation, Conversation: &c})

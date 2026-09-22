@@ -24,10 +24,22 @@ func testStore(t *testing.T) *Store {
 	return New(testdb.Pool(t))
 }
 
+// aWorkspace gives an account somewhere to keep conversations. Every
+// conversation is in one since D-050, so every test that makes one needs this.
+func aWorkspace(t *testing.T, s *Store, userID string) string {
+	t.Helper()
+	w, err := s.CreateWorkspace(context.Background(), userID, "Test workspace")
+	if err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	return w.ID
+}
+
 func newConversation(t *testing.T, s *Store) protocol.Conversation {
 	t.Helper()
 	ctx := context.Background()
-	c, err := s.Create(ctx, storeOwner(t, s).ID, "D:\\test", "codex", protocol.Model{ID: "m1", Label: "M One"})
+	owner := storeOwner(t, s)
+	c, err := s.Create(ctx, owner.ID, aWorkspace(t, s, owner.ID), "D:\\test", "codex", protocol.Model{ID: "m1", Label: "M One"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

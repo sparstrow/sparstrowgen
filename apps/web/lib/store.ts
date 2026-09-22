@@ -157,9 +157,14 @@ export const useShellView = create<ShellView>((set, get) => ({
    question, so answering it once here should not answer it everywhere
    (docs/Decisions.md D-046).
 
-   It stops being the right home as soon as a step is an account fact — naming
-   a workspace is not something to re-answer per browser. When Profile and
-   Workspace arrive, this moves to the account and `useSetup` reads it there. */
+   Profile and Workspace are account facts rather than browser ones, which this
+   comment used to say would move the flag to the account. It has not, and here
+   is why it does not need to: skipping means "do not stop me on the way in",
+   and that is exactly a per-browser wish. What changed instead is that the one
+   step the app cannot run without — having a workspace at all — is not
+   skippable, and the redirect in app/page.tsx ignores this flag in that one
+   case. A skip can defer a name and a picture; it cannot defer the thing every
+   conversation needs to be in. */
 
 const SETUP_SKIPPED_KEY = "sparstrowgen.setup-skipped";
 
@@ -214,6 +219,55 @@ export const useSetupView = create<SetupView>((set) => ({
     }
   },
   loadSkipped: () => set({ skipped: readSkipped(), loaded: true }),
+}));
+
+/* -------------------------------------------------------------------------
+   Which workspace is being looked at.
+
+   View state, and deliberately so (docs/Decisions.md D-050). Two tabs open on
+   two workspaces is the normal way to use this, and a "current workspace" kept
+   on the account would make that the broken case — switching in one tab would
+   move the other.
+
+   Remembered in this browser so coming back lands where you left off, and read
+   in an effect rather than in the store's initial state so the server and
+   client render the same markup. The id is only ever a hint: the workspace
+   list is the authority, and `resolveWorkspace` below drops one this account
+   can no longer reach. */
+
+const WORKSPACE_KEY = "sparstrowgen.workspace";
+
+function readWorkspace(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+type WorkspaceView = {
+  /** The remembered id, before it has been checked against the real list. */
+  workspaceId: string | null;
+  /** True once the browser's remembered value has been read. Until then there
+   *  is no answer, only a default, and nothing should act on it. */
+  loaded: boolean;
+  setWorkspace: (id: string) => void;
+  loadWorkspace: () => void;
+};
+
+export const useWorkspaceView = create<WorkspaceView>((set) => ({
+  workspaceId: null,
+  loaded: false,
+  setWorkspace: (workspaceId) => {
+    set({ workspaceId });
+    try {
+      window.localStorage.setItem(WORKSPACE_KEY, workspaceId);
+    } catch {
+      // Blocked site data: the choice holds for this visit.
+    }
+  },
+  loadWorkspace: () => set({ workspaceId: readWorkspace(), loaded: true }),
 }));
 
 /* ---------------------------------------------------------------------- */

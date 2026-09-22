@@ -76,7 +76,10 @@ type rig struct {
 	client *http.Client
 	// userID is the account this client is signed in as.
 	userID string
-	mail   *mailbox
+	// workspaceID is that account's workspace. Every conversation lives in one
+	// (D-050), so every test that makes one uses this.
+	workspaceID string
+	mail        *mailbox
 }
 
 func newRig(t *testing.T) *rig {
@@ -128,6 +131,11 @@ func (r *rig) claim() {
 		r.t.Fatalf("create the owner: %v", err)
 	}
 	r.userID = owner.ID
+	workspace, err := r.store.CreateWorkspace(ctx, owner.ID, "Personal")
+	if err != nil {
+		r.t.Fatalf("create the workspace: %v", err)
+	}
+	r.workspaceID = workspace.ID
 	r.signIn()
 }
 
@@ -192,7 +200,7 @@ func (r *rig) ws(path string) string {
 // conversation makes one for this rig's account and removes it afterwards.
 func (r *rig) conversation(provider string) protocol.Conversation {
 	r.t.Helper()
-	c, err := r.store.Create(context.Background(), r.userID, "D:\\test", provider,
+	c, err := r.store.Create(context.Background(), r.userID, r.workspaceID, "D:\\test", provider,
 		protocol.Model{ID: "m1", Label: "M One"})
 	if err != nil {
 		r.t.Fatalf("create conversation: %v", err)
@@ -207,7 +215,7 @@ func (r *rig) conversation(provider string) protocol.Conversation {
 // which is why every conversation a test makes is cleaned up.
 func (r *rig) createConversation() protocol.Conversation {
 	r.t.Helper()
-	res := r.post("/api/conversations", nil)
+	res := r.post("/api/conversations", map[string]any{"workspaceId": r.workspaceID})
 	if res.StatusCode != http.StatusOK {
 		r.t.Fatalf("create conversation: %s", res.Status)
 	}
