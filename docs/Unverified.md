@@ -494,3 +494,23 @@ existing conversations rather than on an empty Chat.
 
 **If it fails:** the migration refuses rather than guessing — it raises if any conversation is left
 without a workspace — so a failure is a refused deploy, not a silent loss.
+
+## U-27 — Machine assignment with two computers actually online
+
+**Raised:** 2026-09-22, building machine assignment (D-051)
+**Who can run it:** the owner, with two computers connected; the agent, with two test daemons
+
+Every branch was exercised: the Go suite pairs a real computer over a real websocket and asserts
+that removing it from a workspace makes that workspace's send 503 while another workspace's
+succeeds, that the provider list and folder browsing follow the same rule, and that a stop reaches
+the computer running the turn. The browser checks were done against two computers that existed as
+rows but were **offline**, because this machine has one daemon and CLAUDE.md forbids using the
+owner's install for a test.
+
+**The step:** with two computers connected at once, assign one to Personal and the other to Work,
+then send a message in each and check it ran on the intended computer. G-44 is the reason this is
+worth doing by hand: with both online, which one runs the turn is not yet visible.
+
+**If it fails:** the routing is in `hub.Target` and is covered by
+`TestAWorkspaceRunsOnlyOnItsOwnComputers`, so a failure here is most likely about *which of two
+online* computers was picked, which is G-44 rather than a bug.

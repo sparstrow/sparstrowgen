@@ -86,6 +86,12 @@ type turn struct {
 	EntryID        string
 	Provider       string
 	Model          protocol.Model
+	// MachineID is the computer this turn is running on. Stopping it has to
+	// reach that computer — "the account's current machine" is a different one
+	// the moment another connects, and with several assigned to a workspace
+	// that is no longer a theoretical race. Empty means the legacy
+	// account-wide daemon (D-038).
+	MachineID string
 	// Text accumulated from deltas, so a provider that streams and then also
 	// sends a final message does not double up.
 	Streamed string
@@ -168,6 +174,12 @@ func (a *API) Routes() http.Handler {
 		r.Get("/api/workspaces", a.listWorkspaces)
 		r.Post("/api/workspaces", a.createWorkspace)
 		r.Patch("/api/workspaces/{id}", a.renameWorkspace)
+		// Which computers a workspace may use, and the same assignment from the
+		// computer's end. Both directions, because the owner asked for both.
+		r.Get("/api/workspaces/{id}/machines", a.workspaceMachines)
+		r.Post("/api/workspaces/{id}/machines/{machineId}", a.setWorkspaceMachine)
+		r.Get("/api/machines/{id}/workspaces", a.machineWorkspaces)
+		r.Post("/api/machines/{id}/workspaces/{workspaceId}", a.setMachineWorkspace)
 		r.Get("/api/machines", a.listMachines)
 		r.Post("/api/machines/pairings", a.createPairing)
 		r.Get("/api/machines/pairings/{id}", a.getPairing)
@@ -259,9 +271,21 @@ func (a *API) failConversation(w http.ResponseWriter, err error) {
 // conversations
 // ---------------------------------------------------------------------------
 
+// getProviders is what the workspace on screen can run: the agents on the
+// computer its work would go to. Not "every agent on every computer the account
+// has" — that would offer a provider the next message could not use.
 func (a *API) getProviders(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
-	writeJSON(w, a.hub.Providers(user.ID))
+	ws, ok := a.workspaceFor(w, r, r.URL.Query().Get("workspace"))
+	if !ok {
+		return
+	}
+	ids, err := a.machinesIn(r, ws.ID)
+	if err != nil {
+		a.failWorkspace(w, err)
+		return
+	}
+	writeJSON(w, a.hub.ProvidersIn(user.ID, ids))
 }
 
 func (a *API) listConversations(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +344,12 @@ func (a *API) createConversation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if body.Provider == "" {
-		if ps := a.hub.Providers(user.ID); len(ps) > 0 && ps[0].Model != nil {
+		ids, err := a.machinesIn(r, ws.ID)
+		if err != nil {
+			a.failWorkspace(w, err)
+			return
+		}
+		if ps := a.hub.ProvidersIn(user.ID, ids); len(ps) > 0 && ps[0].Model != nil {
 			body.Provider, body.Model = ps[0].ID, *ps[0].Model
 		}
 	}
@@ -439,9 +468,15 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		body.Provider, body.Model = conv.Provider, conv.Model
 	}
 
-	// This account's machine. Another account's machine being connected is no
-	// help, and must not be used.
-	if !a.hub.DaemonOnline(user.ID) {
+	// The computers THIS CONVERSATION'S WORKSPACE may use. Another account's
+	// machine is no help, and neither is one this workspace was not given
+	// (migration 00018) — assigning is what the work is routed by.
+	allowed, err := a.machinesIn(r, conv.WorkspaceID)
+	if err != nil {
+		a.failWorkspace(w, err)
+		return
+	}
+	if !a.hub.OnlineIn(user.ID, allowed) {
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)
 		return
 	}
@@ -526,15 +561,20 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		Type: protocol.EventEntryAdded, ConversationID: id, Entry: &agentEntry,
 	})
 
+	// The computer is chosen BEFORE the turn is recorded, so that the turn knows
+	// where it went from the moment it exists. Choosing after the send would
+	// leave a window in which a stop could not be addressed.
+	target, _ := a.hub.Target(user.ID, allowed)
+
 	turnID := agentEntry.ID
 	a.mu.Lock()
 	a.turns[turnID] = &turn{
 		UserID: user.ID, ConversationID: id, EntryID: agentEntry.ID,
-		Provider: body.Provider, Model: body.Model,
+		Provider: body.Provider, Model: body.Model, MachineID: target.MachineID,
 	}
 	a.mu.Unlock()
 
-	sent := a.hub.SendToDaemon(user.ID, protocol.ServerMessage{
+	sent := a.hub.SendToRunningMachine(user.ID, target.MachineID, protocol.ServerMessage{
 		Type: protocol.ServerRunTurn,
 		Turn: &protocol.RunTurn{
 			TurnID:          turnID,
@@ -579,7 +619,10 @@ func (a *API) stopTurn(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errTurnNotRunning, http.StatusConflict)
 		return
 	}
-	if !a.hub.SendToDaemon(user.ID, protocol.ServerMessage{
+	// To the computer this turn is RUNNING on, not to whichever one is current.
+	// With several computers in a workspace those are different machines, and
+	// stopping the wrong one would report success while the turn carried on.
+	if !a.hub.SendToRunningMachine(user.ID, t.MachineID, protocol.ServerMessage{
 		Type: protocol.ServerStopTurn, TurnID: turnID,
 	}) {
 		a.fail(w, errDaemonOffline, http.StatusServiceUnavailable)

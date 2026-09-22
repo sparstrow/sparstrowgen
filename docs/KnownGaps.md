@@ -520,3 +520,25 @@ members resolved at send time, which is a query on a path that currently does no
 - **If wrong:** nothing today. With a second member, that person's browser would hear nothing about
   work in a workspace they are in, until they reloaded.
 - **Clears when:** invitations exist, and broadcasting takes a workspace as well as an account.
+
+## G-44 — With two computers in one workspace, nothing says which one ran the turn
+
+**Kind:** caveat
+**Raised:** 2026-09-22, building machine assignment (D-051)
+
+A workspace can be given several computers. When more than one of them is online, the turn goes to
+the account's primary — whichever connected most recently — and nothing on screen says which. The
+turn records its machine internally, so stopping reaches the right one, but the person cannot see
+it and cannot choose it.
+
+This is not new: it is the rule that was always there, now narrowed to the workspace's set and
+therefore visible as a question for the first time. Left alone because the honest fix is a *per
+conversation* choice — "this conversation runs on WORK-LAPTOP", shown in the header and settled
+when the first turn runs — and that is a design the owner has not seen. A global "preferred
+computer" would be the wrong shape: which computer you want depends on what the work is, which is
+the conversation, not the account.
+
+- **If wrong:** somebody with two computers in one workspace sees a turn run somewhere they did not
+  expect — most likely against a checkout that exists on the other machine.
+- **Clears when:** a conversation names its computer, or the owner says the workspace's set is
+  enough and one of them being picked arbitrarily is fine.

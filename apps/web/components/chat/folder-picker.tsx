@@ -103,19 +103,23 @@ function Body({ onOpenChange, current, onChoose, hasMessages }: Props) {
   const [path, setPath] = useState(current);
   const [typed, setTyped] = useState(current);
 
+  // Both queries are per workspace. The folders somebody works in say as much
+  // about what they are doing as the conversations do, so a personal workspace
+  // must not suggest a client's directory (D-050) — and browsing goes to the
+  // computer THIS workspace would run on, so a path picked here is one the next
+  // message can actually reach (00018).
+  const workspaceId = useCurrentWorkspace();
+
   const listing = useQuery<DirListing>({
-    queryKey: ["directories", path],
-    queryFn: () => api.directories(path),
+    queryKey: ["directories", workspaceId, path],
+    queryFn: () => api.directories(workspaceId!, path),
+    enabled: workspaceId !== null,
     // Directories change under us, and nothing here is worth reusing between
     // openings.
     staleTime: 0,
     retry: false,
   });
 
-  // Per workspace: the folders somebody works in say as much about what they
-  // are doing as the conversations do, so a personal workspace must not
-  // suggest a client's directory (docs/Decisions.md D-050).
-  const workspaceId = useCurrentWorkspace();
   const recents = useQuery({
     queryKey: ["recent-folders", workspaceId],
     queryFn: () => api.recentFolders(workspaceId!),

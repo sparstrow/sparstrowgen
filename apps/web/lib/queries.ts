@@ -243,14 +243,88 @@ export function useSignOut() {
   });
 }
 
+/** The agents the workspace on screen can run.
+ *
+ *  Keyed by workspace, because it is the agents on the computer THIS
+ *  workspace's work would go to (migration 00018). Offering one that the next
+ *  message could not reach is worse than offering none. */
 export function useProviders() {
+  const workspaceId = useCurrentWorkspace();
   return useQuery({
-    queryKey: keys.providers,
-    queryFn: api.providers,
+    queryKey: [...keys.providers, workspaceId] as const,
+    queryFn: () => api.providers(workspaceId!),
+    enabled: workspaceId !== null,
     // Providers arrive over the websocket the moment the daemon reports them,
     // so polling would only duplicate a push we already get.
     staleTime: Infinity,
     initialData: [] as Provider[],
+  });
+}
+
+/** Which of the account's computers a workspace may use, and which of a
+ *  computer's workspaces offer it — the same row read from either end, because
+ *  the owner asked to edit it from both. */
+export function useWorkspaceMachines(workspaceId: string | null) {
+  return useQuery({
+    queryKey: ["workspace-machines", workspaceId] as const,
+    queryFn: () => api.workspaceMachines(workspaceId!),
+    enabled: workspaceId !== null,
+  });
+}
+
+export function useMachineWorkspaces(machineId: string | null) {
+  return useQuery({
+    queryKey: ["machine-workspaces", machineId] as const,
+    queryFn: () => api.machineWorkspaces(machineId!),
+    enabled: machineId !== null,
+  });
+}
+
+/** Assigning, from either end.
+ *
+ *  Not optimistic. AGENTS.md §3's test asks whether the outcome is predictable,
+ *  and this one is not the way a rename is: the server answers with the whole
+ *  list, and what it decides changes where work can run. A tick that flips back
+ *  is better than one that lies about which computer the next message reaches.
+ *
+ *  Both invalidate the providers list, because that is the visible consequence
+ *  — take the last computer out of a workspace and its agents go with it. */
+function useAssignmentInvalidation() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["workspace-machines"] });
+    void qc.invalidateQueries({ queryKey: ["machine-workspaces"] });
+    void qc.invalidateQueries({ queryKey: keys.providers });
+  };
+}
+
+export function useSetWorkspaceMachine(workspaceId: string) {
+  const qc = useQueryClient();
+  const invalidate = useAssignmentInvalidation();
+  return useMutation({
+    mutationFn: ({ machineId, assigned }: { machineId: string; assigned: boolean }) =>
+      api.setWorkspaceMachine(workspaceId, machineId, assigned),
+    onSuccess: (list) => {
+      qc.setQueryData(["workspace-machines", workspaceId], list);
+      invalidate();
+    },
+    onError: (err: Error) =>
+      toast.error("That computer could not be changed", { description: err.message }),
+  });
+}
+
+export function useSetMachineWorkspace(machineId: string) {
+  const qc = useQueryClient();
+  const invalidate = useAssignmentInvalidation();
+  return useMutation({
+    mutationFn: ({ workspaceId, assigned }: { workspaceId: string; assigned: boolean }) =>
+      api.setMachineWorkspace(machineId, workspaceId, assigned),
+    onSuccess: (list) => {
+      qc.setQueryData(["machine-workspaces", machineId], list);
+      invalidate();
+    },
+    onError: (err: Error) =>
+      toast.error("That workspace could not be changed", { description: err.message }),
   });
 }
 

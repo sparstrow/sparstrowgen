@@ -129,6 +129,12 @@ type Workspace struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type WorkspaceMachine struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	MachineID   pgtype.UUID        `json:"machine_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type WorkspaceMember struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	UserID      pgtype.UUID        `json:"user_id"`

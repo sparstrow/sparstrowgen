@@ -130,6 +130,15 @@ func (s *Store) CreateWorkspace(ctx context.Context, userID, name string) (proto
 	}); err != nil {
 		return protocol.Workspace{}, err
 	}
+	// And every computer the account already has, for the same reason a newly
+	// paired one goes into every workspace (00018): a workspace that cannot run
+	// anything the moment it is made is a workspace somebody has to go and
+	// repair before using. Taking a computer out is the deliberate act.
+	if err := q.AddEveryMachineToWorkspace(ctx, db.AddEveryMachineToWorkspaceParams{
+		WorkspaceID: row.ID, UserID: owner,
+	}); err != nil {
+		return protocol.Workspace{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return protocol.Workspace{}, err
 	}
@@ -160,4 +169,117 @@ func (s *Store) RenameWorkspace(ctx context.Context, userID, id, name string) (p
 		return protocol.Workspace{}, err
 	}
 	return toWorkspace(uuidToString(row.ID), row.Name, RoleOwner), nil
+}
+
+// ---------------------------------------------------------------------------
+// which computers a workspace may use
+// ---------------------------------------------------------------------------
+
+/* A computer belongs to the ACCOUNT and is offered to workspaces (00018). The
+owner asked for both directions: "I need to choose which machine needs added to
+that workspace or vice versa whick workspace needs to added to the machines."
+
+Assignment is what a turn is routed by. Without that it would be a label, and a
+label that looks like a setting is worse than no setting at all. */
+
+// WorkspaceMachines is the computers this workspace may use.
+//
+// Empty is a real answer and a deliberate one — somebody took them all out —
+// and the surfaces say so rather than quietly falling back to every computer
+// the account has. A fallback would make the setting a suggestion.
+func (s *Store) WorkspaceMachines(ctx context.Context, userID, workspaceID string) ([]Machine, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("account id: %w", err)
+	}
+	workspace, err := parseUUID(workspaceID)
+	if err != nil {
+		return nil, ErrNoWorkspace
+	}
+	rows, err := s.q.ListWorkspaceMachines(ctx, db.ListWorkspaceMachinesParams{
+		WorkspaceID: workspace, UserID: owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Machine, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, machineFrom(row))
+	}
+	return out, nil
+}
+
+// MachineWorkspaces is the same fact from the computer's end: which of this
+// account's workspaces offer it.
+func (s *Store) MachineWorkspaces(ctx context.Context, userID, machineID string) ([]string, error) {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("account id: %w", err)
+	}
+	machine, err := parseUUID(machineID)
+	if err != nil {
+		return nil, ErrPairingUnavailable
+	}
+	rows, err := s.q.ListMachineWorkspaces(ctx, db.ListMachineWorkspacesParams{
+		MachineID: machine, UserID: owner,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, id := range rows {
+		out = append(out, uuidToString(id))
+	}
+	return out, nil
+}
+
+// SetWorkspaceMachine adds or removes one assignment.
+//
+// Both statements check membership AND ownership of the computer, so neither id
+// on its own is permission. Removing the last one is allowed: a workspace with
+// no computer is a legitimate thing to want — reading old transcripts without
+// being able to start anything — and refusing it here would be this code
+// deciding what somebody's workspace is for.
+func (s *Store) SetWorkspaceMachine(ctx context.Context, userID, workspaceID, machineID string, assigned bool) error {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return fmt.Errorf("account id: %w", err)
+	}
+	workspace, err := parseUUID(workspaceID)
+	if err != nil {
+		return ErrNoWorkspace
+	}
+	machine, err := parseUUID(machineID)
+	if err != nil {
+		return ErrPairingUnavailable
+	}
+	if assigned {
+		return s.q.AddWorkspaceMachine(ctx, db.AddWorkspaceMachineParams{
+			WorkspaceID: workspace, MachineID: machine, UserID: owner,
+		})
+	}
+	return s.q.RemoveWorkspaceMachine(ctx, db.RemoveWorkspaceMachineParams{
+		WorkspaceID: workspace, MachineID: machine, UserID: owner,
+	})
+}
+
+// OfferMachineEverywhere puts a newly approved computer into every workspace
+// the account has.
+//
+// A computer that has just been paired and is offered nowhere is a computer
+// that cannot run anything, and somebody who just connected one has no reason
+// to expect a second step in a settings page they have never opened. Narrowing
+// is the deliberate act; widening is the default.
+func (s *Store) OfferMachineEverywhere(ctx context.Context, userID, machineID string) error {
+	owner, err := parseUUID(userID)
+	if err != nil {
+		return fmt.Errorf("account id: %w", err)
+	}
+	machine, err := parseUUID(machineID)
+	if err != nil {
+		return ErrPairingUnavailable
+	}
+	return s.q.AddMachineToEveryWorkspace(ctx, db.AddMachineToEveryWorkspaceParams{
+		MachineID: machine, UserID: owner,
+	})
 }

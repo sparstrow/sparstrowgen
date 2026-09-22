@@ -189,6 +189,19 @@ export type Workspace = {
   role: "owner" | "member";
 };
 
+/** One of the account's computers, with whether a particular workspace may use
+ *  it (migration 00018). Every computer is listed either way, because the
+ *  surface is a set of checkboxes over all of them. */
+export type AssignedMachine = Machine & {
+  assigned: boolean;
+  /** Whether it is connected right now, so an assignment can be made without
+   *  guessing which of two names is the laptop that is awake. */
+  online: boolean;
+};
+
+/** The same assignment from the computer's end: which workspaces offer it. */
+export type AssignedWorkspace = Workspace & { assigned: boolean };
+
 export type Conversation = {
   id: string;
   /** Which workspace it lives in. Carried on every conversation because live

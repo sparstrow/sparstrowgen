@@ -19,12 +19,25 @@ import (
 // account asking.
 func (a *API) listDirectories(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
+	// The computer this WORKSPACE would run on, so the folders offered are the
+	// ones the next message could actually use. Browsing one computer's disk
+	// and then running on another is how a conversation ends up pointed at a
+	// path that does not exist there.
+	ws, ok := a.workspaceFor(w, r, r.URL.Query().Get("workspace"))
+	if !ok {
+		return
+	}
+	allowed, err := a.machinesIn(r, ws.ID)
+	if err != nil {
+		a.failWorkspace(w, err)
+		return
+	}
 	// Long enough for a spun-down drive, short enough that a wedged daemon does
 	// not hold the request open.
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	reply, err := a.hub.Ask(ctx, user.ID, protocol.ServerMessage{
+	reply, err := a.hub.AskIn(ctx, user.ID, allowed, protocol.ServerMessage{
 		Type: protocol.ServerListDir,
 		Path: r.URL.Query().Get("path"),
 	})
