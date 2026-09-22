@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import { AccountMenu } from "@/components/auth/account-menu";
+import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
 import { useProfile, useSession } from "@/lib/queries";
 import { useShellView } from "@/lib/store";
 
@@ -92,6 +93,10 @@ export function Rail({ current }: { current: Section }) {
             <PanelLeft className="size-4" />
           </button>
         </div>
+
+        {/* Above the sections, because it scopes them: everything below is in
+            whichever workspace this names (D-050). */}
+        <WorkspaceSwitcher pinned={pinned} />
 
         <nav aria-label="Sections" className="flex flex-1 flex-col gap-0.5 p-2">
           {NAV.map((n) => {

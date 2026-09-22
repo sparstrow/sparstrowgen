@@ -16,18 +16,19 @@ type AccessRequest struct {
 }
 
 type Conversation struct {
-	ID         pgtype.UUID        `json:"id"`
-	Title      *string            `json:"title"`
-	Folder     string             `json:"folder"`
-	Provider   string             `json:"provider"`
-	ModelID    string             `json:"model_id"`
-	ModelLabel string             `json:"model_label"`
-	Archived   bool               `json:"archived"`
-	SpendTicks int64              `json:"spend_ticks"`
-	Tokens     int64              `json:"tokens"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	UserID     pgtype.UUID        `json:"user_id"`
+	ID          pgtype.UUID        `json:"id"`
+	Title       *string            `json:"title"`
+	Folder      string             `json:"folder"`
+	Provider    string             `json:"provider"`
+	ModelID     string             `json:"model_id"`
+	ModelLabel  string             `json:"model_label"`
+	Archived    bool               `json:"archived"`
+	SpendTicks  int64              `json:"spend_ticks"`
+	Tokens      int64              `json:"tokens"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 }
 
 type EmailLink struct {
@@ -119,4 +120,18 @@ type UserAvatar struct {
 	ContentType string             `json:"content_type"`
 	Bytes       []byte             `json:"bytes"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Workspace struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type WorkspaceMember struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Role        string             `json:"role"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }

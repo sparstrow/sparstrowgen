@@ -57,6 +57,26 @@
   #app[data-pinned="true"] .lbl, #app[data-pinned="true"] .pinbtn { opacity: 1; }
   #app[data-pinned="true"] .pinbtn { background: var(--accent); color: var(--foreground); }
   @media (prefers-reduced-motion: reduce) { .pinbtn { transition: none; } }
+  /* The workspace switcher, above the sections because it scopes them: what is
+     below is "in" whichever workspace this names (D-050). */
+  /* The two form-shaped setup steps. Inert, like every other control here. */
+  .fset { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .fset.col { display: block; }
+  .flab { display: block; margin-bottom: 6px; font-weight: 500; }
+  .ti { flex: 1; min-width: 0; display: block; height: 32px; padding: 5px 10px; border: 1px solid var(--input); border-radius: var(--r-lg); background: var(--background); }
+  .ti.empty { color: var(--muted-foreground); }
+  .fine { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+  .linky { text-decoration: underline; text-underline-offset: 2px; }
+  .linky:hover { color: var(--foreground); }
+  .wsw { padding: 8px 8px 0; }
+  .wsb { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border-radius: var(--r-sm); white-space: nowrap; font-size: 14px; }
+  .wsb:hover { background: color-mix(in oklab, var(--accent) 60%, transparent); }
+  .wsb .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 500; text-align: left; }
+  .wsb .ic { color: var(--muted-foreground); flex: none; }
+  .wsmenu { margin: 4px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--popover, var(--card)); }
+  .wsmenu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 10px; border-radius: var(--r-sm); font-size: 14px; color: var(--foreground); white-space: nowrap; }
+  .wsmenu button:hover { background: var(--accent); }
+  .wsmenu .sep { height: 1px; margin: 4px 0; background: var(--border); }
   .rail nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
   .navb { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 16px; border-radius: var(--r-sm); color: var(--muted-foreground); font-weight: 500; white-space: nowrap; }
   .navb:hover { background: color-mix(in oklab, var(--accent) 60%, transparent); }
@@ -208,8 +228,8 @@
   .step[data-at="done"] .n { background: var(--success); color: var(--background); }
   .step[data-at="now"] .n { background: var(--primary); color: var(--primary-foreground); }
   .step[data-at="now"] { color: var(--foreground); font-weight: 500; }
-  .step[data-at="soon"] { opacity: .65; }
-  .step[data-at="soon"] .n { border: 1px dashed var(--border); background: none; }
+  /* A step that is simply further along, not one that does not exist yet. */
+  .step[data-at="ahead"] { opacity: .8; }
   .steprule { width: 22px; height: 1px; background: var(--border); flex: none; }
   .setup h1 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.02em; text-align: center; }
   .setup .lede { margin: 8px auto 0; max-width: 32rem; text-align: center; color: var(--muted-foreground); }
@@ -257,7 +277,16 @@
     // setup leaves behind in the running app.
     setup: pick(Q.get("setup"), ["off", "idle", "waiting", "unanswered", "approval", "ready", "loading", "error"], "off"),
     resume: Q.get("resume") === "1",
-    future: Q.get("future") === "1",
+    // Which of the earlier steps the account has already satisfied. Both are
+    // real steps now (D-047): a profile is done when it has a name, a
+    // workspace when the account has one at all (D-050).
+    profiled: Q.get("profiled") === "1",
+    spaced: Q.get("spaced") !== "0",
+    // The workspace this browser is looking at, and whether its menu is open.
+    ws: Q.get("ws") || "Personal",
+    wsopen: false,
+    // Steps passed over for now, which is not the same as done.
+    passed: {},
     mview: "list",
     sel: { chat: "c1", machines: "m1", settings: "appearance" },
     convs: D.conversations.slice(), archivedOpen: false, search: "", toast: "",
@@ -293,9 +322,21 @@
   function railNav() {
     return NAV.map(function (n) { return '<button class="navb" data-act="section" data-v="' + n[0] + '"' + (S.section === n[0] ? ' aria-current="page"' : "") + ">" + I(n[1]) + '<span class="lbl">' + n[2] + "</span></button>"; }).join("");
   }
+  /* Which area of work you are in, and the way to be in another one (D-050).
+     Above the sections rather than one of them: Chat is a place you go, a
+     workspace is the world you are in when you get there. */
+  function switcher() {
+    var open = S.wsopen;
+    var menu = open ? '<div class="wsmenu" role="menu">' + D.workspaces.map(function (w) {
+      return '<button role="menuitem" data-act="ws" data-v="' + w + '">' + esc(w) + (w === S.ws ? I("check", 14) : "") + "</button>";
+    }).join("") + '<div class="sep"></div><button role="menuitem" data-act="ws-manage">' + I("settings", 14) + "Manage workspaces</button></div>" : "";
+    return '<div class="wsw"><button class="wsb" data-act="ws-open" aria-expanded="' + open + '" aria-label="Workspace: ' + esc(S.ws) + '. Switch workspace">' +
+      I("folder-open") + '<span class="lbl nm">' + esc(S.ws) + '</span><span class="lbl ic">' + I("chevrons-up-down", 14) + "</span></button>" + menu + "</div>";
+  }
   function rail() {
     return '<div class="railwrap"><aside class="rail" aria-label="Primary"><div class="rail-h"><span class="wm"><span aria-hidden="true">s</span><span class="lbl">sparstrowgen</span></span>' +
-      '<button class="iconbtn pinbtn" data-act="pin" aria-pressed="' + S.pinned + '" aria-label="' + (S.pinned ? "Let the menu collapse" : "Keep the menu open") + '">' + I("panel-left") + '</button></div><nav aria-label="Sections">' + railNav() +
+      '<button class="iconbtn pinbtn" data-act="pin" aria-pressed="' + S.pinned + '" aria-label="' + (S.pinned ? "Let the menu collapse" : "Keep the menu open") + '">' + I("panel-left") + '</button></div>' +
+      switcher() + '<nav aria-label="Sections">' + railNav() +
       '</nav><div class="rail-f"><span class="avatar" aria-hidden="true">a</span><span class="lbl">' + esc(D.account.email) + "</span></div></aside></div>";
   }
 
@@ -386,6 +427,17 @@
     var body;
     if (id === "appearance") body = '<div class="card"><div class="row"><div><div>Mode</div><div class="desc">Light, dark, or follow this computer.</div></div><div class="chips">' + ["Light", "Dark", "System"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "System") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + '</div></div><div class="row"><div><div>Surface</div><div class="desc">The background and its cast.</div></div><div class="chips">' + ["Mono", "Paper", "Slate", "Soft"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "Mono") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + '</div></div><div class="row"><div><div>Accent</div><div class="desc">The colour of the primary action.</div></div><div class="chips">' + ["Neutral", "Amber", "Violet", "Blue", "Teal", "Rose"].map(function (x) { return '<button class="chipb" aria-pressed="' + (x === "Neutral") + '" data-act="fake" data-v="Saved per account in the real app">' + x + "</button>"; }).join("") + "</div></div></div>";
     else if (id === "password") body = '<div class="card"><div class="row"><div>Current password</div><span class="field">••••••••••••</span></div><div class="row"><div>New password</div><span class="field">At least 12 characters</span></div><div class="row"><div>Confirm new password</div><span class="field"></span></div></div><div style="margin-top:14px"><button class="btn primary" data-act="fake" data-v="Changing the password is inert in the prototype">Change password</button></div>';
+    else if (id === "account") body = '<div class="card"><div class="row"><div><div>Picture</div><div class="desc">PNG, JPEG or WebP. Squared and shrunk in your browser before it is sent.</div></div><span class="avatar" aria-hidden="true">a</span></div><div class="row"><div>Name</div><span class="field">' + esc(D.account.email) + '</span></div><div class="row"><div><div>About you</div><div class="desc">A line about what you work on. Optional.</div></div><span class="field"></span></div><div class="row"><div><div>Email address</div><div class="desc">How you sign in. Changing it needs the new address proved, so it is not editable here yet.</div></div><span class="desc" style="margin:0">' + esc(D.account.email) + '</span></div></div>';
+    /* Workspaces: the same editor first-run setup step two shows (D-050).
+       No delete — it would take every conversation in the workspace with it,
+       so it needs to say what it is about to remove before it is offered. */
+    else if (id === "workspaces") body = '<div class="card"><div class="row"><div class="desc" style="margin:0">Click a name to change it. Opening one switches this browser; another tab or device stays where it was.</div></div>' +
+      D.workspaces.map(function (w) {
+        return '<div class="row"><div style="display:flex;align-items:center;gap:10px">' + I("folder-open", 16) + '<span class="field" style="min-width:220px;color:var(--foreground)">' + esc(w) + "</span></div>" +
+          (w === S.ws ? '<span class="desc" style="margin:0;display:inline-flex;align-items:center;gap:6px">' + I("check", 14) + "Open</span>" : '<button class="btn" data-act="ws" data-v="' + esc(w) + '">Open</button>') + "</div>";
+      }).join("") +
+      '<div class="row"><button class="btn" data-act="fake" data-v="Adding a workspace opens a name box in the real app">' + I("plus", 14) + 'Add a workspace</button><span class="desc" style="margin:0">Conversations, searches and folders stay inside the workspace they belong to.</span></div></div>' +
+      '<div class="card" style="margin-top:14px"><div class="row"><div class="desc" style="margin:0">Your computers belong to your account rather than to one workspace, so a computer you have connected is available in every workspace you work in. You do not pair it again.<br><br>Deleting a workspace is not possible yet. It would take every conversation in it with it, so it needs to say exactly what it is about to remove before it is offered.</div></div></div>';
     else body = '<div class="card"><div class="row"><div><div>' + primary.name + '</div><div class="desc">Current version v' + primary.version + "</div></div>" + (online() ? St("success", "Online") : St("neutral", "Offline")) + '</div><div class="row"><div><div>Automatic updates</div><div class="desc">Checks every hour and installs a new version only when no agent work is running.</div></div><span class="switch" role="img" aria-label="On"></span></div><div class="row"><div class="desc" style="margin:0">' + (online() ? St("success", "You’re on the latest version.", { quiet: true }) : St("neutral", "This computer is offline. It checks for updates when it reconnects.", { quiet: true })) + '</div><button class="btn" data-act="fake" data-v="Check now is inert in the prototype">Check now</button></div></div>';
     return '<div class="scroll"><div class="page"><div class="crumb">' + g.group + " " + I("chevron-right", 12) + " " + pg.label + "</div>" + body + "</div></div>";
   }
@@ -417,9 +469,22 @@
      from the `future` toggle so their place is visible, and nothing more. */
   function setupSteps() {
     var done = S.setup === "ready";
-    var steps = [];
-    if (S.future) steps.push({ label: "Profile", at: "soon" }, { label: "Workspace", at: "soon" });
-    steps.push({ label: "Machines", at: done ? "done" : "now" });
+    // The owner's order: profile, then workspace, then machines. "now" is the
+    // first one that is not done; the rest are simply ahead.
+    var steps = [
+      { id: "profile", label: "Profile", at: S.profiled ? "done" : "now" },
+      { id: "workspace", label: "Workspace", at: S.spaced ? "done" : "now" },
+      { id: "machines", label: "Machines", at: done ? "done" : "now" },
+    ];
+    // "Do this later" is NOT the same as done: the step stays outstanding and
+    // the finish-setting-up card still lists it. It only stops the wizard
+    // stopping on it now.
+    var first = true;
+    steps.forEach(function (s) {
+      if (s.at !== "now") return;
+      if (S.passed[s.id]) { s.at = "ahead"; return; }
+      if (first) first = false; else s.at = "ahead";
+    });
     return steps;
   }
   function stepper() {
@@ -431,7 +496,7 @@
       var mark = s.at === "done" ? I("check", 12) : String(i + 1);
       return (i ? '<span class="steprule" aria-hidden="true"></span>' : "") +
         '<span class="step" data-at="' + s.at + '"' + (s.at === "now" ? ' aria-current="step"' : "") + '><span class="n">' + mark + '</span><span class="lbl2">' + s.label +
-        (s.at === "soon" ? " <small>(later)</small>" : "") + "</span></span>";
+        "</span></span>";
     }).join("") + "</div>";
   }
 
@@ -439,7 +504,30 @@
      pairing is absent on purpose: the browser cannot currently tell it apart
      from a computer that never answered (docs/KnownGaps.md G-40), so drawing it
      would be designing something the backend cannot serve. */
+  function currentStep() {
+    var now = setupSteps().filter(function (x) { return x.at === "now"; })[0];
+    return now ? now.id : null;
+  }
+  /* Step one and step two, in the one state each of them has: not done. Both
+     are ordinary forms rather than a state machine — a name is typed and
+     saved, and nothing can be waiting on another computer. */
+  function profileStep() {
+    return '<div class="card" style="padding:20px"><div class="fset"><span class="avatar" style="width:56px;height:56px;font-size:18px" aria-hidden="true">a</span>' +
+      '<button class="btn" data-act="fake" data-v="Choosing a picture opens the file dialog in the real app">' + I("plus", 14) + "Add a picture</button></div>" +
+      '<div class="fset col"><label class="flab">Name</label><span class="ti empty">' + esc(D.account.email) + "</span></div>" +
+      '<div class="fset col"><label class="flab">About you</label><span class="ti empty">A line about what you work on. Optional.</span></div>' +
+      '<div class="acts"><button class="btn primary" data-act="step-done" data-v="profile">Save</button></div>' +
+      '<p class="fine">Only the name matters, and you can change it whenever you like. <button class="linky" data-act="step-skip" data-v="profile">Do this later</button></p></div>';
+  }
+  function workspaceStep() {
+    return '<div class="card" style="padding:20px"><div class="fset col"><label class="flab">Name this workspace</label>' +
+      '<div class="fset"><span class="ti">Personal</span><button class="btn primary" data-act="step-done" data-v="workspace">Create workspace</button></div></div>' +
+      '<p class="fine">Everything you do lives in a workspace. Most people start with one and add another when a second body of work turns up.</p></div>';
+  }
   function setupStep() {
+    var step = currentStep();
+    if (step === "profile") return profileStep();
+    if (step === "workspace") return workspaceStep();
     var s = S.setup;
     if (s === "loading") return '<div class="card" style="padding:20px" aria-busy="true"><div class="skel" style="height:15px;width:45%"></div><div class="skel" style="height:12px;width:70%;margin-top:10px"></div><div class="skel" style="height:32px;width:170px;margin-top:20px"></div></div>';
     if (s === "error") return '<div class="card"><div class="headrow">' + St("danger", "", { size: 18 }) + "<div><h2>Setup could not be started</h2><p>sparstrowgen could not be reached, so no request was made. Your account is fine and nothing was connected.</p></div></div>" +
@@ -467,27 +555,38 @@
   function setupScreen() {
     var steps = setupSteps(), now = 0;
     steps.forEach(function (s, i) { if (s.at === "now") now = i + 1; });
-    var ready = S.setup === "ready";
+    var ready = S.setup === "ready", step = currentStep();
+    // The words belong to whichever step is showing, so the heading never
+    // describes one thing while the card below it does another.
     var copy = ready
       ? { h: "You’re ready", l: "That is everything. Your computer is connected and its agents are available to every conversation." }
+      : step === "profile"
+      ? { h: "Your profile", l: "A name and a picture, so sparstrowgen refers to you as you rather than as your email address." }
+      : step === "workspace"
+      ? { h: "Your first workspace", l: "A workspace keeps one body of work apart from another — personal in one, client work in the next. Everything you do lives in one of them." }
       : { h: "Connect this computer", l: "sparstrowgen runs coding agents on a computer of your own. Connect the one you are sitting at, and its agents become available here." };
     return '<div class="setup"><div class="setup-top"><span class="wm"><span aria-hidden="true">s</span>sparstrowgen</span>' +
       (steps.length > 1 && !ready ? '<span class="of">Step ' + now + " of " + steps.length + "</span>" : "") + "</div>" +
       '<div class="setup-body">' + stepper() + "<h1>" + copy.h + '</h1><p class="lede">' + copy.l + "</p>" + setupStep() +
-      (ready ? "" : '<div class="skiprow"><span>You can connect a computer later. Your account is already usable.</span><button class="btn" data-act="setup-skip">Skip for now</button></div>') +
+      (ready ? "" : !S.spaced
+        ? '<div class="skiprow"><span>A workspace is the one thing that cannot wait — every conversation is kept in one. The rest of setup can.</span></div>'
+        : '<div class="skiprow"><span>You can finish this later. Your account is already usable.</span><button class="btn" data-act="setup-skip">Skip for now</button></div>') +
       "</div></div>";
   }
 
   /* The compact rendering of the same list, for a setup that was skipped or
      interrupted. It reopens the wizard rather than duplicating its steps. */
   function setupCard() {
-    var steps = [{ label: "Connect this computer", done: false }];
-    if (S.future) steps.unshift({ label: "Add your profile", done: false }, { label: "Name your workspace", done: false });
+    var steps = [
+      { label: "Add your name and picture", done: S.profiled },
+      { label: "Make your first workspace", done: S.spaced },
+      { label: "Connect this computer", done: false },
+    ];
     var done = steps.filter(function (s) { return s.done; }).length;
     return '<div class="setupcard"><button class="iconbtn x" data-act="setup-dismiss" aria-label="Hide setup">' + I("x", 14) + "</button>" +
       "<h3>Finish setting up</h3><div class=\"of\">" + done + " of " + steps.length + " done</div><ul>" + steps.map(function (s) {
         return '<li class="' + (s.done ? "is-done" : "") + '">' + St(s.done ? "success" : "pending", esc(s.label), { size: 14 }) + "</li>";
-      }).join("") + '</ul><button class="btn primary" data-act="setup" data-v="idle">Connect this computer</button></div>';
+      }).join("") + '</ul><button class="btn primary" data-act="setup" data-v="idle">' + esc(steps.filter(function (x) { return !x.done; })[0].label) + "</button></div>";
   }
 
   /* ---------------------------------------------------------------- render */
@@ -507,7 +606,7 @@
     app.innerHTML = body + (S.toast ? '<div class="toast" role="status">' + esc(S.toast) + "</div>" : "");
     if (keep) { var qs = [].slice.call(document.querySelectorAll(".q")).filter(function (x) { return x.offsetParent !== null; }); var q = qs[0]; if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
     renderBar();
-    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width, pin: S.pinned ? "1" : "0", setup: S.setup, resume: S.resume ? "1" : "0", future: S.future ? "1" : "0" });
+    var u = new URLSearchParams({ section: S.section, state: S.ui, computer: S.computer, theme: S.theme, width: S.width, pin: S.pinned ? "1" : "0", setup: S.setup, resume: S.resume ? "1" : "0", profiled: S.profiled ? "1" : "0", spaced: S.spaced ? "1" : "0", ws: S.ws });
     try { history.replaceState(null, "", "?" + u.toString()); } catch (e) {}
   }
   function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-ctl="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
@@ -515,7 +614,8 @@
     document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "empty", "loading", "error"]) + grp("Computer", "computer", ["online", "offline", "reconnecting"]) + grp("Theme", "theme", ["light", "dark"]) + grp("Width", "width", ["desktop", "narrow"]) +
       grp("Setup", "setup", ["off", "idle", "waiting", "unanswered", "approval", "ready", "loading", "error"]) +
       '<span class="grp"><b>Resume card</b><button data-tgl="resume" aria-pressed="' + S.resume + '">' + (S.resume ? "shown" : "hidden") + '</button></span>' +
-      '<span class="grp"><b>Later steps</b><button data-tgl="future" aria-pressed="' + S.future + '">' + (S.future ? "shown" : "hidden") + "</button></span>";
+      '<span class="grp"><b>Profile</b><button data-tgl="profiled" aria-pressed="' + S.profiled + '">' + (S.profiled ? "done" : "outstanding") + "</button></span>" +
+      '<span class="grp"><b>Workspace</b><button data-tgl="spaced" aria-pressed="' + S.spaced + '">' + (S.spaced ? "done" : "outstanding") + "</button></span>";
   }
   var toastT, waitT;
   function toast(m) { S.toast = m; render(); clearTimeout(toastT); toastT = setTimeout(function () { S.toast = ""; render(); }, 2200); }
@@ -536,6 +636,15 @@
       if (v === "waiting") waitT = setTimeout(function () { if (S.setup === "waiting") { S.setup = "unanswered"; render(); } }, 2600);
       render(); return;
     }
+    if (a === "ws-open") { S.wsopen = !S.wsopen; render(); return; }
+    if (a === "ws") { S.ws = v; S.wsopen = false; toast("Switched to " + v + " — its own conversations and folders"); return; }
+    if (a === "ws-manage") { S.wsopen = false; S.section = "settings"; S.sel.settings = "workspaces"; S.mview = "detail"; render(); return; }
+    // Finishing step one or two. Both are account facts, so the step becomes
+    // done and the wizard moves on by itself.
+    if (a === "step-done") { S[v === "profile" ? "profiled" : "spaced"] = true; render(); return; }
+    // Passing over a step is NOT the same as it being done: the resume card
+    // still lists it. Only the profile can be passed over; a workspace cannot.
+    if (a === "step-skip") { S.passed[v] = true; toast("Left for later — it stays on the finish-setting-up card"); return; }
     if (a === "setup-skip") { S.setup = "off"; S.resume = true; S.section = "chat"; S.computer = "offline"; render(); return; }
     if (a === "setup-finish") { S.setup = "off"; S.resume = false; S.section = "chat"; render(); return; }
     if (a === "setup-machines") { S.setup = "off"; S.resume = false; S.section = "machines"; S.mview = "detail"; render(); return; }

@@ -33,7 +33,13 @@ import { useSetupView } from "@/lib/store";
                       read rather than assumed
 
    It is an effect rather than a render-time redirect because Chat is the right
-   thing to show while any of those is still unknown. */
+   thing to show while any of those is still unknown.
+
+   The skip has one exception, and only one: an account with no workspace at
+   all. Every conversation is kept in a workspace (D-050), so there is nothing
+   for Chat to list and no folder for a new one to be started in — honouring a
+   skip there would land somebody on a permanently empty screen instead of on
+   the one box that fixes it. `setup.blocked` is that case and nothing else. */
 function useFirstRunRedirect(signedIn: boolean) {
   const router = useRouter();
   const setup = useSetup();
@@ -41,7 +47,8 @@ function useFirstRunRedirect(signedIn: boolean) {
 
   useEffect(() => loadSkipped(), [loadSkipped]);
 
-  const send = signedIn && loaded && !skipped && setup.settled && !setup.complete;
+  const wanted = !skipped || setup.blocked;
+  const send = signedIn && loaded && wanted && setup.settled && !setup.complete;
   useEffect(() => {
     if (send) router.replace("/setup");
   }, [send, router]);

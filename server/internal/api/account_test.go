@@ -102,16 +102,17 @@ func TestAnInvitedPersonCreatesTheirAccountFromTheEmail(t *testing.T) {
 	}
 
 	// Signed in as the new account, which owns nothing — the owner's work is
-	// not part of it.
+	// not part of it. It has no workspace of its own yet either: making the
+	// first one is what first-run setup's second step is for (D-047), so the
+	// only workspace it could name is somebody else's, and that answers 404.
 	r.conversation("claude")
-	list := s.get("/api/conversations")
-	if list.StatusCode != http.StatusOK {
-		t.Fatalf("list as the new account: %s", list.Status)
+	var spaces []protocol.Workspace
+	decodeInto(t, s.get("/api/workspaces"), &spaces)
+	if len(spaces) != 0 {
+		t.Errorf("a brand-new account already has %d workspaces: %+v", len(spaces), spaces)
 	}
-	var convs []protocol.Conversation
-	decodeInto(t, list, &convs)
-	if len(convs) != 0 {
-		t.Errorf("a brand-new account can see %d conversations", len(convs))
+	if list := s.get("/api/conversations?workspace=" + r.workspaceID); list.StatusCode != http.StatusNotFound {
+		t.Errorf("a brand-new account naming the owner's workspace: %s, want 404", list.Status)
 	}
 
 	// Spent. The page says the account is set up, and it cannot be spent again.

@@ -1103,3 +1103,21 @@ Found while building first-run setup, which is what makes this state common rath
 
 **Release note:** Before you have connected a computer, the message box now says so and points you
 to Machines, instead of saying your computer could not be reached.
+
+## B-47 — "Add a workspace" offered to create "PersonalWork"
+
+**Found:** 2026-09-21, running Settings → Workspaces in a browser. Mine, fixed the same turn.
+
+The name box starts pre-filled with "Personal", which is the right suggestion for an account that
+has no workspace at all — one press accepts it. But the same box is reused for "Add a workspace",
+where it opened still holding "Personal", so typing a second name appended to it and the button
+offered to create "PersonalWork".
+
+**Fixed** in [`workspace-fields.tsx`](../apps/web/components/workspaces/workspace-fields.tsx):
+opening the add box clears the field. The suggestion now belongs to the first workspace only, where
+it means something — a second workspace has no obvious name, which is the whole reason somebody is
+making it.
+
+Never shipped: found before merge, in the same turn the surface was built.
+
+**Release note:** none — the feature had not been released.

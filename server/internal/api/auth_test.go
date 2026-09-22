@@ -328,7 +328,9 @@ func TestCORSAnswersOnlyTheConfiguredOrigin(t *testing.T) {
 // for another device.
 func newClientOn(t *testing.T, r *rig) *rig {
 	t.Helper()
-	second := &rig{t: t, api: r.api, store: r.store, http: r.http, client: newJarClient(t)}
+	// The same account in another browser, so the same workspace.
+	second := &rig{t: t, api: r.api, store: r.store, http: r.http, client: newJarClient(t),
+		userID: r.userID, workspaceID: r.workspaceID}
 	second.signIn()
 	return second
 }

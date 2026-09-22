@@ -136,8 +136,22 @@ type Entry struct {
 	Tokens           int64  `json:"tokens,omitempty"`
 }
 
+// Workspace is a separate area of work inside an account (D-050). Role is this
+// account's role in it, and it travels with the workspace because the surface
+// that lists them is the same one that decides whether renaming is offered.
+type Workspace struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
 type Conversation struct {
 	ID string `json:"id"`
+	// Which workspace this conversation lives in. It travels with every
+	// conversation because events are addressed to an ACCOUNT, not to a
+	// workspace: without it, a tab looking at Personal would patch a Work
+	// conversation into its own list the moment one changed.
+	WorkspaceID string `json:"workspaceId"`
 	// Empty when nobody has named it: not the owner, and not the first message
 	// sent in it. The surface shows a placeholder, which describes a
 	// conversation with no name rather than pretending to be one.
@@ -353,6 +367,11 @@ const (
 	// page, so a tab that was open while it changed would keep showing the old
 	// one until it happened to be reloaded.
 	EventProfile = "profile"
+	// EventWorkspaces says the list of workspaces this account can reach has
+	// changed — one was created or renamed. The list itself is not sent: the
+	// browser refetches it, because unlike a conversation there is no partial
+	// update worth patching in and the list is three rows long.
+	EventWorkspaces = "workspaces"
 )
 
 type ClientEvent struct {

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { DirListing, DirReason } from "@/lib/chat-types";
 import { api } from "@/lib/api";
+import { useCurrentWorkspace } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Status, StatusIcon } from "@/components/ui/status";
@@ -111,9 +112,14 @@ function Body({ onOpenChange, current, onChoose, hasMessages }: Props) {
     retry: false,
   });
 
+  // Per workspace: the folders somebody works in say as much about what they
+  // are doing as the conversations do, so a personal workspace must not
+  // suggest a client's directory (docs/Decisions.md D-050).
+  const workspaceId = useCurrentWorkspace();
   const recents = useQuery({
-    queryKey: ["recent-folders"],
-    queryFn: () => api.recentFolders(),
+    queryKey: ["recent-folders", workspaceId],
+    queryFn: () => api.recentFolders(workspaceId!),
+    enabled: workspaceId !== null,
   });
 
   const data = listing.data;

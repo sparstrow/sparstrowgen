@@ -2,20 +2,27 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — later scope; account creation, password reset and initial pairing moved to the approved first usable release** |
+| **Status** | **US2 approved 2026-09-21.** US1 and US3 shipped as part of the first usable release |
 | **Created** | 2026-09-12 |
 | **Trigger** | "I want account to be created and then lets have multiple workspace creation and manage as well. Then the setup should take to computer setup." |
-| **Design** | not designed yet |
-| **Open questions** | none; the account-to-computer sequence below is inferred from the owner's scenario |
+| **Design** | the shell prototype's workspace switcher and setup step two |
+| **Open questions** | none for US2; sharing is still out of scope below |
 
-> I inferred that a workspace is a separate area of work inside an account, not a folder on the
-> computer. I also inferred that a computer is paired once to the person and can then be made
-> available where that person works, rather than being reinstalled for every workspace. Correct
-> either inference if that is not what you mean.
+> **Both inferences were confirmed on 2026-09-21**, in the owner's words:
 >
-> The smaller first delivery is approved in
-> [`2026-09-12-first-usable-release.md`](2026-09-12-first-usable-release.md). This draft now retains
-> the later workspace-management outcomes and must not expand that first delivery.
+> > "Workspace is when I want group of projects, skills, chats, separate. I would create one personal
+> > and one work related workspace. Keeping both of them Separate. ALso adding other people to my
+> > workspace in future. Check how multica did the workspace, and implement it"
+>
+> So a workspace is a separate area of work inside the account — it groups conversations today and
+> projects and skills when those exist — and a computer is still paired once to the person. What the
+> answer added is **other people, later**: that is not in this delivery, but it is now a stated
+> direction, and [`docs/Decisions.md`](../Decisions.md) D-050 makes the ownership trade D-031 said
+> would have to be made knowingly.
+>
+> US1 (account creation and recovery) and US3 (first computer setup) were delivered through
+> [`2026-09-12-first-usable-release.md`](2026-09-12-first-usable-release.md) and the first-run setup
+> wizard (D-046). **US2 is what remains**, and it is what this document is now for.
 
 ## What's wrong today
 
@@ -127,9 +134,11 @@ computer **so that** I reach a usable product without already knowing what a dae
 
 ## Out of scope
 
-- **Inviting other people into the same workspace.** This delivery supports separate user accounts
-  and multiple personal workspaces. Sharing, membership and roles need their own scenarios before
-  they become part of workspace management.
+- **Inviting other people into the same workspace.** Still out of this delivery: no invitation, no
+  member list, no roles to choose. It is no longer hypothetical, though — the owner has said he
+  wants it — so the schema this delivery lands is the one that can carry it without moving
+  ownership a second time (D-050), and the work it still needs is written down in
+  [`docs/KnownGaps.md`](../KnownGaps.md) rather than half-built here.
 - **Choosing the visual setup pattern.** The Bluetooth-device analogy and the supplied stepper are
   direction for design; the spec does not decide whether the final experience is a stepper,
   checklist, assistant or something else.
@@ -141,6 +150,5 @@ computer **so that** I reach a usable product without already knowing what a dae
 
 ## What I need from you
 
-Confirm whether my workspace inference is right: it is a separate area inside your account, and a
-computer is paired once to you rather than once per workspace. If that matches your intention,
-approve this draft; otherwise correct that relationship before design begins.
+*Answered 2026-09-21 — see the note under the header. Both inferences were right, and sharing was
+added as a stated direction for later.*

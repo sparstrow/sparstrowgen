@@ -307,3 +307,73 @@ comment says a pending computer belongs.
 
 **Still not done:** OQ6, OQ7 and OQ8 above are unanswered, and none of this has been seen by the
 owner or run on production.
+
+---
+
+## Appendix — Workspaces, and setup step two (2026-09-21)
+
+The owner answered what a workspace is: *"Workspace is when I want group of projects, skills,
+chats, separate. I would create one personal and one work related workspace. Keeping both of them
+Separate. ALso adding other people to my workspace in future. Check how multica did the workspace,
+and implement it."* That closed the last open step in his order (`docs/Decisions.md` D-047), and
+the ownership trade it forced is D-050.
+
+**What this prototype gained**
+
+| Piece | Where |
+|---|---|
+| The switcher at the top of the rail | `switcher()` — above the sections, because it scopes them |
+| Settings → Workspaces | `mainset()`, id `workspaces` |
+| Settings → Account | `mainset()`, id `account` — the profile that shipped in #58 and was never drawn here |
+| Step one and step two of the wizard | `profileStep()`, `workspaceStep()` |
+| Three real steps in the stepper and the resume card | `setupSteps()`, `setupCard()` |
+
+The toolbar's **Later steps** toggle is gone. It existed because Profile and Workspace were drawn
+as things that did not exist yet; both are built, so the toolbar now has a **Profile** and a
+**Workspace** toggle instead, each switching that step between done and outstanding.
+
+**Decisions this made, all of them now in D-050**
+
+- The switcher is **above** the sections, not one of them. Chat is a place you go; a workspace is
+  the world you are in when you get there.
+- It is shown with **one** workspace as well as several. Hiding it until there are two means the
+  first switch happens through a control nobody has ever seen, and it is also the only place that
+  says which workspace the conversations on screen belong to.
+- **Making and renaming are not in the menu.** A switcher that also creates is a menu you cannot
+  open without risking the thing you did not mean to do. Both live in Settings → Workspaces, which
+  the menu's last entry goes to.
+- **Step two cannot be skipped.** Every other step can wait; a workspace cannot, because every
+  conversation is kept in one and skipping would land somebody on a Chat with nowhere to put
+  anything. The skip row says that instead of offering a button.
+- **"Do this later" still is not "done".** Passing over step one leaves it outstanding on the
+  resume card. The prototype models that with its own `passed` map, because getting it wrong here
+  would have made the stepper claim something the account had not done.
+
+**What the real app does that this cannot show:** switching workspaces re-keys the conversation
+query, so the list, the search and the recent folders all change with it. The prototype's switcher
+only toasts — there is one seeded conversation set, and giving it two would say more about the seed
+data than about the design.
+
+### Verification — the real app, against a real server
+
+| Checked | Result |
+|---|---|
+| An existing account's conversations land in a backfilled "Personal" | pass — migration 00017, 1 conversation moved |
+| The switcher lists the account's workspaces and marks the open one | pass |
+| Switching to an empty workspace empties the conversation list | pass — "No conversations yet" |
+| Switching back restores the first workspace's conversations | pass |
+| Settings → Workspaces renames in place and opens another | pass |
+| A brand-new account with **no** workspace is sent to `/setup` even though this browser had already skipped setup | pass |
+| Step two has no "Skip for now"; the row explains why | pass |
+| Creating the first workspace advances to step three and the skip returns | pass |
+| Light and dark, and 375x812 | pass, no overflow |
+| Console on a clean load | clean |
+
+**One bug found by running it, mine, fixed before merge:** the "Add a workspace" box opened
+pre-filled with "Personal" — the suggestion meant for the *first* one — so typing a second name
+appended to it and offered to create "PersonalWork". The suggestion now belongs to the empty-account
+case only.
+
+**Not verified:** pressing Enter in either name box. The browser tool's synthetic Enter does not
+trigger a form's implicit submission — confirmed by the same failure on the shipped registration
+form, which is a control this change did not touch. See `docs/Unverified.md` U-25.

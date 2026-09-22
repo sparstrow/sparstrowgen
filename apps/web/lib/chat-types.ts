@@ -179,8 +179,22 @@ export type ReplayMarker = {
 
 export type Entry = UserMessage | AgentMessage | ReplayMarker;
 
+/** A separate area of work inside one account (docs/Decisions.md D-050). One
+ *  for personal things, one for work; conversations live in one and never
+ *  appear in another. `role` is this account's role in it, which is what
+ *  decides whether renaming is offered. */
+export type Workspace = {
+  id: string;
+  name: string;
+  role: "owner" | "member";
+};
+
 export type Conversation = {
   id: string;
+  /** Which workspace it lives in. Carried on every conversation because live
+   *  events are addressed to an ACCOUNT rather than to a workspace: without it
+   *  a tab looking at Personal would patch a Work conversation into its list. */
+  workspaceId: string;
   /** Empty until it has a name — from the first thing said in it, or from the
    *  owner typing one. The surface shows a placeholder for that, which
    *  describes a conversation with no name rather than pretending to be one. */

@@ -458,3 +458,39 @@ status colours that the artifact already documents.
 `LiveStatus`, and the five rows above; note the 768px breakpoint and the phone's list-then-detail
 behaviour; update the component list and the "Live gaps" section in `project/README.md`; bump
 `lastChange` in `project/design-system.json`.
+
+## U-25 — Pressing Enter in the workspace name boxes
+
+**Raised:** 2026-09-21, building workspaces
+**Who can run it:** anyone with the app open
+
+Both name boxes — first-run setup step two, and "Add a workspace" in Settings → Workspaces — are
+ordinary forms with a single text input and a submit button, so Enter should create the workspace.
+That could not be confirmed in the browser automation: its synthetic Enter does not trigger a form's
+implicit submission. Confirmed as a limitation of the tool rather than of this change by trying the
+same thing on the shipped registration form, which this change does not touch, and getting the same
+nothing.
+
+**The step:** open Settings → Workspaces, press "Add a workspace", type a name, press Enter. It
+should be created without touching the button. Same on `/setup` step two for a new account.
+
+**If it fails:** the forms need an explicit `onKeyDown` for Enter, which is three lines in
+`components/workspaces/workspace-fields.tsx`.
+
+## U-26 — Workspaces on production, and on an account with real history
+
+**Raised:** 2026-09-21, building workspaces (D-050)
+**Who can run it:** the agent, on `agent@sparstrow.com`; the owner, on his own account
+
+Migration 00017 moves every existing conversation into a backfilled "Personal" workspace. That was
+run against the local development database — one account, one conversation, moved correctly — and
+against the test database by the suite. It has not run against production, where there are two
+accounts and real transcripts.
+
+**The step:** deploy, then check that every account has exactly one workspace called Personal, that
+`SELECT count(*) FROM conversations WHERE workspace_id IS NULL` is impossible (the column is NOT
+NULL, so a failed backfill would have failed the migration), and that signing in lands on the
+existing conversations rather than on an empty Chat.
+
+**If it fails:** the migration refuses rather than guessing — it raises if any conversation is left
+without a workspace — so a failure is a refused deploy, not a silent loss.

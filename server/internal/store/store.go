@@ -104,7 +104,8 @@ func relative(t time.Time) string {
 
 func toConversation(c db.Conversation) protocol.Conversation {
 	return protocol.Conversation{
-		ID: uuidToString(c.ID),
+		ID:          uuidToString(c.ID),
+		WorkspaceID: uuidToString(c.WorkspaceID),
 		// Empty means nobody has named it — neither the owner nor its first
 		// message. The surface describes that; it is not a name.
 		Title:    str(c.Title),
@@ -180,24 +181,34 @@ func toEntry(e db.Entry) protocol.Entry {
 // conversations
 // ---------------------------------------------------------------------------
 
-// List returns every conversation this account owns, archived included. The
+// List returns every conversation in one workspace, archived included. The
 // client decides what to show: the archive is a filter, not a separate store,
 // which is what lets search reach into it.
+//
+// One workspace, not one account. Two workspaces exist so that work and
+// personal things are apart, and a list that merged them would be the thing the
+// feature is for, undone (D-050).
 //
 // A non-empty query searches titles, folders AND message bodies in Postgres.
 // Searching titles alone would miss the ones that most need finding: a name
 // comes from the first message or from the owner, so it says where a
 // conversation started and never where it went.
-func (s *Store) List(ctx context.Context, userID, query string) ([]protocol.Conversation, error) {
+func (s *Store) List(ctx context.Context, userID, workspaceID, query string) ([]protocol.Conversation, error) {
 	owner, err := parseUUID(userID)
 	if err != nil {
 		return nil, fmt.Errorf("account id: %w", err)
 	}
+	// Not one of this account's workspaces is an empty list, never another
+	// workspace's conversations.
+	workspace, err := parseUUID(workspaceID)
+	if err != nil {
+		return nil, ErrNoWorkspace
+	}
 	query = strings.TrimSpace(query)
 	if query != "" {
-		return s.search(ctx, owner, query)
+		return s.search(ctx, owner, workspace, query)
 	}
-	rows, err := s.q.ListConversations(ctx, owner)
+	rows, err := s.q.ListConversations(ctx, db.ListConversationsParams{WorkspaceID: workspace, UserID: owner})
 	if err != nil {
 		return nil, err
 	}
@@ -218,8 +229,10 @@ func (s *Store) List(ctx context.Context, userID, query string) ([]protocol.Conv
 // sentence, short enough for one line in a 288px sidebar.
 const excerptPad = 34
 
-func (s *Store) search(ctx context.Context, owner pgtype.UUID, query string) ([]protocol.Conversation, error) {
-	rows, err := s.q.SearchConversations(ctx, db.SearchConversationsParams{Q: query, UserID: owner})
+func (s *Store) search(ctx context.Context, owner, workspace pgtype.UUID, query string) ([]protocol.Conversation, error) {
+	rows, err := s.q.SearchConversations(ctx, db.SearchConversationsParams{
+		Q: query, WorkspaceID: workspace, UserID: owner,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -301,18 +314,30 @@ func (s *Store) seenBy(ctx context.Context, id pgtype.UUID) (map[string]int32, e
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, userID, folder, provider string, model protocol.Model) (protocol.Conversation, error) {
+// Create starts a conversation in a workspace. The statement inserts nothing
+// when the account is not a member of it, so a workspace id the caller made up
+// answers like one that does not exist rather than putting a transcript
+// somewhere it cannot be seen again.
+func (s *Store) Create(ctx context.Context, userID, workspaceID, folder, provider string, model protocol.Model) (protocol.Conversation, error) {
 	owner, err := parseUUID(userID)
 	if err != nil {
 		return protocol.Conversation{}, fmt.Errorf("account id: %w", err)
 	}
+	workspace, err := parseUUID(workspaceID)
+	if err != nil {
+		return protocol.Conversation{}, ErrNoWorkspace
+	}
 	row, err := s.q.CreateConversation(ctx, db.CreateConversationParams{
-		UserID:     owner,
-		Folder:     folder,
-		Provider:   provider,
-		ModelID:    model.ID,
-		ModelLabel: model.Label,
+		WorkspaceID: workspace,
+		UserID:      owner,
+		Folder:      folder,
+		Provider:    provider,
+		ModelID:     model.ID,
+		ModelLabel:  model.Label,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return protocol.Conversation{}, ErrNoWorkspace
+	}
 	if err != nil {
 		return protocol.Conversation{}, err
 	}
@@ -422,12 +447,20 @@ func (s *Store) SetFolder(ctx context.Context, userID, id, folder string) (proto
 // RecentFolders is the picker's shortcut list and the default for a new
 // conversation. Derived from conversations that already exist, so there is no
 // separate list to keep in step with reality.
-func (s *Store) RecentFolders(ctx context.Context, userID string, limit int32) ([]string, error) {
+//
+// Per workspace, for the same reason the list is: the folders somebody works in
+// are one of the more telling things about what they are doing, and a personal
+// workspace suggesting a client's directory would be the separation leaking.
+func (s *Store) RecentFolders(ctx context.Context, userID, workspaceID string, limit int32) ([]string, error) {
 	owner, err := parseUUID(userID)
 	if err != nil {
 		return nil, fmt.Errorf("account id: %w", err)
 	}
-	rows, err := s.q.RecentFolders(ctx, db.RecentFoldersParams{UserID: owner, Limit: limit})
+	workspace, err := parseUUID(workspaceID)
+	if err != nil {
+		return nil, ErrNoWorkspace
+	}
+	rows, err := s.q.RecentFolders(ctx, db.RecentFoldersParams{WorkspaceID: workspace, UserID: owner, Lim: limit})
 	if err != nil {
 		return nil, err
 	}

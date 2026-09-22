@@ -47,10 +47,15 @@ func (a *API) listDirectories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, reply.Listing)
 }
 
-// recentFolders backs the picker's shortcut list: this account's folders only.
+// recentFolders backs the picker's shortcut list: the folders worked in inside
+// ONE of this account's workspaces (D-050).
 func (a *API) recentFolders(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
-	folders, err := a.store.RecentFolders(r.Context(), user.ID, 8)
+	ws, ok := a.workspaceFor(w, r, r.URL.Query().Get("workspace"))
+	if !ok {
+		return
+	}
+	folders, err := a.store.RecentFolders(r.Context(), user.ID, ws.ID, 8)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
