@@ -1201,3 +1201,66 @@ token count appear from 36rem, and the computer's name from 48rem. Below that, t
 
 **Release note:** Chat stays usable in narrow windows: the message box keeps its room and the
 conversation title stays visible.
+
+## B-52 — Claude's model list was stuck in September, so Opus 5.5 never appeared
+
+**Found:** 2026-09-23, reported by the owner: "Yesterday opus 5.5 launched and I am using it. But the
+app is showing very old models". Fixed the same turn.
+
+The app offered Opus 4.6, Sonnet 4.6 and Haiku 4.5, a static list written on 2026-09-10. There
+were two causes:
+
+- **The daemon misread the CLI's answer.** The `list_models` control request had worked since the
+  CLI updated past 2.1.223, and it returns the same rows as Claude Code's own `/model` picker. But
+  the reply nests the rows one level deeper (`response.response.models`) and names them `value`,
+  `resolvedModel` and `displayName`. The parser looked for `response.models`, `model` and
+  `display_name`, found nothing in every reply, and silently fell back to the static list.
+- **Nothing would have noticed a new model anyway.** The daemon re-asked only when an agent's
+  executable changed on disk. Which models claude offers is decided by Anthropic for the signed-in
+  account. Opus 5.5 arrived without a byte changing on the computer.
+
+**Fixed:**
+- [`detect.go`](../server/internal/agent/detect.go) reads the real shape, following Multica's
+  rules. It keys each row by the model it runs, so two names for one model show once. It treats
+  "Default" as a pointer, not a model. It leaves out rows the CLI greys out. The resolved id is
+  what gets stored, so a transcript keeps saying which model answered after an alias moves.
+- A new conversation still starts on the `sonnet` alias, for his quota, but that is now Sonnet 5
+  rather than a position in a hand-kept list.
+- [`providers.go`](../server/cmd/daemon/providers.go) asks again every 30 minutes
+  (`MODEL_REFRESH_INTERVAL`), and still immediately when a CLI changes. A change reaches the app
+  through the existing `providers` event.
+
+Tests are built on the CLI's replies captured verbatim, signed in and signed out. They cover the
+new-model-with-nothing-changed case.
+
+**Verified end to end:** a test daemon built from this branch, started with the owner's token as his
+daemon is, reported Opus 5.5, Sonnet 5, Fable 5.1, Haiku 4.5, Opus 5, Fable 5, Opus 4.8, 4.7 and 4.6,
+and Sonnet 4.6. The composer's model menu showed exactly those. One turn on Opus 5.5 answered, and
+the transcript labels it Opus 5.5.
+
+**Release note:** Chat now lists the Claude models your account actually has, including Opus 5.5,
+and picks up new ones on its own within half an hour of Anthropic releasing them.
+
+## B-53 — An agent's test run signed the command-line `claude` out on the owner's computer
+
+**Found:** 2026-09-23, while diagnosing B-52. **Caused by the agent.**
+
+To see what the CLI answers, I ran `claude` by hand from my own shell inside the Claude desktop
+app. That shell carries the app's own sign-in variables (`ANTHROPIC_BASE_URL` and the host-auth
+`CLAUDE_CODE_*` set). The run rewrote `~/.claude/.credentials.json` at 12:02:31, 0.7s before its
+reply was written. Its Claude sign-in was left blank: no expiry and no refresh token.
+`claude auth status` has said "not logged in" since.
+
+**What it did not touch:** the daemon. It launches `claude` with every `CLAUDE*` variable and
+`ANTHROPIC_BASE_URL` stripped, and signs in with `CLAUDE_CODE_OAUTH_TOKEN` from his Windows user
+environment, which is still set. A test daemon run that way afterwards was signed in and ran an
+Opus 5.5 turn, and the file was not written again. A new terminal also gets that token, so
+`claude` typed there most likely still works.
+
+**What stays open, and needs him:** if `claude` in a terminal ever says it is not signed in, run
+`claude auth login` once. The agent never signs in for him.
+
+**Prevented:** CLAUDE.md now says never to run `claude` directly from an agent shell. Go through a
+daemon, which strips the host's variables, or strip them explicitly.
+
+**Release note:** none — nothing shipped.

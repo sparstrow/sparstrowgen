@@ -53,6 +53,9 @@ before it is fixed, and the fix is seen there after it deploys:
   Without its own `SPARSTROWGEN_HOME` it reads his computer's credential, and a refusal deletes it.
 - **Never use his computer for a test.** Do not stop, restart or replace his installed daemon without
   asking. A copy started from an agent's shell loses his Windows user environment (docs/Bugs.md B-28).
+- **Never run `claude` itself from an agent shell.** Inside the Claude desktop app that shell carries
+  the app's own sign-in variables, and one run rewrote his CLI's credentials (docs/Bugs.md B-53). Go
+  through a test daemon, which strips them, or strip every `CLAUDE*` and `ANTHROPIC_*` variable first.
 - **Keep it small.** Conversations go in a scratch folder, and every turn spends his real agent quota,
   so prompts stay short. To reproduce the old behaviour, build the daemon from `main` in a scratch copy.
 - **Clean up.** Disconnect the test computer (`DELETE /api/machines/{id}`) and stop its process when
