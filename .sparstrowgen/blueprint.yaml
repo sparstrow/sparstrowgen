@@ -66,7 +66,7 @@ agent_clis:
     print_note: "--verbose is REQUIRED with --output-format stream-json in print mode, not obvious from --help"
     resume: "--resume <uuid> / --session-id <uuid>"
     model_flag: "--model"
-    model_list: "list_models CONTROL REQUEST over stream-json — no user message, nothing billed. Unsupported on our 2.1.90; works on 2.1.223+ (Multica does this). Fall back to a static catalogue. Aliases verified today: opus=claude-opus-4-6, sonnet=claude-sonnet-4-6, haiku=claude-haiku-4-5-20251001. See docs/KnownGaps.md G-8"
+    model_list: "list_models CONTROL REQUEST over stream-json — no user message, nothing billed. Verified on 2.1.280 (2026-09-23): the same rows as the CLI /model picker for the signed-in account, at response.response.models as value/resolvedModel/displayName; the resolved id is stored. Asked on connect and every 30 minutes; static catalogue only when it cannot answer. See docs/Bugs.md B-52"
     scoping: "MANDATORY --strict-mcp-config --setting-sources project — VERIFIED 2026-09-10: 0 MCP servers, skills 72->17, OAuth still works (apiKeySource 'none'). Do NOT use --bare: it never reads OAuth or the keychain and cannot authenticate a subscription account."
     env_scrubbing: "MANDATORY — the daemon must clear CLAUDE_* and ANTHROPIC_* before spawning. Inherited nested-session vars (CLAUDE_CODE_MESSAGING_SOCKET, CLAUDECODE=1) make claude -p hang indefinitely; verified 2026-09-10, two runs killed at 120s."
     usage_verified: true

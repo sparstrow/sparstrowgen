@@ -13,10 +13,10 @@ import (
 
 // Detect reports what is actually installed and usable on this machine.
 //
-// Model lists come from the CLI wherever the CLI can answer. Only agy can
-// enumerate directly; claude has a list_models control request that our 2.1.90
-// is too old for; codex has nothing. Each fallback below is a captured fact,
-// not a remembered one — see docs/KnownGaps.md G-8.
+// Model lists come from the CLI wherever the CLI can answer: agy enumerates
+// directly, claude answers a list_models control request, and codex has
+// nothing. Each fallback below is a captured fact, not a remembered one — see
+// docs/KnownGaps.md G-8.
 func Detect(ctx context.Context) []protocol.Provider {
 	return []protocol.Provider{
 		detectClaude(ctx),
@@ -41,7 +41,7 @@ func detectClaude(ctx context.Context) protocol.Provider {
 	if _, err := exec.LookPath("claude"); err != nil {
 		return missing("claude")
 	}
-	models := claudeModels(ctx)
+	models, everyday := claudeModels(ctx)
 	p := protocol.Provider{
 		ID:           "claude",
 		Label:        "claude",
@@ -58,29 +58,45 @@ func detectClaude(ctx context.Context) protocol.Provider {
 		Streams: true,
 		Routes:  false,
 	}
-	if len(models) > 0 {
-		p.Model = &models[1] // Sonnet: the everyday default, not the expensive one
+	for i := range models {
+		if models[i].ID == everyday {
+			p.Model = &models[i]
+		}
+	}
+	if p.Model == nil && len(models) > 0 {
+		p.Model = &models[0]
 	}
 	return p
 }
 
-// claudeStaticModels is the fallback catalogue. Each id was resolved by running
-// the alias and reading `model` back out of the system.init line, not from
-// memory — an earlier version of this list said "Opus 5", which this CLI does
-// not offer.
+// claudeStaticModels is the fallback catalogue, used only when the CLI cannot
+// answer list_models. It is the head of each family as a signed-in 2.1.280
+// reported it on 2026-09-23 — and it goes stale the day the next model ships,
+// which is exactly why it is no longer the first answer.
 var claudeStaticModels = []protocol.Model{
-	{ID: "claude-opus-4-6", Label: "Opus 4.6"},
-	{ID: "claude-sonnet-4-6", Label: "Sonnet 4.6"},
+	{ID: "claude-opus-5-5", Label: "Opus 5.5"},
+	{ID: "claude-sonnet-5", Label: "Sonnet 5"},
 	{ID: "claude-haiku-4-5-20251001", Label: "Haiku 4.5"},
 }
 
-// claudeModels asks the CLI first and falls back to the static catalogue.
+// claudeStaticEveryday is what a new conversation starts on when the CLI
+// could not be asked.
+const claudeStaticEveryday = "claude-sonnet-5"
+
+// claudeListModelsID labels our control request so its reply can be picked out
+// of the stream.
+const claudeListModelsID = "sg-list-models"
+
+// claudeModels asks the CLI for its catalogue and falls back to the static one.
+// It also returns the model a new conversation should start on.
 //
-// The control request sends no user message, so nothing is billed. An old CLI
-// answers "Unsupported control request subtype" in about two seconds and exits
-// 0 — it does not hang — which is why this needs no version gate. Borrowed from
-// Multica's server/pkg/agent/claude_models.go.
-func claudeModels(ctx context.Context) []protocol.Model {
+// The answer is the list the CLI's own /model picker shows, computed by the
+// installed binary against the signed-in account, so a model Anthropic ships
+// appears here with nothing in this repo changing (docs/Bugs.md B-52). The
+// request sends no user message, so nothing is billed, and a CLI too old to
+// know it answers "Unsupported control request subtype" and exits rather than
+// hanging. Borrowed from Multica's server/pkg/agent/claude_models.go.
+func claudeModels(ctx context.Context) ([]protocol.Model, string) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
@@ -88,44 +104,117 @@ func claudeModels(ctx context.Context) []protocol.Model {
 		"--print", "--verbose",
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",
+		// Without an --mcp-config this means no MCP servers at all: listing
+		// models has no use for them, and booting them could make it slow.
 		"--strict-mcp-config",
 	)
 	cmd.Stdin = strings.NewReader(
-		`{"type":"control_request","request_id":"sg","request":{"subtype":"list_models"}}` + "\n")
+		`{"type":"control_request","request_id":"` + claudeListModelsID + `","request":{"subtype":"list_models"}}` + "\n")
 
 	out, err := cmd.Output()
 	if err != nil {
-		return claudeStaticModels
+		return claudeStaticModels, claudeStaticEveryday
 	}
+	models, everyday, ok := parseClaudeModels(out)
+	if !ok {
+		return claudeStaticModels, claudeStaticEveryday
+	}
+	return models, everyday
+}
 
+// claudeModelInfo is one row of the CLI's catalogue.
+//
+// Value is the picker's token — an alias like "opus", an id, or the sentinel
+// "default" — and ResolvedModel is what that token runs today. The resolved id
+// is what gets stored and passed to --model: an alias moves when Anthropic
+// moves it, and a transcript has to keep saying which model actually answered.
+type claudeModelInfo struct {
+	Value         string `json:"value"`
+	ResolvedModel string `json:"resolvedModel"`
+	DisplayName   string `json:"displayName"`
+	Disabled      bool   `json:"disabled"`
+}
+
+// parseClaudeModels reads the list_models reply out of the CLI's stdout.
+//
+// The doubled `response` is Claude's shape, not a slip: the outer one is the
+// envelope, the inner one the payload. Reading the rows one level too high,
+// under the wrong names, is what left the app on a list from September while
+// the CLI was offering Opus 5.5 (docs/Bugs.md B-52).
+//
+// Rows are keyed by the model they run, so two tokens for one model show once.
+// "default" is not offered as a model of its own, because it is only a pointer
+// to one, and a row the CLI greys out is left out because nothing here can run
+// it. ok is false when there is no usable answer, so the caller falls back.
+func parseClaudeModels(out []byte) (models []protocol.Model, everyday string, ok bool) {
 	for _, line := range strings.Split(string(out), "\n") {
 		var resp struct {
 			Type     string `json:"type"`
 			Response struct {
-				Subtype string `json:"subtype"`
-				Models  []struct {
-					Model       string `json:"model"`
-					DisplayName string `json:"display_name"`
-				} `json:"models"`
+				Subtype   string `json:"subtype"`
+				RequestID string `json:"request_id"`
+				Response  struct {
+					Models []claudeModelInfo `json:"models"`
+				} `json:"response"`
 			} `json:"response"`
 		}
 		if json.Unmarshal([]byte(strings.TrimSpace(line)), &resp) != nil {
 			continue
 		}
-		if resp.Type != "control_response" || len(resp.Response.Models) == 0 {
+		if resp.Type != "control_response" || resp.Response.RequestID != claudeListModelsID {
 			continue
 		}
-		models := make([]protocol.Model, 0, len(resp.Response.Models))
-		for _, m := range resp.Response.Models {
-			label := m.DisplayName
-			if label == "" {
-				label = m.Model
-			}
-			models = append(models, protocol.Model{ID: m.Model, Label: label})
+		if resp.Response.Subtype != "success" {
+			return nil, "", false
 		}
-		return models
+
+		seen := map[string]bool{}
+		var recommended, sonnet string
+		for _, m := range resp.Response.Response.Models {
+			id := strings.TrimSpace(m.ResolvedModel)
+			if id == "" {
+				id = strings.TrimSpace(m.Value)
+			}
+			if id == "" || m.Disabled {
+				continue
+			}
+			switch m.Value {
+			case "default":
+				recommended = id
+				continue
+			case "sonnet":
+				sonnet = id
+			}
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			label := strings.TrimSpace(m.DisplayName)
+			if label == "" {
+				label = id
+			}
+			models = append(models, protocol.Model{ID: id, Label: label})
+		}
+		if len(models) == 0 {
+			return nil, "", false
+		}
+
+		// A new conversation starts on whatever "sonnet" means today: the
+		// everyday model rather than the expensive one, a deliberate choice for
+		// his quota that is kept — only now it follows Anthropic's alias rather
+		// than a position in a hand-kept list. Then the CLI's own
+		// recommendation, then the first row.
+		switch {
+		case seen[sonnet]:
+			everyday = sonnet
+		case seen[recommended]:
+			everyday = recommended
+		default:
+			everyday = models[0].ID
+		}
+		return models, everyday, true
 	}
-	return claudeStaticModels
+	return nil, "", false
 }
 
 // ---------------------------------------------------------------------------

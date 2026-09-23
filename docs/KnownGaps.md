@@ -76,7 +76,11 @@ feature: switching provider mid-conversation is user-initiated and works regardl
 - **Clears when:** a provider is used enough to actually hit a limit — capture the stream when it
   happens, it is the only cheap opportunity — or provider documentation describes the payload.
 
-## G-8 — Only `agy` can enumerate its own models
+## G-8 — `codex` cannot enumerate its own models
+
+**claude half closed 2026-09-23 (docs/Bugs.md B-52):** the daemon now reads the CLI's `list_models`
+reply correctly and asks again every 30 minutes. What follows is the history; only the `codex` row
+is still open.
 
 **Kind:** caveat
 **Raised:** 2026-09-10, feedback round item 1.
