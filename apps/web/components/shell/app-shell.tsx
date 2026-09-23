@@ -105,7 +105,7 @@ export function AppHeader({
     "-ml-2 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:hidden";
 
   return (
-    <header className="group/header flex h-14 shrink-0 items-center justify-between gap-3 border-b pr-5 pl-4 md:pl-5">
+    <header className="group/header @container/header flex h-14 shrink-0 items-center justify-between gap-3 border-b pr-5 pl-4 md:pl-5">
       <div className="flex min-w-0 items-center gap-2">
         {"href" in back ? (
           <Link href={back.href} aria-label={back.label} className={backClass}>

@@ -1121,3 +1121,83 @@ making it.
 Never shipped: found before merge, in the same turn the surface was built.
 
 **Release note:** none — the feature had not been released.
+
+## B-48 — The agent menu in Chat opened empty
+
+**Found:** 2026-09-23, reported by the owner ("the drop down to select the agent is not working in
+the chat"). Mine — introduced by machine assignment (#61) — fixed the same turn.
+
+The agent list query was given `initialData: []` and an infinite `staleTime`. Together they mean
+"this empty list is fresh forever", so the query never fetched. It only ever showed agents because
+the socket's `providers` event wrote them straight into the `["providers"]` key. #61 added the
+workspace to that key, so the socket's write landed on a key nothing read, and the menu stayed
+empty. The model menu, which lists the chosen agent's models, was disabled with it.
+
+**Fixed** in [`queries.ts`](../apps/web/lib/queries.ts): no `initialData`, so the list is fetched
+per workspace, and the socket event now *invalidates* every workspace's list instead of writing
+into one. The event carries the account's current computer's agents, which is not what a workspace
+may run (D-051), so it cannot be written into a workspace's list.
+
+**Release note:** Choosing an agent and a model in Chat works again.
+
+## B-49 — The header and the composer answered for the account, not the workspace
+
+**Found:** 2026-09-23, verifying B-48. Mine — from #61 — fixed the same turn.
+
+Two ways of getting the same question wrong:
+
+- The header said **"3 computers online"** with one online. It counted every paired computer and
+  called them all online.
+- The composer let you send whenever *any* computer on the account was online. With machine
+  assignment, a workspace runs only on its own computers, so a workspace whose computers were all
+  offline still offered Send, and the send was then refused.
+
+**Fixed** with one hook, `useWorkspaceReach` in [`queries.ts`](../apps/web/lib/queries.ts), which
+follows the server's own rule (`hub.Target`): one of the workspace's computers is connected, or, in
+development only, the shared-token daemon. The header counts and names only online computers in
+the workspace, and says "No computer in this workspace" when it has none. The composer says the
+same thing in neutral grey, with where to change it. Machine events now also re-read the
+workspace's computer and agent lists, because assigning a computer changes both without any
+daemon changing.
+
+Verified live in the browser: removing the only online computer from a workspace switched the
+header to "No computer online" and disabled the composer without a reload; removing all of them
+showed the neutral "no computer" message; putting it back restored both.
+
+**Release note:** The status in the header now shows only the computers that are actually online,
+and Chat tells you when the workspace you are in has no computer to run on.
+
+## B-50 — Switching agent in an empty conversation announced a catch-up of 0 messages
+
+**Found:** 2026-09-23, verifying B-48. Pre-existing; fixed the same turn.
+
+The switch notice ("codex hasn't seen this conversation. It will catch up on 0 messages (~0
+tokens) when you send.") appeared for every switch, including ones that cost nothing: an empty
+conversation, or another model of the same agent, where it said the *current* agent had not seen
+the conversation. The empty conversation's hint also kept naming the old agent ("Ask agy
+something…") after codex was chosen.
+
+**Fixed** in [`composer.tsx`](../apps/web/components/chat/composer.tsx): the notice appears only when
+something will be replayed. The hint names the chosen agent.
+
+**Release note:** The "catch up" notice now appears only when switching agent actually replays
+something.
+
+## B-51 — In a narrow window, the message box shrank to two letters and the title disappeared
+
+**Found:** 2026-09-23, when the Browser pane narrowed during verification. Pre-existing; fixed the
+same turn.
+
+With the rail and the conversation list open, a window around 800px wide leaves the conversation
+about 390px. The agent and model buttons were never allowed to shrink, so the message box got what
+was left, which was about two letters ("Me"). The header switched its controls to their long form
+at 768px of *screen*, not of header, so the computer's name and the token count pushed the
+conversation title out.
+
+**Fixed:** the model button now shrinks and truncates, and the message box keeps at least 7rem.
+The header is a container, and its controls go by the header's own width: the view switch and
+token count appear from 36rem, and the computer's name from 48rem. Below that, the status says just
+"Online".
+
+**Release note:** Chat stays usable in narrow windows: the message box keeps its room and the
+conversation title stays visible.
