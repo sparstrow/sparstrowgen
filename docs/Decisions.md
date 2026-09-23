@@ -1305,3 +1305,26 @@ workspace is for. Both surfaces say so plainly instead.
 
 **The legacy shared-token daemon ignores all of this**, because it has no machine row to scope by.
 It is the development-only route (D-038) and it predates machines entirely.
+
+## D-052 — The working indicator is the design system's pixel grid
+
+**2026-09-23.** The owner asked for the design system's `WorkingIndicator` by name, showing its
+three variants side by side, and it replaced the three pulsing dots in
+[`working-indicator.tsx`](../apps/web/components/chat/working-indicator.tsx). The grid has nine cells
+lit in a travelling wave, the word "working" shimmers, and a timer counts in tenths ("1m 53.5s").
+For codex, the one agent that sends nothing until it has finished, the line also says so.
+
+**Each agent gets its own grid: square cells for claude, round for codex, and a comet around the
+edge for agy.** That is how the three appeared in what he showed, but it is **my reading, not
+something he said**. The artifact presents them as variants of one component with `drive` as the
+default. If he meant one grid for every agent, it is a one-line change to `VARIANT`.
+
+**The clock lives inside the indicator, timed from when the turn was sent.** Tenths need a tick
+ten times a second. On the chat surface, that re-rendered the whole transcript's markdown to move
+one number. Timing from the send, not from when the indicator appears, means switching away from a
+conversation and back does not restart the count at zero. This is the one place the code departs
+from the artifact, which takes `elapsed` or times itself from mount (drift recorded as U-29).
+
+**What stays from the old indicator:** it appears only while a turn is running and is removed, not
+paused, when the turn ends. Only the word is announced to screen readers, never the timer. With
+reduced motion, the grid and shimmer stop and the timer keeps going.

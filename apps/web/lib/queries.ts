@@ -247,17 +247,23 @@ export function useSignOut() {
  *
  *  Keyed by workspace, because it is the agents on the computer THIS
  *  workspace's work would go to (migration 00018). Offering one that the next
- *  message could not reach is worse than offering none. */
+ *  message could not reach is worse than offering none.
+ *
+ *  No `initialData`. With it, an empty list counts as fresh data, and with an
+ *  infinite staleTime that means this query never fetches at all — it only ever
+ *  showed agents because the socket used to write them into it. Once the key
+ *  gained the workspace, the socket's write landed on a different key and the
+ *  agent menu opened empty for good (docs/Bugs.md B-48). Callers default the
+ *  pending list to [] themselves. */
 export function useProviders() {
   const workspaceId = useCurrentWorkspace();
-  return useQuery({
+  return useQuery<Provider[]>({
     queryKey: [...keys.providers, workspaceId] as const,
     queryFn: () => api.providers(workspaceId!),
     enabled: workspaceId !== null,
-    // Providers arrive over the websocket the moment the daemon reports them,
+    // The socket says when the daemon's agents change (see "providers" below),
     // so polling would only duplicate a push we already get.
     staleTime: Infinity,
-    initialData: [] as Provider[],
   });
 }
 
@@ -270,6 +276,31 @@ export function useWorkspaceMachines(workspaceId: string | null) {
     queryFn: () => api.workspaceMachines(workspaceId!),
     enabled: workspaceId !== null,
   });
+}
+
+/** Whether the workspace on screen can run anything right now, and on what.
+ *
+ *  This used to be `useDaemon().online`, which answers for the whole ACCOUNT.
+ *  Once a workspace could be given its own computers (00018) that became the
+ *  wrong question: with the laptop online and the workspace given only the
+ *  desktop, Send was offered and then refused (docs/Bugs.md B-49).
+ *
+ *  `reachable` follows the server's own rule (hub.Target) rather than
+ *  re-deriving it: one of the workspace's computers is connected — or, in
+ *  development only, the shared-token daemon is, which has no machine row and
+ *  so shows up only as agents to run. */
+export function useWorkspaceReach() {
+  const workspaceId = useCurrentWorkspace();
+  const machines = useWorkspaceMachines(workspaceId);
+  const { data: providers } = useProviders();
+  const assigned = (machines.data ?? []).filter((m) => m.assigned);
+  const online = assigned.filter((m) => m.online);
+  return {
+    known: machines.isSuccess,
+    assigned,
+    online,
+    reachable: online.length > 0 || (providers?.length ?? 0) > 0,
+  };
 }
 
 export function useMachineWorkspaces(machineId: string | null) {
@@ -768,7 +799,12 @@ export function useRealtime() {
     const handle = (ev: ServerEvent) => {
       switch (ev.type) {
         case "providers":
-          qc.setQueryData(keys.providers, ev.providers);
+          // A signal, not a payload. The event carries the agents of the
+          // ACCOUNT's current computer, while the list on screen is the
+          // WORKSPACE's (00018) — writing one into the other would offer agents
+          // the next message cannot reach. So every workspace's list is re-read
+          // from the server, which knows which computer each would use.
+          void qc.invalidateQueries({ queryKey: keys.providers });
           break;
 
         case "daemon":
@@ -776,7 +812,15 @@ export function useRealtime() {
           break;
 
         case "machines":
+          // Sent when a computer connects or drops, as well as when one is
+          // assigned, so the workspace views of the same rows are re-read too —
+          // they carry `online`, and the composer decides from them. And the
+          // agents: taking a computer out of a workspace changes what it can
+          // run without any "providers" event, because no daemon changed.
           void qc.invalidateQueries({ queryKey: ["machines"] });
+          void qc.invalidateQueries({ queryKey: ["workspace-machines"] });
+          void qc.invalidateQueries({ queryKey: ["machine-workspaces"] });
+          void qc.invalidateQueries({ queryKey: keys.providers });
           break;
 
         case "appearance":

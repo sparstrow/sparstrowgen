@@ -18,12 +18,14 @@ import {
   useSendMessage,
   useSetFolder,
   useStopTurn,
+  useWorkspaceReach,
 } from "@/lib/queries";
 import { useChatView, type TranscriptView } from "@/lib/store";
 import { ConversationList } from "./conversation-list";
 import { ConversationName } from "./conversation-name";
 import { ProviderStrip } from "./provider-strip";
-import { MessageList, MessageSkeleton, WorkingIndicator } from "./message-list";
+import { MessageList, MessageSkeleton } from "./message-list";
+import { WorkingIndicator } from "./working-indicator";
 import { RawTranscript } from "./raw-transcript";
 import { FolderPicker } from "./folder-picker";
 import { Composer } from "./composer";
@@ -37,8 +39,8 @@ import { formatTokens, formatUsd } from "./provider-meta";
 
 /* Server state is TanStack Query's; view state is Zustand's; websocket events
    patch the Query cache and are never mirrored into the store (AGENTS.md §3).
-   The only useState left is the wall clock that drives the elapsed counter and
-   the daemon-reachable flag, neither of which is server data. */
+   The only useState left is whether the folder picker is open, which is not
+   server data either. The working indicator keeps its own clock. */
 
 const VIEWS: { id: TranscriptView; label: string }[] = [
   { id: "rendered", label: "Rendered" },
@@ -104,7 +106,6 @@ export function ChatSurface() {
   const clearDraft = useChatView((s) => s.clearDraft);
 
   const [pickingFolder, setPickingFolder] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
 
   // Whether the computer can be reached, and whether it is too old to be sent
   // work (spec US3). Both are the server's to report, so they come from the
@@ -118,6 +119,15 @@ export function ChatSurface() {
   // computer that they have none.
   const machines = useMachines();
   const noComputerYet = machines.isSuccess && (machines.data?.length ?? 0) === 0;
+
+  // Whether THIS workspace can run anything — not whether any computer on the
+  // account is up, which is the question the composer asked until workspaces
+  // got computers of their own (docs/Bugs.md B-49). The account's answer stands
+  // in only until the workspace's list has loaded.
+  const reach = useWorkspaceReach();
+  const canReach = reach.known ? reach.reachable : daemonOnline;
+  const noComputerInWorkspace =
+    !noComputerYet && reach.known && reach.assigned.length === 0 && !reach.reachable;
 
   // On a phone the list and the conversation are two screens, so having one
   // open is what "show the conversation" means.
@@ -159,19 +169,6 @@ export function ChatSurface() {
     if (first) select(first.id);
   }, [list, selectedId, search, select, isMobile]);
 
-  // A turn in flight needs a ticking clock: on codex nothing else moves until
-  // the whole answer lands. The clock only runs while one is in flight, and
-  // elapsed is derived from it rather than accumulated, so there is nothing to
-  // reset when the turn ends.
-  useEffect(() => {
-    if (!inFlight) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [inFlight]);
-  const elapsed = inFlight
-    ? Math.max(0, Math.floor((now - inFlight.startedAt) / 1000))
-    : 0;
-
   // The turn is over when its entry says so: usage means it finished, a failure
   // means it broke, and stopped means it was called back.
   //
@@ -194,7 +191,7 @@ export function ChatSurface() {
   const usableProviders = useMemo(
     () =>
       providers.map((p) =>
-        !daemonOnline
+        !canReach
           ? {
               ...p,
               availability: "waitable" as const,
@@ -209,7 +206,7 @@ export function ChatSurface() {
               }
             : p,
       ),
-    [providers, daemonOnline, daemonTooOld],
+    [providers, canReach, daemonTooOld],
   );
 
   // -------------------------------------------------------------------------
@@ -282,7 +279,6 @@ export function ChatSurface() {
 
     try {
       const { entry } = await send.mutateAsync({ id: conversationId, text, provider, model });
-      setNow(Date.now());
       // Against the conversation it was sent from, which may no longer be the
       // open one by the time the server answers.
       setInFlight(conversationId, { entryId: entry.id, provider, model, startedAt: Date.now() });
@@ -422,10 +418,10 @@ export function ChatSurface() {
                   </button>
                 }
               >
-                <div className="hidden md:block">
+                <div className="hidden @xl/header:block">
                   <ViewToggle value={transcriptView} onChange={setTranscriptView} />
                 </div>
-                <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
+                <div className="hidden text-right font-mono text-xs text-muted-foreground @xl/header:block">
                   {/* Only claude states a dollar figure, so zero spend on a
                       conversation answered by the others means "not reported",
                       not "free". Showing it only when there is one keeps that
@@ -445,7 +441,7 @@ export function ChatSurface() {
                     <div className="flex flex-col items-center gap-2 py-24 text-center">
                       <p className="text-sm font-medium">Nothing said here yet</p>
                       <p className="max-w-sm text-sm text-muted-foreground">
-                        Ask {selected.provider} something about{" "}
+                        Ask {pending?.to ?? selected.provider} something about{" "}
                         {selected.folder.split(/[\\/]/).pop()}. You can move this
                         conversation to another agent at any point without losing
                         it.
@@ -466,7 +462,7 @@ export function ChatSurface() {
                           <WorkingIndicator
                             provider={inFlight.provider}
                             model={inFlight.model}
-                            elapsed={elapsed}
+                            startedAt={inFlight.startedAt}
                             streams={inFlightProvider?.streams ?? false}
                           />
                         </div>
@@ -491,12 +487,16 @@ export function ChatSurface() {
                 activeProvider={activeProvider}
                 activeModel={activeModel}
                 pending={pending}
-                disabled={!daemonOnline || daemonTooOld || inFlight !== null}
-                disabledTone={noComputerYet ? "neutral" : "warning"}
+                disabled={!canReach || daemonTooOld || inFlight !== null}
+                disabledTone={noComputerYet || noComputerInWorkspace ? "neutral" : "warning"}
                 disabledReason={
                   noComputerYet
                     ? "You have not connected a computer yet, so there is nothing to run agents on. Connect one in Machines. Everything already said stays readable."
-                    : !daemonOnline
+                    : noComputerInWorkspace
+                      ? // A choice somebody made, not a fault, so neutral like
+                        // the one above (B-46), with the place to change it.
+                        "This workspace has no computer, so nothing can run in it. Give it one in Settings → Workspaces. Everything already said stays readable."
+                    : !canReach
                       ? "Your machine is unreachable, so nothing new can be sent. Everything already said stays readable."
                       : daemonTooOld
                         ? "Your computer's sparstrowgen is too old for this app, so nothing new can be sent. Update it in Settings → Updates. Everything already said stays readable."

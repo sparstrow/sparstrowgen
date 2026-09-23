@@ -69,8 +69,14 @@ export function Composer({
     <div className="shrink-0 border-t bg-card/40">
       {/* A switch costs nothing until the next message is sent, so the price is
           quoted here rather than charged on selection. Switching back before
-          sending withdraws it entirely. */}
-      {pending && (
+          sending withdraws it entirely.
+
+          Only when there is a price. A switch in an empty conversation, or to
+          another model of the same agent, replays nothing — and the banner used
+          to announce it anyway, as "codex hasn't seen this conversation. It
+          will catch up on 0 messages" (docs/Bugs.md B-50). The menu already
+          shows what was picked; choosing again undoes it. */}
+      {pending && pending.messagesToReplay > 0 && (
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 pt-3">
           <div className="flex flex-1 items-center gap-2.5 rounded-lg border border-dashed px-3.5 py-2 text-sm">
             <ProviderIcon
@@ -130,7 +136,10 @@ export function Composer({
         <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
           {/* Provider first, then that provider's models. One merged menu was
               tolerable at two models each; agy alone offers fourteen. */}
-          <div className="flex shrink-0 items-center gap-0.5">
+          {/* Allowed to shrink, and the model name truncates first. With both
+              held at full width, a narrow conversation pane left the message
+              box two letters wide (docs/Bugs.md B-51). */}
+          <div className="flex min-w-0 shrink items-center gap-0.5">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -139,7 +148,7 @@ export function Composer({
                     size="sm"
                     disabled={disabled}
                     aria-label={`Provider: ${shown.provider}`}
-                    className="h-9 gap-1.5 rounded-xl px-2.5"
+                    className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5"
                   />
                 }
               >
@@ -191,7 +200,7 @@ export function Composer({
                     size="sm"
                     disabled={disabled || shownProvider.models.length === 0}
                     aria-label={`Model: ${shown.model.label}`}
-                    className="h-9 max-w-52 gap-1.5 rounded-xl px-2.5 text-muted-foreground"
+                    className="h-9 min-w-0 max-w-52 shrink gap-1.5 rounded-xl px-2.5 text-muted-foreground"
                   />
                 }
               >
@@ -242,7 +251,7 @@ export function Composer({
                   : `Message ${shown.provider}…`
             }
             aria-label="Message"
-            className="max-h-50 min-h-9 flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="max-h-50 min-h-9 min-w-28 flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-muted-foreground disabled:opacity-50"
           />
 
           {running ? (

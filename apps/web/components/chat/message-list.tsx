@@ -162,52 +162,6 @@ function ReplayDivider({
   );
 }
 
-/** Shown while a turn is in flight. Deliberately not tied to text arriving:
- *  codex emits no incremental output at all, so on that provider this is the
- *  only sign of life until the whole answer lands. */
-export function WorkingIndicator({
-  provider,
-  model,
-  elapsed,
-  streams,
-}: {
-  provider: ProviderId;
-  model: Model;
-  elapsed: number;
-  streams: boolean;
-}) {
-  const c = providerStyle(provider);
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-2">
-        <ProviderIcon provider={provider} className={`size-4 ${c.text}`} />
-        <span className={`text-sm font-medium ${c.text}`}>{provider}</span>
-        <span className="text-xs text-muted-foreground">{model.label}</span>
-      </div>
-      <div
-        className="flex items-center gap-2.5 text-sm text-muted-foreground"
-        role="status"
-        aria-live="polite"
-      >
-        <span className="flex gap-1" aria-hidden>
-          <span className="working-dot size-1.5 rounded-full bg-muted-foreground" />
-          <span className="working-dot size-1.5 rounded-full bg-muted-foreground" />
-          <span className="working-dot size-1.5 rounded-full bg-muted-foreground" />
-        </span>
-        <span className="tabular-nums">
-          working · {elapsed}s
-          {!streams && (
-            <span className="text-muted-foreground/70">
-              {" "}
-              · {provider} sends its reply in one piece
-            </span>
-          )}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function MessageSkeleton() {
   return (
     <div className="space-y-8" aria-busy="true" aria-label="Loading conversation">

@@ -514,3 +514,25 @@ worth doing by hand: with both online, which one runs the turn is not yet visibl
 **If it fails:** the routing is in `hub.Target` and is covered by
 `TestAWorkspaceRunsOnlyOnItsOwnComputers`, so a failure here is most likely about *which of two
 online* computers was picked, which is G-44 rather than a bug.
+
+## U-28 — The working indicator with reduced motion turned on
+
+**Raised:** 2026-09-23, building D-052
+**Who can run it:** anyone who can turn on the OS setting (Windows: Settings → Accessibility →
+Visual effects → Animation effects off)
+
+The browser check confirmed the `prefers-reduced-motion` rules are in the served CSS. The Browser
+pane cannot emulate that setting, so they were never seen taking effect.
+
+**The step:** with animation effects off, send a message. The grid should sit still and dim, and
+"working" should be plain grey. The timer should still count.
+
+## U-29 — The design system's WorkingIndicator no longer matches the code
+
+**Raised:** 2026-09-23, building D-052
+**Who can run it:** agent
+
+The artifact's `WorkingIndicator` takes `elapsed` in seconds, or times itself from mount, and a
+`variant`. The code's takes `startedAt` in epoch ms and chooses the variant from the provider
+(D-052 says why). The artifact should gain `startedAt`, and a note on which agent gets which grid,
+once the owner has confirmed that mapping. This is the same class of drift as U-24.
