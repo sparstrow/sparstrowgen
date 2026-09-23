@@ -103,6 +103,19 @@ func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err, 500)
 		return
 	}
+	// A computer that has just been approved is offered in every workspace this
+	// account has (migration 00018's reasoning). Somebody who just connected one
+	// has no reason to expect a second step in a settings page they have never
+	// opened; narrowing is the deliberate act, not widening.
+	//
+	// Logged and not returned on failure: the computer IS paired, which is what
+	// was asked for, and refusing to say so because an assignment did not
+	// happen would trade the thing that matters for the thing that can be fixed
+	// with two clicks.
+	if err := a.store.OfferMachineEverywhere(r.Context(), u.ID, m.ID); err != nil {
+		a.log.Warn("could not offer the new computer to this account's workspaces",
+			"machine", m.ID, "err", err)
+	}
 	a.hub.BroadcastTo(u.ID, protocol.ClientEvent{Type: protocol.EventMachines})
 	writeJSON(w, a.viewMachine(m))
 }

@@ -1258,3 +1258,50 @@ rail and the skipped-setup flag, and it is a parameter on the queries that need 
 on `users` and not a field on the session. Two tabs on two workspaces is the normal way to use
 this, and a server-side "current workspace" makes that the broken case. The workspace a browser
 has never heard of, or has lost access to, falls back to the first one the account is a member of.
+
+## D-051 — A computer is offered to workspaces, and that is what routes the work
+
+**2026-09-22.** Rejected: one computer per workspace; a `workspace_id` column on `machines`;
+assignment as a label with routing left on "whichever computer connected last".
+
+The owner, the day after workspaces landed: *"I need a way and a settings to be able to add the
+machine to the workspace. If I have multiple machine in my account. I need to choose which machine
+needs added to that workspace or vice versa whick workspace needs to added to the machines."*
+
+**Many-to-many, and editable from both ends**, because that is what he described in as many words.
+`workspace_machines` is its own table rather than a column on either side, one computer can be in
+several workspaces, and Settings → Workspaces and the computer's own page write the same row.
+
+**Ownership does not move.** A computer still belongs to the ACCOUNT (D-031, D-050). This table
+says where it is *offered*, which is what keeps pairing a once-per-computer job — the thing the
+spec's US2 asked for in as many words, and the thing one-machine-per-workspace would have broken.
+
+**The assignment routes the work, and that is the whole point.** Before this there was no choice to
+make: the hub kept one "primary" machine per account — whichever connected most recently — and
+every turn, folder listing and provider strip used it. With several computers paired that was
+already arbitrary; it simply never came up, because nobody had a way to say which they meant. Now
+the workspace's set is the set, and `Target` picks from inside it. An assignment that only labelled
+would be a setting that lies, and a setting that lies is worse than no setting.
+
+Three consequences fall out, and each is worth more than the assignment itself:
+
+- **The provider strip is per workspace.** Offering an agent that the next message cannot reach is
+  worse than offering none.
+- **Browsing folders goes to the computer the workspace would run on.** Picking a path off one
+  computer and running on another is how a conversation ends up pointed at a directory that does
+  not exist there.
+- **Stopping a turn goes to the computer running it**, not to whichever is current. The turn now
+  records its machine. With one computer this was true by accident; it is now true on purpose.
+
+**Everything is assigned everywhere by default** — the migration backfills it, a newly approved
+computer joins every workspace, and a new workspace gets every computer. The alternative would have
+taken every working account's computer away at deploy time and left Chat unable to send until
+somebody found a settings page they had never needed. Narrowing is the deliberate act; widening is
+what was already true.
+
+**A workspace with no computer is allowed.** Reading old transcripts without being able to start
+anything is a legitimate thing to want, and refusing it would be this code deciding what somebody's
+workspace is for. Both surfaces say so plainly instead.
+
+**The legacy shared-token daemon ignores all of this**, because it has no machine row to scope by.
+It is the development-only route (D-038) and it predates machines entirely.

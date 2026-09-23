@@ -11,6 +11,76 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addEveryMachineToWorkspace = `-- name: AddEveryMachineToWorkspace :exec
+INSERT INTO workspace_machines (workspace_id, machine_id)
+SELECT $1, m.id
+FROM machines m
+WHERE m.user_id = $2 AND m.approved_at IS NOT NULL AND m.revoked_at IS NULL
+ON CONFLICT DO NOTHING
+`
+
+type AddEveryMachineToWorkspaceParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+// And its mirror: a workspace made after a computer was paired still gets it.
+func (q *Queries) AddEveryMachineToWorkspace(ctx context.Context, arg AddEveryMachineToWorkspaceParams) error {
+	_, err := q.db.Exec(ctx, addEveryMachineToWorkspace, arg.WorkspaceID, arg.UserID)
+	return err
+}
+
+const addMachineToEveryWorkspace = `-- name: AddMachineToEveryWorkspace :exec
+INSERT INTO workspace_machines (workspace_id, machine_id)
+SELECT mem.workspace_id, $1
+FROM workspace_members mem
+WHERE mem.user_id = $2
+ON CONFLICT DO NOTHING
+`
+
+type AddMachineToEveryWorkspaceParams struct {
+	MachineID pgtype.UUID `json:"machine_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+}
+
+// Every workspace a new computer should appear in: all of this account's.
+//
+// A computer that has just been paired and is offered nowhere would be a
+// computer that cannot run anything, and the person who just connected it has
+// no reason to expect a second step. Narrowing is the deliberate act, not
+// widening (00018's own reasoning).
+func (q *Queries) AddMachineToEveryWorkspace(ctx context.Context, arg AddMachineToEveryWorkspaceParams) error {
+	_, err := q.db.Exec(ctx, addMachineToEveryWorkspace, arg.MachineID, arg.UserID)
+	return err
+}
+
+const addWorkspaceMachine = `-- name: AddWorkspaceMachine :exec
+INSERT INTO workspace_machines (workspace_id, machine_id)
+SELECT $1, $2
+WHERE EXISTS (
+    SELECT 1 FROM workspace_members mem
+    WHERE mem.workspace_id = $1 AND mem.user_id = $3
+) AND EXISTS (
+    SELECT 1 FROM machines m
+    WHERE m.id = $2 AND m.user_id = $3
+      AND m.approved_at IS NOT NULL AND m.revoked_at IS NULL
+)
+ON CONFLICT DO NOTHING
+`
+
+type AddWorkspaceMachineParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	MachineID   pgtype.UUID `json:"machine_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+// Assigning. The SELECT is the permission check: the account has to be in the
+// workspace AND own the computer, so neither id alone is enough.
+func (q *Queries) AddWorkspaceMachine(ctx context.Context, arg AddWorkspaceMachineParams) error {
+	_, err := q.db.Exec(ctx, addWorkspaceMachine, arg.WorkspaceID, arg.MachineID, arg.UserID)
+	return err
+}
+
 const addWorkspaceMember = `-- name: AddWorkspaceMember :exec
 INSERT INTO workspace_members (workspace_id, user_id, role)
 VALUES ($1, $2, $3)
@@ -76,6 +146,100 @@ func (q *Queries) GetWorkspace(ctx context.Context, arg GetWorkspaceParams) (Get
 	return i, err
 }
 
+const listMachineWorkspaces = `-- name: ListMachineWorkspaces :many
+SELECT w.id
+FROM workspaces w
+JOIN workspace_machines wm ON wm.workspace_id = w.id
+WHERE wm.machine_id = $1
+  AND EXISTS (
+      SELECT 1 FROM workspace_members mem
+      WHERE mem.workspace_id = w.id AND mem.user_id = $2
+  )
+ORDER BY w.name
+`
+
+type ListMachineWorkspacesParams struct {
+	MachineID pgtype.UUID `json:"machine_id"`
+	UserID    pgtype.UUID `json:"user_id"`
+}
+
+// The same fact from the other end: which workspaces offer this computer. The
+// owner asked for both directions in as many words.
+func (q *Queries) ListMachineWorkspaces(ctx context.Context, arg ListMachineWorkspacesParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listMachineWorkspaces, arg.MachineID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceMachines = `-- name: ListWorkspaceMachines :many
+SELECT m.id, m.user_id, m.display_name, m.credential_hash, m.approved_at, m.revoked_at, m.created_at, m.last_seen_at, m.automatic_updates, m.daemon_version
+FROM machines m
+JOIN workspace_machines wm ON wm.machine_id = m.id
+WHERE wm.workspace_id = $1
+  AND m.approved_at IS NOT NULL AND m.revoked_at IS NULL
+  AND EXISTS (
+      SELECT 1 FROM workspace_members mem
+      WHERE mem.workspace_id = wm.workspace_id AND mem.user_id = $2
+  )
+ORDER BY m.created_at DESC
+`
+
+type ListWorkspaceMachinesParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+// Which computers a workspace may use (00018). Approved and unrevoked only,
+// the same rule ListMachines applies: a computer waiting for approval belongs
+// to a pairing in progress, not to anybody's list.
+//
+// Membership is joined here as everywhere else: this answers for an account
+// that is in the workspace, and for nobody else.
+func (q *Queries) ListWorkspaceMachines(ctx context.Context, arg ListWorkspaceMachinesParams) ([]Machine, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceMachines, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Machine{}
+	for rows.Next() {
+		var i Machine
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.DisplayName,
+			&i.CredentialHash,
+			&i.ApprovedAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.AutomaticUpdates,
+			&i.DaemonVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaces = `-- name: ListWorkspaces :many
 
 SELECT w.id, w.name, w.created_at, w.updated_at, m.role
@@ -127,6 +291,27 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Lis
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeWorkspaceMachine = `-- name: RemoveWorkspaceMachine :exec
+DELETE FROM workspace_machines
+WHERE workspace_machines.workspace_id = $1
+  AND workspace_machines.machine_id = $2
+  AND EXISTS (
+      SELECT 1 FROM workspace_members mem
+      WHERE mem.workspace_id = workspace_machines.workspace_id AND mem.user_id = $3
+  )
+`
+
+type RemoveWorkspaceMachineParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	MachineID   pgtype.UUID `json:"machine_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) RemoveWorkspaceMachine(ctx context.Context, arg RemoveWorkspaceMachineParams) error {
+	_, err := q.db.Exec(ctx, removeWorkspaceMachine, arg.WorkspaceID, arg.MachineID, arg.UserID)
+	return err
 }
 
 const renameWorkspace = `-- name: RenameWorkspace :one

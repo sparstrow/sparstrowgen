@@ -16,6 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Status, StatusIcon, type StatusTone } from "@/components/ui/status";
+import { MachineWorkspaces } from "@/components/workspaces/workspace-machines";
 import { AppHeader, AppShell, PaneHeader } from "@/components/shell/app-shell";
 
 /* Machines in the shell (docs/Decisions.md D-042): the computers are a pane and
@@ -95,6 +96,11 @@ function MachineDetail({ machine }: { machine: Machine }) {
     </AppHeader>
     <div className="min-h-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-3xl px-6 py-8">
       <section><h2 className="text-sm font-medium">Agent providers</h2><p className="mt-1 text-sm text-muted-foreground">Providers this computer can make available to new work.</p><div className="mt-4 divide-y border-y">{data.providers.length ? data.providers.map((provider) => <div className="flex items-center justify-between gap-4 py-3" key={provider.id}><span className="font-medium">{provider.label}</span><Status className="text-sm" tone={providerTone(provider.availability)}>{provider.availability === "available" ? "Available" : provider.unavailableReason ?? "Unavailable"}</Status></div>) : <p className="py-5 text-sm text-muted-foreground">Waiting for this computer to connect and report its providers.</p>}</div></section>
+      {/* The same assignment as Settings -> Workspaces, from this end. The
+          owner asked for both directions, and this is the one you want when
+          the computer is what you are thinking about: "which of my workspaces
+          should be able to use this laptop". */}
+      <section className="mt-8"><h2 className="text-sm font-medium">Workspaces</h2><p className="mt-1 mb-4 text-sm text-muted-foreground">Where this computer is offered. Work started in a workspace runs on that workspace&rsquo;s computers, so taking it out here stops new work there — conversations already in it stay readable.</p><MachineWorkspaces machineId={data.id}/></section>
       <p className="mt-6 text-xs text-muted-foreground"><Status tone={data.online ? "success" : "neutral"} size="sm">{status(data)}</Status></p>
     </div></div>
   </>;

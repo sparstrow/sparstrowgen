@@ -377,3 +377,25 @@ case only.
 **Not verified:** pressing Enter in either name box. The browser tool's synthetic Enter does not
 trigger a form's implicit submission — confirmed by the same failure on the shipped registration
 form, which is a control this change did not touch. See `docs/Unverified.md` U-25.
+
+---
+
+## Appendix — Which computers a workspace may use (2026-09-22)
+
+The owner, reading the note that computers stay with the account: *"yes, I need a way and a
+settings to be able to add the machine to the workspace. If I have multiple machine in my account.
+I need to choose which machine needs added to that workspace or vice versa whick workspace needs to
+added to the machines."*
+
+**Not drawn in this prototype, deliberately.** It is two lists of switches inside surfaces this
+prototype already has — Settings → Workspaces, and a computer's own page — in an established
+pattern the app uses for automatic updates. There is no layout question to answer by looking, and a
+prototype of two switches would have cost a round trip to tell the owner nothing he could not see
+in the real app a few minutes later. `docs/Decisions.md` D-051 carries the reasoning instead.
+
+What is worth knowing here, because it changes what every other surface in this prototype means:
+**the assignment routes the work.** The provider strip is now the agents on the computer *this
+workspace* would run on, the folder picker browses that computer, and a workspace whose computers
+have all been taken out can read its transcripts but cannot send. The prototype still draws one
+account-wide strip, which is what the app did until this change; that is the one place it is now
+behind the code.

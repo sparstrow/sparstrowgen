@@ -10,6 +10,8 @@ import type {
   Pairing,
   Profile,
   Workspace,
+  AssignedMachine,
+  AssignedWorkspace,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -260,8 +262,47 @@ export const api = {
     await post<{ ok: true }>(`${BASE}/api/auth/logout`, { everywhere });
   },
 
-  async providers(): Promise<Provider[]> {
-    return json(await request(`${BASE}/api/providers`, { cache: "no-store" }));
+  /** What the workspace on screen can run: the agents on the computer its work
+   *  would go to. Scoped to the workspace because offering an agent the next
+   *  message could not reach is worse than offering none. */
+  async providers(workspaceId: string): Promise<Provider[]> {
+    return json(
+      await request(`${BASE}/api/providers?workspace=${encodeURIComponent(workspaceId)}`, {
+        cache: "no-store",
+      }),
+    );
+  },
+
+  /** Which of the account's computers this workspace may use, every computer
+   *  listed with whether it is assigned. One list rather than two: the surface
+   *  is checkboxes over all of them. */
+  async workspaceMachines(workspaceId: string): Promise<AssignedMachine[]> {
+    return json(
+      await request(`${BASE}/api/workspaces/${workspaceId}/machines`, { cache: "no-store" }),
+    );
+  },
+
+  async setWorkspaceMachine(
+    workspaceId: string,
+    machineId: string,
+    assigned: boolean,
+  ): Promise<AssignedMachine[]> {
+    return post(`${BASE}/api/workspaces/${workspaceId}/machines/${machineId}`, { assigned });
+  },
+
+  /** The same assignment from the computer's end. */
+  async machineWorkspaces(machineId: string): Promise<AssignedWorkspace[]> {
+    return json(
+      await request(`${BASE}/api/machines/${machineId}/workspaces`, { cache: "no-store" }),
+    );
+  },
+
+  async setMachineWorkspace(
+    machineId: string,
+    workspaceId: string,
+    assigned: boolean,
+  ): Promise<AssignedWorkspace[]> {
+    return post(`${BASE}/api/machines/${machineId}/workspaces/${workspaceId}`, { assigned });
   },
 
   async machines(): Promise<Machine[]> {
@@ -391,9 +432,13 @@ export const api = {
   /** What is inside a directory ON THE OWNER'S MACHINE. The server forwards
    *  this to the daemon and never touches a filesystem itself — it is meant to
    *  run somewhere else entirely. An empty path asks for the starting points. */
-  async directories(path: string): Promise<DirListing> {
-    const q = path ? `?path=${encodeURIComponent(path)}` : "";
-    return json(await request(`${BASE}/api/directories${q}`, { cache: "no-store" }));
+  async directories(workspaceId: string, path: string): Promise<DirListing> {
+    const q = path ? `&path=${encodeURIComponent(path)}` : "";
+    return json(
+      await request(`${BASE}/api/directories?workspace=${encodeURIComponent(workspaceId)}${q}`, {
+        cache: "no-store",
+      }),
+    );
   },
 
   /** Folders already in use in this workspace, most recent first. Free from

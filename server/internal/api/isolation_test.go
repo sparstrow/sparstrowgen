@@ -179,11 +179,11 @@ func TestTheOwnersMachineDoesNotWorkForAnotherAccount(t *testing.T) {
 	}
 
 	var providers []protocol.Provider
-	decodeInto(t, other.get("/api/providers"), &providers)
+	decodeInto(t, other.get("/api/providers?workspace="+other.workspaceID), &providers)
 	if len(providers) != 0 {
 		t.Errorf("another account sees the owner's machine's providers: %v", providers)
 	}
-	if res := other.get("/api/directories?path=" + url.QueryEscape("C:\\")); res.StatusCode != http.StatusServiceUnavailable {
+	if res := other.get("/api/directories?workspace=" + other.workspaceID + "&path=" + url.QueryEscape("C:\\")); res.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("another account browsing folders: %s, want 503 — it has no machine", res.Status)
 	}
 }
