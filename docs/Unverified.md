@@ -536,3 +536,16 @@ The artifact's `WorkingIndicator` takes `elapsed` in seconds, or times itself fr
 `variant`. The code's takes `startedAt` in epoch ms and chooses the variant from the provider
 (D-052 says why). The artifact should gain `startedAt`, and a note on which agent gets which grid,
 once the owner has confirmed that mapping. This is the same class of drift as U-24.
+
+## U-30 — Daemon candidate 0.3.1's own installer, before it is promoted
+
+**Raised:** 2026-09-23, releasing B-52
+**Who can run it:** the owner, or the agent on a computer put on the candidate channel
+
+`daemon-candidate-v0.3.1` was built by the release workflow from `1b70627`. A test daemon built
+from that same commit reported the live Claude list (Opus 5.5 and the rest) and ran an Opus 5.5
+turn. The published `sparstrowgen-setup.exe` itself has not been installed anywhere.
+
+**The step:** on a candidate-channel computer, install 0.3.1. Open the composer's model menu on a
+claude conversation and check it lists Opus 5.5. Then promote 0.3.1 with **Promote a daemon
+candidate** (Actions tab). Every computer with automatic updates on installs it within the hour.
