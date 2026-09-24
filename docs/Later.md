@@ -493,3 +493,18 @@ to your files unattended:
 the conversation, and the activity trail being built now is exactly what makes it safe to watch.
 It should be a per-workspace setting whose default is A, so nothing changes until you turn it on.
 The trail shows refusals honestly either way, so it can ship before this is decided.
+
+## L-34 — Your own skills and tools, as pages in sparstrowgen
+
+**Status:** idea **Raised:** 2026-09-24, owner
+
+"Later I am gonna bring tools, and skill as separate pages in sparstrowgen. So when I pass my tools,
+and skill, I want them to read and given priority." Skills and tools he keeps once, in sparstrowgen,
+handed to whichever agent a conversation is on, and read ahead of the agent's own.
+
+The groundwork is the raw exchange's US4 (spec `2026-09-23-raw-exchange.md`): seeing, per turn, what
+each agent already feeds its model, so he can turn off what competes. How to hand an agent our own
+skills differs per CLI (claude reads a project's `.claude/skills`, codex its skills roots, agy its
+own skills folder), so it needs its own feasibility check before any design.
+
+**Unblocks when:** he starts that feature.

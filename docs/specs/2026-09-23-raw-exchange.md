@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Approved 2026-09-23 ("I approve the spec") |
+| **Status** | Approved 2026-09-23 ("I approve the spec"). **US4 added 2026-09-24 as a Draft**, for the owner to approve |
 | **Created** | 2026-09-23 |
 | **Trigger** | "I want to see what actually being sent raw to agent and what the agent replied exactly and everything." Why: "Rendered is formatted chat, but I also want to see if we rendered properly from AI, and also what see what are the context AI agent are feeding, reading, thinking etc." |
 | **Design** | [`docs/design/prototypes/Chat/raw-exchange.dc.html`](../design/prototypes/Chat/raw-exchange.dc.html), chosen by the agent at the owner's request |
@@ -86,6 +86,32 @@ explain a large token count, or an answer based on something I never said.
 - **Given** an agent that reports little or nothing about what it loaded, **then** that is said
   plainly for that agent, not left blank.
 
+### US4 — Everything the agent was fed, word for word (P1) — **Draft, added 2026-09-24**
+
+**Trigger:** "Those 15,917 if agy's own instruction, skills, mcp and more will be fed. Is it possible
+for us to read that bring it to our app. I want to see them." Why: "Later I am gonna bring tools, and
+skill as separate pages in sparstrowgen. So when I pass my tools, and skill, I want them to read and
+given priority. If I see the other skills being fed on that turn, I'll turn them off in AGY and other
+agent respectively."
+
+**As** the owner **I want** to see every piece of context an agent fed its model on a turn, word for
+word, and where each came from, **so that** I can turn off, in that agent, what I do not want it to
+read, and later make sure my own skills and tools are what it reads first.
+
+**Acceptance**
+
+- **Given** a finished turn, **when** I look at what the agent loaded, **then** I see each piece it
+  was fed (its own instructions, the skills it was offered, its tools, its rules and instruction
+  files, its connected servers), how big each piece is, and its full text.
+- **Given** a piece that came from a file on my computer, **then** I see which file, so I know where
+  to turn it off. Where the agent does not record the file, that is said.
+- **Given** an agent that keeps no record of some piece (codex does not keep its tool definitions),
+  **then** that is said for that agent, not left blank.
+- **Given** the agent's own records could not be read (an update moved them), **then** I am told
+  so, and the rest of the turn's record is unaffected.
+- **Given** a turn from before this existed, **then** it shows what it shows today: the names the
+  agent reported, and nothing claimed beyond them.
+
 ## Edge cases
 
 - **Thinking.** When an agent sends what it thought, the record shows it. When it reports only that
@@ -106,7 +132,8 @@ explain a large token count, or an answer based on something I never said.
 
 ## Out of scope
 
-- **The agents' built-in instructions, word for word.** No agent reports them; only that they were
-  loaded, and how large they were.
+- **Turning a piece off from here.** Each agent's skills, rules and servers are switched off in that
+  agent, by you. Choosing what sparstrowgen gives an agent is the later skills and tools pages
+  ([`Later.md`](../Later.md) L-34).
 - **Editing what was sent and sending it again.** A possible later idea, not part of this.
 - **The everyday step-by-step view.** That is [See what the agent did](2026-09-24-agent-activity.md).
