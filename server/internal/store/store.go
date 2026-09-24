@@ -512,6 +512,14 @@ func (s *Store) Delete(ctx context.Context, userID, id string) error {
 	if _, err := q.LockConversation(ctx, db.LockConversationParams{ID: uid, UserID: owner}); err != nil {
 		return missing(err)
 	}
+	// Each turn's record goes with it: lines, then the record, then the
+	// entries they belong to.
+	if err := q.DeleteConversationExchangeLines(ctx, uid); err != nil {
+		return err
+	}
+	if err := q.DeleteConversationExchanges(ctx, uid); err != nil {
+		return err
+	}
 	if err := q.DeleteConversationEntries(ctx, uid); err != nil {
 		return err
 	}

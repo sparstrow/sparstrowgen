@@ -1312,3 +1312,23 @@ folder with `--add-dir`. Verified on agy 1.2.3: the same prompt with the flag re
 
 **Release note:** agy now works in the conversation's folder and can read the project you pointed
 it at.
+
+## B-56 — codex turns showed far more tokens than they used
+
+**Found:** 2026-09-23, building the raw exchange's usage breakdown **Status:** fixed 2026-09-23
+**Repro:** Send anything to codex and compare the tokens on the turn with codex's own
+`turn.completed` usage.
+**Expected / Actual:** input plus output, 40,108 for the captured turn / 71,877: the adapter added
+`cached_input_tokens` and `reasoning_output_tokens` on top of `input_tokens` and `output_tokens`.
+
+Those two are parts, not additions. codex's own `TokenUsage` computes its uncached input as
+`input_tokens - cached_input_tokens`, and its blended total as that plus `output_tokens` with no
+reasoning added (`codex-rs/protocol/src/protocol.rs`); Multica reads cached input the same way. So
+every codex turn counted its cached input twice, and codex conversations looked about twice as
+expensive as they were.
+
+**Fix:** `codexUsage.total()` in [`codex.go`](../server/internal/agent/codex.go) is now input plus
+output, and `TestParseCodex` expects 19,758 for its fixture instead of 32,046. Totals already stored
+for earlier turns keep their old figure.
+
+**Release note:** Fixed: codex turns no longer show about twice the tokens they actually used.

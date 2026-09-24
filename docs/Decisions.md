@@ -1328,3 +1328,38 @@ from the artifact, which takes `elapsed` or times itself from mount (drift recor
 **What stays from the old indicator:** it appears only while a turn is running and is removed, not
 paused, when the turn ends. Only the word is announced to screen readers, never the timer. With
 reduced motion, the grid and shimmer stop and the timer keeps going.
+
+## D-053 — Each turn's whole exchange is recorded, and read only when opened
+
+**2026-09-23.** The owner asked for Raw to show what was actually sent to the agent and everything
+it sent back ([spec](specs/2026-09-23-raw-exchange.md), L-10). He approved the spec and asked for
+the design and the build in one go while away, so **the direction was chosen by the agent**, not
+picked by him from options ([handoff](design/prototypes/Chat/raw-exchange.handoff.md), Invented).
+
+**Recorded beside the parsers, not by them.** stdout is read through a recorder on its way to each
+parser, and stderr, which nothing read before, is written straight into one
+([`record.go`](../server/internal/agent/record.go)). What a parser makes of a line and what the
+record says was printed cannot disagree about the bytes. Rejected: having each parser emit what it
+skipped, which would put the record at the mercy of three parsers' ideas of what matters.
+
+**One row per line, a record row per turn.** Lines arrive a batch at a time while the turn runs;
+appending rows is cheap where rewriting one growing value is not. The daemon batches at 200 lines,
+256 KB or a quarter second, and flushes before the turn's ending, so a finished turn's record is
+complete when the turn is. Running totals (lines, bytes, last offset) sit on the record row so the
+transcript can label every turn with one small query (`GET /api/conversations/{id}/exchanges`).
+
+**What a CLI said about itself is derived on every read, never stored**
+([`report.go`](../server/internal/agent/report.go)). It is provider knowledge, so it lives with the
+parsers; it runs over stored lines, so a better reading improves old turns too.
+
+**Limits and omissions, on purpose.** 16 MB per turn, then the record counts what it did not keep
+and says so. The environment is never recorded: it carries `CLAUDE_CODE_OAUTH_TOKEN`. A NUL byte
+becomes U+FFFD, the one byte Postgres text refuses. Records live as long as their conversation and
+are deleted with it, explicitly (D-009).
+
+**The watchdog now counts every printed line as a sign of life**, not only the messages parsers
+produce. A tool call or thinking block was always the CLI working; before, only text reset it.
+
+**One copy of the two-button switch.** Rendered / Raw was hand-built in the chat header; it is now
+[`choice-toggle.tsx`](../apps/web/components/chat/choice-toggle.tsx), used there and by the
+exchange's own switches, so adding it to the design system is one move (U-34).

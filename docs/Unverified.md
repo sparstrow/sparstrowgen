@@ -561,3 +561,42 @@ says it "Requires usage credits".
 
 **The step:** in a claude conversation, choose Fable 5.1 and send something short. The reply should
 arrive labelled Fable 5.1. A failure naming the model means the `[1m]` tag needs to come off.
+
+## U-32 — A real turn's exchange shows in Raw on production
+
+**Raised:** 2026-09-23, D-053
+**Who can run it:** agent, with the testing account and a test daemon from this change
+
+**The step:** after the change deploys, run a test daemon built from it (CLAUDE.md, the agent's
+testing account), send a short claude message, switch to codex and send another. In Raw, the latest
+turn is open: the command, the catch-up in stdin, what claude reported loading and its usage, and
+every line; Copy lines copies them. The first turn's line says how big its record is. An older turn
+says "Not recorded".
+**Status:** open
+
+## U-33 — The owner's own computer records its turns once 0.3.3 is installed
+
+**Raised:** 2026-09-23, D-053
+**Who can run it:** the owner — promoting a candidate is his step (docs/runbooks/daemon-release.md)
+
+Recording happens in the daemon, so until his computer runs a daemon from this change, his turns
+show "Not recorded" in Raw. Nothing else changes for him.
+
+**The step:** promote candidate 0.3.3 with **Promote a daemon candidate** (Actions tab). Once his
+computer updates, send any message and open Raw: the new turn has a record.
+**Status:** open
+
+## U-34 — The design system has no entry for the raw exchange or the two-button switch
+
+**Raised:** 2026-09-23, D-053
+**Who can run it:** agent
+
+CLAUDE.md asks for the design system artifact to stay true to `components/chat`. This change added
+[`exchange-panel.tsx`](../apps/web/components/chat/exchange-panel.tsx) and made the chat header's
+hand-built Rendered / Raw switch a shared
+[`choice-toggle.tsx`](../apps/web/components/chat/choice-toggle.tsx), which the artifact lists as
+"not in this system yet".
+
+**The step:** once the owner has reviewed the feature, add ChoiceToggle to the artifact's
+components and describe the raw exchange under Chat, or record why not.
+**Status:** open

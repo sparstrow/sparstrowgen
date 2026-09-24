@@ -17,7 +17,17 @@ import {
   type Session,
 } from "./api";
 import type { Appearance } from "./api";
-import type { Conversation, Entry, Model, Provider, ProviderId, Workspace } from "./chat-types";
+import type {
+  Conversation,
+  Entry,
+  Exchange,
+  ExchangeSummary,
+  Model,
+  Provider,
+  ProviderId,
+  Workspace,
+} from "./chat-types";
+import { utf8Bytes } from "./exchange";
 import { useWorkspaceView } from "./store";
 
 /* Every read of server state goes through here, and every realtime event
@@ -37,6 +47,11 @@ export const keys = {
   conversations: (workspaceId: string, q: string) =>
     ["conversations", workspaceId, q] as const,
   conversation: (id: string) => ["conversation", id] as const,
+  // One turn's whole record, and how big every turn's record in a conversation
+  // is. Separate because the first can be megabytes and is read only when a
+  // turn is opened in Raw; the second is a few numbers per turn.
+  exchange: (entryId: string) => ["exchange", entryId] as const,
+  exchanges: (conversationId: string) => ["exchanges", conversationId] as const,
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
 };
 
@@ -467,6 +482,81 @@ export function useConversation(id: string | null) {
     queryKey: keys.conversation(id ?? ""),
     queryFn: () => api.conversation(id!),
     enabled: id !== null,
+  });
+}
+
+/** One turn's record: what was sent, every line printed, and what the CLI said
+ *  about itself. Fetched only once the turn is opened in Raw.
+ *
+ *  Never stale by time: a finished turn's record does not change, and a running
+ *  one is patched by the socket (see "exchange" below) and re-read when the turn
+ *  ends. */
+export function useExchange(entryId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.exchange(entryId),
+    queryFn: () => api.exchange(entryId),
+    enabled,
+    staleTime: Infinity,
+  });
+}
+
+/** How big each turn's record in a conversation is. Read while Raw is showing,
+ *  so every turn can say whether it has a record before it is opened. */
+export function useExchangeSummaries(conversationId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.exchanges(conversationId ?? ""),
+    queryFn: () => api.exchangeSummaries(conversationId!),
+    enabled: enabled && conversationId !== null,
+    staleTime: Infinity,
+  });
+}
+
+/** Folds what is new in a running turn's record into whatever the cache already
+ *  holds of it. Lines are taken by seq: a repeat is ignored, and a gap means a
+ *  batch never reached this tab, so the caller refetches rather than showing a
+ *  record with a hole in it. Returns whether that happened. */
+function patchExchange(qc: QueryClient, entryId: string, part: Exchange): boolean {
+  let gap = false;
+  qc.setQueryData<Exchange>(keys.exchange(entryId), (prev) => {
+    // Not open anywhere: the fetch, when it happens, reads the stored whole.
+    if (!prev) return prev;
+    const next: Exchange = { ...prev, recorded: true };
+    if (part.sent) next.sent = part.sent;
+    if (part.dropped) next.dropped = part.dropped;
+    if (part.report) next.report = part.report;
+    const last = prev.lines.length ? prev.lines[prev.lines.length - 1].seq : 0;
+    const fresh = (part.lines ?? []).filter((l) => l.seq > last);
+    if (fresh.length && fresh[0].seq !== last + 1) {
+      gap = true;
+      return prev;
+    }
+    if (fresh.length) next.lines = [...prev.lines, ...fresh];
+    return next;
+  });
+  return gap;
+}
+
+function patchSummary(qc: QueryClient, conversationId: string, entryId: string, part: Exchange) {
+  qc.setQueryData<ExchangeSummary[]>(keys.exchanges(conversationId), (prev) => {
+    if (!prev) return prev;
+    const lines = part.lines ?? [];
+    const found = prev.find((s) => s.entryId === entryId);
+    const base: ExchangeSummary = found ?? {
+      entryId,
+      launched: part.sent?.launched ?? true,
+      lines: 0,
+      bytes: 0,
+      lastAtMs: 0,
+    };
+    const next: ExchangeSummary = {
+      ...base,
+      launched: part.sent ? part.sent.launched : base.launched,
+      lines: base.lines + lines.length,
+      bytes: base.bytes + lines.reduce((n, l) => n + utf8Bytes(l.text), 0),
+      lastAtMs: lines.reduce((m, l) => Math.max(m, l.atMs), base.lastAtMs),
+      dropped: part.dropped ?? base.dropped,
+    };
+    return found ? prev.map((s) => (s.entryId === entryId ? next : s)) : [...prev, next];
   });
 }
 
@@ -901,6 +991,18 @@ export function useRealtime() {
             toast.error("Turn did not finish", { description: ev.entry.failure });
           }
           void invalidateLists(qc);
+          // The daemon sends the whole record before the ending, so it is
+          // complete now; re-reading it replaces anything patched in piecemeal
+          // with the stored version and the server's final reading of it.
+          void qc.invalidateQueries({ queryKey: keys.exchange(ev.entry.id) });
+          void qc.invalidateQueries({ queryKey: keys.exchanges(ev.conversationId) });
+          break;
+
+        case "exchange":
+          if (patchExchange(qc, ev.entryId, ev.exchange)) {
+            void qc.invalidateQueries({ queryKey: keys.exchange(ev.entryId) });
+          }
+          patchSummary(qc, ev.conversationId, ev.entryId, ev.exchange);
           break;
       }
     };

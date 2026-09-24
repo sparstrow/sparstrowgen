@@ -92,7 +92,7 @@ output. What's still open after that capture is [`KnownGaps.md`](KnownGaps.md) G
 | Streaming JSON | `--output-format stream-json --verbose` *(verified — `--verbose` is **required** with `-p`, undocumented in `--help`)* | `--json` JSONL *(verified — real stream captured)* | `--output-format stream-json` *(verified — real stream captured)* |
 | Incremental text streaming | **yes** *(verified 2026-09-10 — 89 `content_block_delta` events averaging 8.1 chars for a four-sentence answer, the finest-grained of the three; needs `--include-partial-messages`)* | **no** *(verified — no delta event type exists; one whole `item.completed` per turn)* | **yes** *(verified — 93 chunks of ~25–35 chars for a 400-word answer)* |
 | Config isolation | `--strict-mcp-config --setting-sources project` *(verified 2026-09-10 — 0 MCP servers, 72 skills down to 17. **NOT `--bare`**: it never reads OAuth)* | `--ignore-user-config` *(verified — zero MCP noise, auth still works)* | not needed in captures so far |
-| Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
+| Per-turn token usage | **verified** — see below | **verified** — `turn.completed.usage`: `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`. The cache figures are **parts of** `input_tokens` and reasoning part of `output_tokens` (codex's own `TokenUsage`; B-56) | **verified** — `result.usage` and each `step_update.usage`: `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`, `total_tokens` |
 | Per-turn USD cost | **verified** — `total_cost_usd`, real dollar figure | no — tokens only | no — tokens only |
 | Rate-limit signal | **verified** — `rate_limit_event`, see below. NOT parsed by the adapter yet (G-10) | not observed in this capture | not observed in this capture |
 | Resume a session | `--resume <uuid>` *(verified flag)* | `codex exec resume <id>` *(verified flag)* | `--conversation <id>` *(verified flag)* |
@@ -230,6 +230,25 @@ or run anything and could only search. agy's command was auto-denied ("a tool re
 should be allowed to do is the owner's decision: docs/Later.md L-33.
 
 agy also looked in its own scratch folder rather than the conversation's; fixed in B-55.
+
+### The raw exchange — what one turn's record can hold (2026-09-23)
+
+For [the raw-exchange spec](specs/2026-09-23-raw-exchange.md). **Verified by reading the daemon and
+the captured streams** in `server/internal/agent/testdata`; no new CLI run. **Since D-053 all of the
+first three rows are kept**, per turn; before it, the "Before D-053" column is what survived.
+
+| | What exists | Before D-053 |
+|---|---|---|
+| What we send | All of it is ours: the daemon builds the prompt (the catch-up framing is `buildPrompt` in `cmd/daemon/main.go`), the arguments, the folder and the resume id | only the user's message, and a replay marker with a count and tokens |
+| The CLI's stdout | every event, all three providers | parsed for text, session id, usage, cost and limits; the rest was discarded |
+| The CLI's stderr | codex's refusals appear **only** here (Agent activity, above) | **never read**: no adapter attached stderr, so it went to the null device |
+| What the CLI loaded by itself | claude's `system:init`: `cwd`, `model`, `claude_code_version`, `permissionMode`, `tools`, `skills`, `slash_commands`, `agents`, `mcp_servers`, `plugins`, `output_style`. codex's `thread.started`: the thread id only. agy's `init`: conversation id and `cwd` only | nothing |
+| How much it loaded | usage, all three (table above). The captured claude turn: 4 new input tokens, 30,219 read from cache, 9,177 written to it — about 39k tokens of claude's own context behind a short message | the total only |
+| The text of a CLI's built-in instructions | **not emitted by any of the three** | — |
+| Thinking text | **depends on the version.** The 2.1.90 capture (Sonnet 4.6) streams it as `thinking_delta` text; the 2.1.280 capture sent the block empty, signature only. codex and agy: none seen | — |
+
+**Size.** The captured claude turn is 22.5 KB of events for a two-message answer, mostly
+`--include-partial-messages` deltas. A turn whose tools read files carries those files in full.
 
 ## Real caveats found while capturing (2026-09-09)
 

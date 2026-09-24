@@ -27,6 +27,7 @@ import { ProviderStrip } from "./provider-strip";
 import { MessageList, MessageSkeleton } from "./message-list";
 import { WorkingIndicator } from "./working-indicator";
 import { RawTranscript } from "./raw-transcript";
+import { ChoiceToggle } from "./choice-toggle";
 import { FolderPicker } from "./folder-picker";
 import { Composer } from "./composer";
 import { Button } from "@/components/ui/button";
@@ -46,46 +47,6 @@ const VIEWS: { id: TranscriptView; label: string }[] = [
   { id: "rendered", label: "Rendered" },
   { id: "raw", label: "Raw" },
 ];
-
-/** Two buttons rather than one that flips: a single toggle never says what it
- *  would switch to, and this one is reached for precisely when you already
- *  distrust what is on screen. */
-function ViewToggle({
-  value,
-  onChange,
-}: {
-  value: TranscriptView;
-  onChange: (v: TranscriptView) => void;
-}) {
-  return (
-    <div
-      className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5"
-      role="group"
-      aria-label="Transcript view"
-    >
-      {VIEWS.map((v) => (
-        <Button
-          key={v.id}
-          variant="ghost"
-          size="xs"
-          // Selection is a surface lifted out of the track, not a tint: in the
-          // light theme `secondary` and the ghost hover resolve to the same
-          // value, so a tinted selection is invisible the moment the cursor is
-          // over either half.
-          className={
-            value === v.id
-              ? "bg-background text-foreground shadow-sm hover:bg-background"
-              : "text-muted-foreground"
-          }
-          aria-pressed={value === v.id}
-          onClick={() => onChange(v.id)}
-        >
-          {v.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
 
 export function ChatSurface() {
   const selectedId = useChatView((s) => s.selectedId);
@@ -419,7 +380,12 @@ export function ChatSurface() {
                 }
               >
                 <div className="hidden @xl/header:block">
-                  <ViewToggle value={transcriptView} onChange={setTranscriptView} />
+                  <ChoiceToggle
+                    options={VIEWS}
+                    value={transcriptView}
+                    onChange={setTranscriptView}
+                    label="Transcript view"
+                  />
                 </div>
                 <div className="hidden text-right font-mono text-xs text-muted-foreground @xl/header:block">
                   {/* Only claude states a dollar figure, so zero spend on a
@@ -450,7 +416,14 @@ export function ChatSurface() {
                   ) : (
                     <>
                       {transcriptView === "raw" ? (
-                        <RawTranscript entries={visibleEntries} />
+                        // Every entry, the running turn's empty placeholder
+                        // included: its record is worth watching before any of
+                        // its answer has arrived.
+                        <RawTranscript
+                          conversationId={selected.id}
+                          entries={selected.entries}
+                          runningId={streamingId}
+                        />
                       ) : (
                         <MessageList
                           entries={visibleEntries}

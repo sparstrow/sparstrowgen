@@ -108,6 +108,8 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 		return nil, err
 	}
 	cmd.Stdin = bytes.NewReader(input)
+	messages := make(chan Message, 64)
+	rec := record(cmd, messages)
 	// launch rather than cmd.Start: a stop has to take the tool subprocesses
 	// with it, not just the CLI (D-021).
 	proc, err := launch(ctx, cmd, stdout)
@@ -116,16 +118,18 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 		return nil, err
 	}
 
-	messages := make(chan Message, 64)
 	result := make(chan Result, 1)
 
 	go func() {
 		defer close(result)
 		defer removeLog()
-		p := parseAgy(stdout, messages)
-		close(messages)
+		p := parseAgy(rec.stdout(stdout), messages)
 
+		// Reaped before Messages closes: stderr keeps arriving until Wait
+		// returns, and every line of it belongs in the record.
 		waitErr := proc.Wait()
+		rec.finish()
+		close(messages)
 		switch {
 		case p.Err != nil:
 			waitErr = p.Err
@@ -143,7 +147,7 @@ func (a Agy) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Ses
 		}
 	}()
 
-	return &Session{Messages: messages, Result: result}, nil
+	return &Session{Messages: messages, Result: result, Sent: sentBy(cmd, opts, prompt, input)}, nil
 }
 
 // ---------------------------------------------------------------------------

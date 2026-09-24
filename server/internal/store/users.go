@@ -224,6 +224,12 @@ func (s *Store) DeleteEveryUser(ctx context.Context) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
+	if err := q.DeleteEveryExchangeLine(ctx); err != nil {
+		return 0, err
+	}
+	if err := q.DeleteEveryExchange(ctx); err != nil {
+		return 0, err
+	}
 	if err := q.DeleteEveryEntry(ctx); err != nil {
 		return 0, err
 	}
