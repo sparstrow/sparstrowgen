@@ -25,6 +25,17 @@ func TestAgyArgsCarryNoPromptAndReplaceTheFiveMinuteLimit(t *testing.T) {
 	}
 }
 
+// B-55: agy works in the conversation's folder, not in its own scratch one.
+func TestAgyIsGivenTheConversationsFolder(t *testing.T) {
+	args := strings.Join(agyArgs(ExecOptions{Cwd: `D:\sparstrowgen`}, ""), " ")
+	if !strings.Contains(args, `--add-dir D:\sparstrowgen`) {
+		t.Errorf("agy is not given the conversation's folder: %s", args)
+	}
+	if args := agyArgs(ExecOptions{}, ""); contains(args, "--add-dir") {
+		t.Errorf("no folder, and still --add-dir: %v", args)
+	}
+}
+
 func TestAgyInputIsOneUserEvent(t *testing.T) {
 	long := strings.Repeat("x", 40_000)
 	data, err := agyInput(long)

@@ -1295,3 +1295,20 @@ The half-hourly check is what exposed this within three hours of the change, rat
 
 **Release note:** The model menu shows each Claude model's version again, such as "Opus 5.5"
 rather than "Opus".
+
+## B-55 — agy never looked in the conversation's folder
+
+**Found:** 2026-09-24, capturing what each agent reports about its work. Fixed the same turn.
+
+Asked to read `notes.txt` "in this folder", agy looked for
+`C:\Users\gsrih\.gemini\antigravity-cli\scratch\notes.txt`. Its `init` event reported the right
+folder, because the daemon starts it there, but agy resolves files against its own scratch
+workspace. So an agy conversation "about" a project could not see that project, which is the
+failure B-3 describes for a wrong folder, only with nothing on screen to say so.
+
+**Fixed** in [`agy.go`](../server/internal/agent/agy.go): the daemon passes the conversation's
+folder with `--add-dir`. Verified on agy 1.2.3: the same prompt with the flag read the folder's
+`notes.txt` and answered its first line.
+
+**Release note:** agy now works in the conversation's folder and can read the project you pointed
+it at.
