@@ -443,9 +443,11 @@ function GroupRow({ group, lines }: { group: LineGroup; lines: ExchangeLine[] })
     <>
       <button type="button" className={rowClass} aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="text-right text-muted-foreground tabular-nums">{formatOffset(first.atMs)}</span>
-        <span className={`max-w-[36ch] truncate ${group.stream === "stderr" ? "font-medium" : ""}`}>
-          {kind}
-          {group.count > 1 && <span className="text-muted-foreground"> ×{group.count}</span>}
+        {/* The count sits outside the part that truncates: "×24" is the one
+            thing that says a row stands for more than one line. */}
+        <span className="flex max-w-[40ch] min-w-0 gap-1">
+          <span className={`truncate ${group.stream === "stderr" ? "font-medium" : ""}`}>{kind}</span>
+          {group.count > 1 && <span className="shrink-0 text-muted-foreground">×{group.count}</span>}
         </span>
         <span className="min-w-0 truncate text-muted-foreground">{preview.slice(0, PREVIEW)}</span>
       </button>

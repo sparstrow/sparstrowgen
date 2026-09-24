@@ -44,7 +44,7 @@ Only the latest turn starts open.
 |---|---|
 | Transcript lines, provider colours, saved text | today's `RawTranscript` |
 | The disclosure line and its trail | the agent-activity pattern (chevron, 1px `border` trail) |
-| Formatted / Exact and the stdin switch | the Rendered / Raw two-button pattern (`ViewToggle`) |
+| Formatted / Exact and the stdin switch | the Rendered / Raw two-button pattern, now shared as `ChoiceToggle` |
 | "Not recorded", "never started", "still working", truncation | `Status` (`neutral`, `progress`, `warning`) or a quiet line with `circle-minus` |
 | Load failure | `Status` `danger` + a Try again `Button` |
 | Loading | `Skeleton` rows in the real row geometry |
@@ -81,7 +81,7 @@ Per agent turn, stored with the conversation (and deleted with it), streamed whi
 | `sent.prompt` | string | the daemon's built prompt, catch-up included | yes |
 | `sent.stdin` | string | the exact bytes written to stdin | yes |
 | `sent.launched` | bool | false when the daemon refused before starting the CLI | yes |
-| `lines[]` | `{seq, atMs, stream: stdout\|stderr\|log, text}` | every line the CLI printed, stamped with ms since launch | yes |
+| `lines[]` | `{seq, atMs, stream: stdout\|stderr, text}` | every line the CLI printed, stamped with ms since launch | yes |
 | `dropped` | `{lines, bytes}` | lines not kept past the per-turn cap | yes |
 | `report.*` | version, model, permissionMode, cwd, sessionId, tools, skills, agents, mcpServers | **computed on read** from the lines, per provider | claude: all. codex: session only. agy: session and folder |
 | `report.usage` | `{input, fromCache?, toCache?, output, reasoning?, total}` | computed on read from the last usage the CLI reported | yes, all three (Capabilities) |
@@ -128,3 +128,14 @@ report. A gap in `seq` means refetch.
 - Row labels first read `stream_event · content_block…`, cutting off the part that matters; they now
   name the inner event.
 - Console: no errors.
+
+### In the app, on real data
+
+2026-09-23, production, testing account, test daemon from #68: see
+[`Unverified.md`](../../../Unverified.md) U-32. What differed from the prototype:
+
+- claude 2.1.280 sends thinking as empty `thinking_delta` rows between `system · thinking_tokens`
+  lines, so those runs read `""`. That is what it sent.
+- The "saved answer" label showed over a turn with no answer, only a failure; it now needs text.
+- In a narrow pane a group's `×24` was cut off with its label; the count now sits outside the part
+  that truncates.

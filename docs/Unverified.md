@@ -572,7 +572,19 @@ testing account), send a short claude message, switch to codex and send another.
 turn is open: the command, the catch-up in stdin, what claude reported loading and its usage, and
 every line; Copy lines copies them. The first turn's line says how big its record is. An older turn
 says "Not recorded".
-**Status:** open
+**Status:** verified 2026-09-23 on production with the testing account and a test daemon built from
+#68 (own `SPARSTROWGEN_HOME`, scratch folder). A claude Haiku 4.5 turn asked to read `notes.txt`
+showed live while running ("4 lines · 3.8 KB so far", then the report from claude's first line),
+and finished as 62 lines, 27.1 KB, 7.3s: `C:\Users\gsrih\.local\bin\claude.exe` with its arguments,
+the 145-byte stdin, claude 2.1.280 with its tools, skills and agents, read 50,452 (42,729 from
+cache, 7,705 written), wrote 420. The Read call's arguments grouped as `input_json_delta ×24`, and
+the tool result line held the file. A codex GPT-5.6 Sol turn after the switch showed the whole
+catch-up in stdin, five `stderr` refusals ("blocked by policy"), read 110,905 (102,400 from cache),
+and "codex did not report its version, model, tools or skills". Older turns said "Not recorded"; a
+send into a folder that no longer exists showed "sent · claude never started" and "command: not
+run". **Copy lines is not verified:** the Browser pane refuses clipboard writes (`clipboard-write`
+is "denied") and the app said "Could not copy the lines"; see U-35. Two fixes came out of the walk
+(the saved-answer label over a failure, and a group's count cut off), shipped in the follow-up PR.
 
 ## U-33 — The owner's own computer records its turns once 0.3.3 is installed
 
@@ -599,4 +611,14 @@ hand-built Rendered / Raw switch a shared
 
 **The step:** once the owner has reviewed the feature, add ChoiceToggle to the artifact's
 components and describe the raw exchange under Chat, or record why not.
+**Status:** open
+
+## U-35 — Copy lines copies a turn's record in a real browser
+
+**Raised:** 2026-09-23, U-32
+**Who can run it:** the owner, in his own browser; the agent's Browser pane refuses clipboard writes
+
+**The step:** in Raw, open a recorded turn and press Copy lines, then paste into a text editor.
+Passing: a toast says "Copied N lines" and the paste is the turn's lines, one per line, stdout and
+stderr in the order they arrived.
 **Status:** open

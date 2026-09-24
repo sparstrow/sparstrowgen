@@ -154,7 +154,9 @@ function AgentTurn({
         </>
       )}
 
-      {open && !unrecorded && (e.text || !running) && (
+      {/* Only over text: a turn that ended with a failure and no answer has
+          nothing saved to label, and the failure below speaks for itself. */}
+      {open && !unrecorded && e.text && (
         <div className="mb-1 text-xs text-muted-foreground">saved answer · what Rendered shows</div>
       )}
       {e.text && <Body text={e.text} />}
