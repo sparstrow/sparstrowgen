@@ -2,14 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the owner to correct and approve |
+| **Status** | Approved 2026-09-23 ("I approve the spec") |
 | **Created** | 2026-09-23 |
 | **Trigger** | "I want to see what actually being sent raw to agent and what the agent replied exactly and everything." Why: "Rendered is formatted chat, but I also want to see if we rendered properly from AI, and also what see what are the context AI agent are feeding, reading, thinking etc." |
-| **Design** | not designed yet |
+| **Design** | [`docs/design/prototypes/Chat/raw-exchange.dc.html`](../design/prototypes/Chat/raw-exchange.dc.html), chosen by the agent at the owner's request |
 | **Related** | [See what the agent did](2026-09-24-agent-activity.md) — the everyday, tidied view of the same turn. This one is the unedited record. Both need the same thing kept from every turn. |
 | **Open questions** | none parked; see the edge cases marked *(inferred)* |
-
-> Drafted from your message. Lines marked *(inferred)* are my guesses. Correct anything that's wrong.
 
 ## What's wrong today
 

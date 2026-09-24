@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en" data-surface="mono" data-accent="neutral" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raw exchange (prototype)</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  :root { --r-md: calc(var(--radius) - 2px); --r-lg: var(--radius); --r-xl: calc(var(--radius) + 4px);
+          --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+          --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 4px; }
+  .ic { flex: none; }
+
+  /* Prototype controls: not part of the design. */
+  .proto-bar { position: sticky; top: 0; z-index: 5; height: 40px; display: flex; align-items: center; gap: 18px; padding: 0 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; overflow-x: auto; white-space: nowrap; }
+  .proto-bar .grp { display: flex; align-items: center; gap: 4px; }
+  .proto-bar b { font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
+  .proto-bar button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); }
+  .proto-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+  /* The Raw view as it is today: monospace, the transcript column, meta lines
+     in 12px muted, bodies at 13px exactly as stored. */
+  .col { max-width: 48rem; margin: 0 auto; padding: 32px 24px 96px; display: flex; flex-direction: column; gap: 24px; font-family: var(--font-mono); }
+  .line { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-bottom: 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .fg { color: var(--foreground); }
+  .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 13px; line-height: 1.625; }
+  .p-claude { color: var(--provider-claude); } .p-codex { color: var(--provider-codex); } .p-agy { color: var(--provider-agy); }
+
+  /* The disclosure: one quiet line between a turn's header and its saved
+     answer, the same place the activity line sits in the rendered view. */
+  .xtoggle { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px -6px; padding: 2px 6px; border-radius: var(--r-md); font-size: 12px; line-height: 16px; color: var(--muted-foreground); transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .xtoggle:hover { background: var(--accent); color: var(--foreground); }
+  .xtoggle .chev { transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1); }
+  .xtoggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .xnote { margin: 2px 0 8px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); display: flex; gap: 6px; align-items: flex-start; }
+  .xnote .ic { margin-top: 1px; }
+
+  .xbody { margin: 0 0 12px 1px; padding-left: 16px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
+  .xsec h4 { margin: 0 0 8px; font-family: var(--font-sans); font-size: 13px; line-height: 20px; font-weight: 500; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 8px; }
+  .xsec h4 .meta { font-family: var(--font-mono); font-weight: 400; font-size: 12px; color: var(--muted-foreground); letter-spacing: 0; }
+  .xsec h4 .right { margin-left: auto; }
+
+  .kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; font-size: 12px; line-height: 18px; }
+  .kv dt { color: var(--muted-foreground); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .kv dd .quiet { color: var(--muted-foreground); }
+
+  .box { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+  .box .bh { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+  .box pre { margin: 0; padding: 8px 10px; max-height: 360px; overflow: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 19px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  /* The two-button view switch, the same pattern as Rendered / Raw. */
+  .seg { margin-left: auto; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-md); background: var(--muted); }
+  .seg button { padding: 1px 8px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--muted-foreground); }
+  .seg button[aria-pressed="true"] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .btn-sm { padding: 1px 8px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--muted-foreground); font-family: var(--font-sans); }
+  .btn-sm:hover { background: var(--accent); color: var(--foreground); }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); font-size: 11.5px; line-height: 17px; color: var(--muted-foreground); }
+
+  .usage { display: grid; grid-template-columns: max-content max-content; column-gap: 16px; row-gap: 2px; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+  .usage .n { text-align: right; }
+  .usage .sub { color: var(--muted-foreground); padding-left: 12px; }
+  .usage .tot { border-top: 1px solid var(--border); padding-top: 2px; }
+  .expl { margin-top: 8px; font-family: var(--font-sans); font-size: 12px; line-height: 18px; color: var(--muted-foreground); max-width: 36rem; }
+
+  /* Received: one row per line the agent printed, in the order it arrived. */
+  .rows { display: flex; flex-direction: column; }
+  .row { display: grid; grid-template-columns: 52px minmax(0, max-content) minmax(0, 1fr); column-gap: 10px; align-items: baseline; width: 100%; padding: 1px 6px; margin-left: -6px; border-radius: var(--r-md); font-size: 12px; line-height: 20px; }
+  .row:hover { background: var(--accent); }
+  .row[aria-expanded="true"] { background: var(--muted); }
+  .row .t { color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: right; }
+  .row .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 36ch; }
+  .row .k .n { color: var(--muted-foreground); }
+  .row .v { color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .row .err { font-weight: 500; }
+  .inner { margin: 2px 0 6px 62px; }
+  .inner .rows { padding-left: 8px; border-left: 1px solid var(--border); }
+  .inner .box { margin-top: 2px; }
+  .trunc { margin-top: 6px; font-family: var(--font-sans); font-size: 12px; line-height: 18px; display: flex; gap: 6px; align-items: flex-start; }
+
+  .saved { margin: 4px 0 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+  /* Status: colour, icon and word together (design system, Status). */
+  .status { display: inline-flex; align-items: center; gap: 6px; }
+  .status[data-tone="warning"] .ic { color: var(--warning); } .status[data-tone="warning"] .w { color: var(--warning-text); }
+  .status[data-tone="danger"] .ic { color: var(--destructive); } .status[data-tone="danger"] .w { color: var(--destructive-text); }
+  .status[data-tone="neutral"] .ic { color: var(--muted-foreground); }
+  .status[data-tone="progress"] .ic { color: var(--info); }
+  .status .w.quiet { color: var(--muted-foreground); }
+
+  .sk { background: var(--muted); border-radius: 4px; height: 12px; }
+  .skrow { display: grid; grid-template-columns: 52px 140px 1fr; column-gap: 10px; padding: 4px 0; }
+  .spin { animation: spin 900ms linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes row-in { from { opacity: 0; } to { opacity: 1; } }
+  .row.new { animation: row-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @media (prefers-reduced-motion: reduce) { .xtoggle .chev, .row.new, .spin { transition: none; animation: none; } }
+</style>
+</head>
+<body>
+<div class="proto-bar" id="bar"></div>
+<main class="col" id="col" aria-label="Raw transcript"></main>
+
+<script src="../icons.js"></script>
+<script>
+/* Real lines, captured from the CLIs (server/internal/agent/testdata and
+   parse_test.go). Only the time offsets are made up: no capture kept them. */
+var CLAUDE_LINES = ["{\"type\":\"system\",\"subtype\":\"init\",\"cwd\":\"D:\\\\sparstrowgen\",\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"tools\":[\"Task\",\"AskUserQuestion\",\"Bash\",\"CronCreate\",\"CronDelete\",\"CronList\",\"Edit\",\"EnterPlanMode\",\"EnterWorktree\",\"ExitPlanMode\",\"ExitWorktree\",\"Glob\",\"Grep\",\"NotebookEdit\",\"Read\",\"RemoteTrigger\",\"Skill\",\"TaskOutput\",\"TaskStop\",\"TodoWrite\",\"ToolSearch\",\"WebFetch\",\"WebSearch\",\"Write\"],\"mcp_servers\":[],\"model\":\"claude-sonnet-4-6\",\"permissionMode\":\"default\",\"slash_commands\":[\"update-config\",\"debug\",\"simplify\",\"batch\",\"loop\",\"schedule\",\"claude-api\",\"ai-design-slop\",\"design-brief\",\"design-driven-feature\",\"design-shots\",\"design-system\",\"feedback-round\",\"frontend-verify\",\"interactive-prototype\",\"testing\",\"writing-specs\",\"compact\",\"context\",\"cost\",\"heapdump\",\"init\",\"pr-comments\",\"release-notes\",\"review\",\"security-review\",\"extra-usage\",\"insights\"],\"apiKeySource\":\"none\",\"claude_code_version\":\"2.1.90\",\"output_style\":\"default\",\"agents\":[\"general-purpose\",\"statusline-setup\",\"Explore\",\"Plan\"],\"skills\":[\"update-config\",\"debug\",\"simplify\",\"batch\",\"loop\",\"schedule\",\"claude-api\",\"ai-design-slop\",\"design-brief\",\"design-driven-feature\",\"design-shots\",\"design-system\",\"feedback-round\",\"frontend-verify\",\"interactive-prototype\",\"testing\",\"writing-specs\"],\"plugins\":[],\"uuid\":\"a32b257d-f705-41c7-b553-fb5048a0bcf8\",\"fast_mode_state\":\"off\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8XjHEqWcM7bG18gTD\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":8841,\"cache_read_input_tokens\":10689,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":8841},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"2ba8e120-1ad4-4e7d-9fa0-07adeb101319\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"79a2dd55-a708-4c48-9216-e3695fc70f4f\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"The\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"2cacf457-5b6f-48b3-a43b-4c767d441412\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" user wants me to read\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"b538e4d6-3378-4d9f-8195-dcc51af555cf\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" package.json and show\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"9a0a1c7e-5aac-4369-8068-53d91d26626e\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"9f127b35-f1c9-4422-8b3e-08eddc3d06c8\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" name\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"9d4e4bdf-30d6-4a6a-9f0b-654dfe903ecb\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and version fields.\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"7b765993-9ae8-40bb-b640-a41e609a2ae5\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"EtoCCqoBCBEYAipA8c2fP2gRv9fQDTNjdFvPNVlZkdCsKWIHppPxHU2u61PhzkjQA5BQ1t5YS1IcwL9/ungDlyr/SgzRr2VnEWXDDTIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDA5OTdjZTVjLTBhMWYtNDc3MS1hMTNlLTE3NGVkYWNlMzE0OHIQzrrUKz4AbZIC7TAxeiDs3ogBAagB0ouN1QawAQISDAoyKH/KHFba49te4RoMpuYThhSZ8nSfk5FHIjCEtnaDY3wJ+6FqEeeE98RHbFkYZYtCYVSXZuVWD2kNmAMqejx0kp+GZXB0mU8F+7kqXWrxwmsQaCF7AgcNGPkuHxQifKEU2hBxEUfYX35LI0MvYmlu0Jz21AKCLkCTcvGyqRWQQ8c4Cy2UqEKkiFw0RvdvobTxplVWcX6Mq1cA1t9XizoF2xIwitHC2IzojxgB\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"5d54a564-f010-477f-b8c4-d2966747a526\"}", "{\"type\":\"assistant\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8XjHEqWcM7bG18gTD\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"The user wants me to read package.json and show the name and version fields.\",\"signature\":\"EtoCCqoBCBEYAipA8c2fP2gRv9fQDTNjdFvPNVlZkdCsKWIHppPxHU2u61PhzkjQA5BQ1t5YS1IcwL9/ungDlyr/SgzRr2VnEWXDDTIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDA5OTdjZTVjLTBhMWYtNDc3MS1hMTNlLTE3NGVkYWNlMzE0OHIQzrrUKz4AbZIC7TAxeiDs3ogBAagB0ouN1QawAQISDAoyKH/KHFba49te4RoMpuYThhSZ8nSfk5FHIjCEtnaDY3wJ+6FqEeeE98RHbFkYZYtCYVSXZuVWD2kNmAMqejx0kp+GZXB0mU8F+7kqXWrxwmsQaCF7AgcNGPkuHxQifKEU2hBxEUfYX35LI0MvYmlu0Jz21AKCLkCTcvGyqRWQQ8c4Cy2UqEKkiFw0RvdvobTxplVWcX6Mq1cA1t9XizoF2xIwitHC2IzojxgB\"}],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":8841,\"cache_read_input_tokens\":10689,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":8841},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null},\"parent_tool_use_id\":null,\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"uuid\":\"ec7a18b0-d74d-4c54-af63-39896235c223\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":0},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"cec7c047-60a6-4a9f-b77c-385152c47f2a\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"7e8ed2fa-5272-4849-b3c0-8ef40246f625\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Opening\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"4047e30b-4496-42a3-84e3-b11688274347\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\" the\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"2f949f00-57e7-41e2-8c41-d872390b0a63\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\" root\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"d8747aeb-6d02-4c66-8678-4b771149cb14\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\" package.json to\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"8c0658b6-ef32-47c9-8723-d68d92ffe91c\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\" check the package identity\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"ae33725e-5ebf-425c-bb37-e5c4b495d4de\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\".\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"f19b0753-b843-470f-8676-1b7b989c31e2\"}", "{\"type\":\"assistant\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8XjHEqWcM7bG18gTD\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Opening the root package.json to check the package identity.\"}],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":8841,\"cache_read_input_tokens\":10689,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":8841},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null},\"parent_tool_use_id\":null,\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"uuid\":\"eb295e55-9f75-49b5-860f-04ffa0fb7425\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":1},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"e035fa2a-c86d-48b0-aae1-6a5749d0ccaa\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01Mnnw3HyDaoGC1pm8Dmg1pN\",\"name\":\"Read\",\"input\":{},\"caller\":{\"type\":\"direct\"}}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"e65f2a7d-0ebf-4bdc-9e0f-30c3ec73a830\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"45b73551-5712-4578-ace8-d95632bab056\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"file_\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"16307050-a2f5-4592-be39-3409c06cae05\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"path\\\": \"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"9f88883b-2dbf-4822-992f-efe48d5e4f90\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"D:\\\\\\\\sp\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"74480b01-c896-463a-90cf-d3c09524dbeb\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"arstrow\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"a78e79f3-c711-45e7-9c37-069bc1efcf2b\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"gen\\\\\\\\pa\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"ff98176e-54fd-486a-b82f-d1d576c798bc\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ckage.j\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"836346a9-e93d-4121-a727-04cef639a542\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"son\\\"}\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"19ce4fa8-8985-4adf-8e9b-357e113d2729\"}", "{\"type\":\"assistant\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8XjHEqWcM7bG18gTD\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_01Mnnw3HyDaoGC1pm8Dmg1pN\",\"name\":\"Read\",\"input\":{\"file_path\":\"D:\\\\sparstrowgen\\\\package.json\"},\"caller\":{\"type\":\"direct\"}}],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":8841,\"cache_read_input_tokens\":10689,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":8841},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null},\"parent_tool_use_id\":null,\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"uuid\":\"56fb0a48-a330-40ec-ba67-92ad2e3ca79d\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":2},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"c2d103d1-c552-43f8-b859-951f4ccf9aa5\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":8841,\"cache_read_input_tokens\":10689,\"output_tokens\":107,\"output_tokens_details\":{\"thinking_tokens\":29}},\"context_management\":{\"applied_edits\":[]}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"794596f4-1ce4-4ebc-9fdb-ab1f8f6565b7\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_stop\"},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"1af3533d-dbef-44d5-a996-1ccd27e04b52\"}", "{\"type\":\"rate_limit_event\",\"rate_limit_info\":{\"status\":\"allowed\",\"resetsAt\":1789101000,\"rateLimitType\":\"five_hour\",\"overageStatus\":\"rejected\",\"overageDisabledReason\":\"org_level_disabled\",\"isUsingOverage\":false},\"uuid\":\"9633dd45-5e06-40f5-9e9e-c2e7405f2e05\",\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\"}", "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"tool_use_id\":\"toolu_01Mnnw3HyDaoGC1pm8Dmg1pN\",\"type\":\"tool_result\",\"content\":\"1\\t{\\n2\\t  \\\"name\\\": \\\"sparstrowgen\\\",\\n3\\t  \\\"private\\\": true,\\n4\\t  \\\"packageManager\\\": \\\"pnpm@11.6.0\\\",\\n5\\t  \\\"scripts\\\": {\\n6\\t    \\\"dev\\\": \\\"pnpm --filter web dev\\\",\\n7\\t    \\\"build\\\": \\\"pnpm --filter web build\\\",\\n8\\t    \\\"lint\\\": \\\"pnpm --filter web lint\\\",\\n9\\t    \\\"typecheck\\\": \\\"pnpm --filter web exec tsc --noEmit\\\"\\n10\\t  }\\n11\\t}\\n12\\t\\n\\n<system-reminder>\\nWhenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.\\n</system-reminder>\\n\"}]},\"parent_tool_use_id\":null,\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"uuid\":\"c4ec79aa-3754-4e10-bb74-4a91ec606552\",\"timestamp\":\"2026-09-11T00:05:31.719Z\",\"tool_use_result\":{\"type\":\"text\",\"file\":{\"filePath\":\"D:\\\\sparstrowgen\\\\package.json\",\"content\":\"{\\n  \\\"name\\\": \\\"sparstrowgen\\\",\\n  \\\"private\\\": true,\\n  \\\"packageManager\\\": \\\"pnpm@11.6.0\\\",\\n  \\\"scripts\\\": {\\n    \\\"dev\\\": \\\"pnpm --filter web dev\\\",\\n    \\\"build\\\": \\\"pnpm --filter web build\\\",\\n    \\\"lint\\\": \\\"pnpm --filter web lint\\\",\\n    \\\"typecheck\\\": \\\"pnpm --filter web exec tsc --noEmit\\\"\\n  }\\n}\\n\",\"numLines\":12,\"startLine\":1,\"totalLines\":12}}}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8qz9NZj9475QFVAWJ\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":1,\"cache_creation_input_tokens\":336,\"cache_read_input_tokens\":19530,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":336},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"e6645663-c3a6-4907-a7ce-3c11488c8a18\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"fb1e2928-64ca-4264-b7eb-c0a67cf2f88e\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"```\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"4af3adeb-9237-4fe6-bd85-c51717d33f3c\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"json\\n{\\n  \\\"name\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"95a25182-e557-4009-a0ff-91454b4c0652\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\\": \\\"sparstrowgen\\\",\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"2e6bba1f-4948-43bf-9997-e2429e615601\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n  \\\"version\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"c966e9c0-ab2a-46ec-9826-0e82cb06e7d7\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\\": undefined\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"84f2cec2-47ba-475b-8f0a-1058a4eeaeaa\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"\\n}\\n```\\n\\nNo\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"2b37c3ab-3b5c-4802-87eb-b762b2014fa3\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" `version` field is\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"cba516d6-f27c-4762-9dbc-65cc875c0f75\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" present in\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"46d27fb0-7747-43d1-8dea-9ef404e820b9\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" this\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"9f023b2f-0dd6-4c42-8f1b-a85a4709b752\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" package.json —\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"c56d135e-a85e-4d58-862f-1804b45eadc7\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" it's a\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"f8a8a33b-95c0-452a-a6a0-efa537bb233b\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" private\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"eeace30e-1bed-4fd5-8375-34d9f6ffbfc6\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" mon\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"5508fed6-0d75-4c37-a7ff-5ad43642d4d7\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orepo root\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"6226709f-1571-4f8a-875f-6e9fdbdf2ef0\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\",\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"a4342832-467e-4fdf-8d41-c2fa19d2be62\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" so vers\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"8fa2c682-c12a-4c30-b1ae-0c54bfa59b29\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ioning is om\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"c0c1c3f4-fa2d-400e-bb6e-ade449288dd1\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"itted.\"}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"b05e465c-4594-4014-bdf0-c3c0fe316a0b\"}", "{\"type\":\"assistant\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"id\":\"msg_011Cevg8qz9NZj9475QFVAWJ\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"```json\\n{\\n  \\\"name\\\": \\\"sparstrowgen\\\",\\n  \\\"version\\\": undefined\\n}\\n```\\n\\nNo `version` field is present in this package.json — it's a private monorepo root, so versioning is omitted.\"}],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":1,\"cache_creation_input_tokens\":336,\"cache_read_input_tokens\":19530,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":336},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"context_management\":null},\"parent_tool_use_id\":null,\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"uuid\":\"36e7a384-84a5-4b4e-880f-d649795919f6\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":0},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"e4b8c05f-0cef-4039-8243-cab688bff49b\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":1,\"cache_creation_input_tokens\":336,\"cache_read_input_tokens\":19530,\"output_tokens\":58,\"output_tokens_details\":{\"thinking_tokens\":0}},\"context_management\":{\"applied_edits\":[]}},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"ed2e5e60-e724-4cc9-80e5-5f24922f983d\"}", "{\"type\":\"stream_event\",\"event\":{\"type\":\"message_stop\"},\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"parent_tool_use_id\":null,\"uuid\":\"69f0bef0-d68a-4d72-9e80-cdb3bfecca13\"}", "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"duration_ms\":8152,\"duration_api_ms\":7666,\"num_turns\":2,\"result\":\"```json\\n{\\n  \\\"name\\\": \\\"sparstrowgen\\\",\\n  \\\"version\\\": undefined\\n}\\n```\\n\\nNo `version` field is present in this package.json — it's a private monorepo root, so versioning is omitted.\",\"stop_reason\":\"end_turn\",\"session_id\":\"4af6f16f-10fb-4767-b7a9-4363d3d777f1\",\"total_cost_usd\":0.045966450000000006,\"usage\":{\"input_tokens\":4,\"cache_creation_input_tokens\":9177,\"cache_read_input_tokens\":30219,\"output_tokens\":165,\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":9177,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"\",\"iterations\":[],\"speed\":\"standard\"},\"modelUsage\":{\"claude-sonnet-4-6\":{\"inputTokens\":4,\"outputTokens\":165,\"cacheReadInputTokens\":30219,\"cacheCreationInputTokens\":9177,\"webSearchRequests\":0,\"costUSD\":0.045966450000000006,\"contextWindow\":200000,\"maxOutputTokens\":32000}},\"permission_denials\":[],\"fast_mode_state\":\"off\",\"uuid\":\"25ad08fa-9363-4bed-a08f-2364faa6368e\"}"];
+var AGY_LINES = ["{\"event\": \"init\", \"conversation_id\": \"74a2cdae-09a8-4846-8738-0e4eadc22f0d\", \"init\": {\"cwd\": \"D:\\\\sparstrowgen\"}}", "{\"event\": \"step_update\", \"step_update\": {\"step_index\": 0, \"state\": \"ACTIVE\", \"text_delta\": \"Jitter \"}}", "{\"event\": \"step_update\", \"step_update\": {\"step_index\": 0, \"state\": \"ACTIVE\", \"text_delta\": \"spreads retries\"}}", "{\"event\": \"step_update\", \"step_update\": {\"step_index\": 0, \"state\": \"DONE\", \"step_type\": \"user_input\"}}", "{\"event\": \"result\", \"result\": {\"conversation_id\": \"74a2cdae-09a8-4846-8738-0e4eadc22f0d\", \"status\": \"SUCCESS\", \"response\": \"Jitter spreads retries.\\n\", \"usage\": {\"input_tokens\": 15917, \"output_tokens\": 124, \"thinking_tokens\": 123, \"cache_read_tokens\": 0, \"total_tokens\": 16164}}}"];
+</script>
+<script>
+(function () {
+  var ICONS = window.SPG_ICONS;
+  var Q = new URLSearchParams(location.search);
+  function pick(v, ok, d) { return ok.indexOf(v) > -1 ? v : d; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function I(n, s, cls) {
+    s = s || 16;
+    var nodes = (ICONS[n] || []).map(function (x) { return "<" + x[0] + " " + Object.keys(x[1]).map(function (k) { return k + '="' + x[1][k] + '"'; }).join(" ") + "/>"; }).join("");
+    return '<svg class="ic ' + (cls || "") + '" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes + "</svg>";
+  }
+  function status(tone, icon, word, quiet) { return '<span class="status" data-tone="' + tone + '">' + I(icon, 14, tone === "progress" ? "spin" : "") + '<span class="w' + (quiet ? " quiet" : "") + '">' + esc(word) + "</span></span>"; }
+  function n(x) { return x.toLocaleString("en-US"); }
+  function kb(bytes) { return bytes < 1024 ? bytes + " B" : bytes < 1048576 ? (bytes / 1024).toFixed(1) + " KB" : (bytes / 1048576).toFixed(1) + " MB"; }
+
+  var S = {
+    ui: pick(Q.get("state"), ["populated", "running", "not-recorded", "never-ran", "truncated", "loading", "error"], "populated"),
+    theme: pick(Q.get("theme"), ["light", "dark"], "dark"),
+    open: { c: true },   // which turns' exchange is open; the latest starts open
+    line: {},            // which line (or group) is open, per turn
+    stdin: {},           // "prompt" | "exact", per turn
+    fmt: {},             // "formatted" | "exact", per line
+    live: 0,
+  };
+
+  /* ── Timing. Each line gets the offset the daemon will stamp it with. */
+  function stamp(lines, total) { return lines.map(function (l, i) { return { t: +(total * (i / Math.max(1, lines.length - 1))).toFixed(2), s: "stdout", x: l }; }); }
+  var CL = stamp(CLAUDE_LINES, 7.2).map(function (l) { l.t = +(l.t + 0.94).toFixed(2); return l; });
+  var AL = stamp(AGY_LINES, 3.4);
+
+  var CATCHUP = "You are joining a conversation already in progress. Earlier turns are below, some answered by a different coding agent. Read them for context, then answer the final message.\n\n--- conversation so far ---\n\n[user]\nWhy do retries need jitter? One line.\n\n[agy]\nJitter spreads retries.\n--- end of conversation so far ---\n\n[user]\nRead package.json and show me the name and version fields.";
+
+  var TURNS = {
+    a: { provider: "agy", model: "Gemini 3.8 Flash (High)", time: "9:48 PM", usage: "16.2k tokens",
+      answer: "Jitter spreads retries.",
+      sent: { program: "agy", args: ["-p=", "--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", "24h0m0s", "--log-file", "C:\\Users\\gsrih\\AppData\\Local\\Temp\\sparstrowgen-agy-2291754163.log", "--add-dir", "D:\\sparstrowgen", "--model", "gemini-3.8-flash-high"],
+        cwd: "D:\\sparstrowgen", resume: "", prompt: "Why do retries need jitter? One line.",
+        stdin: '{"event":"user","message":{"content":"Why do retries need jitter? One line.","role":"user"}}\n', launched: true },
+      lines: AL,
+      report: { says: "agy reports only its conversation id and folder when it starts.", sessionId: "74a2cdae-09a8-4846-8738-0e4eadc22f0d", cwd: "D:\\sparstrowgen",
+        usage: { input: 15917, fromCache: 0, output: 247, reasoning: 123, total: 16164, reasoningWord: "thinking" } } },
+    c: { provider: "claude", model: "Sonnet 4.6", time: "9:51 PM", usage: "39.6k tokens · $0.04",
+      answer: "```json\n{\n  \"name\": \"sparstrowgen\",\n  \"version\": undefined\n}\n```\n\nNo `version` field is present in this package.json \u2014 it's a private monorepo root, so versioning is omitted.",
+      sent: { program: "claude", args: ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--strict-mcp-config", "--setting-sources", "project", "--disallowedTools", "AskUserQuestion", "--model", "claude-sonnet-4-6"],
+        cwd: "D:\\sparstrowgen", resume: "", prompt: CATCHUP,
+        stdin: JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: CATCHUP }] } }) + "\n", launched: true },
+      lines: CL,
+      report: { version: "2.1.90", model: "claude-sonnet-4-6", permissionMode: "default", sessionId: "4af6f16f-10fb-4767-b7a9-4363d3d777f1", cwd: "D:\\sparstrowgen",
+        tools: JSON.parse(CLAUDE_LINES[0]).tools, skills: JSON.parse(CLAUDE_LINES[0]).skills, agents: JSON.parse(CLAUDE_LINES[0]).agents, mcp: [],
+        usage: { input: 39400, fromCache: 30219, toCache: 9177, output: 165, total: 39565 } } },
+  };
+
+  /* ── A line's label is read off the JSON itself: its type, then whatever
+     names the kind of event under it. Nothing here knows what a provider
+     means; it only names what is there. */
+  function parse(x) { try { return JSON.parse(x); } catch (e) { return null; } }
+  function label(o) {
+    if (!o || typeof o !== "object") return null;
+    var ev = o.event && typeof o.event === "object" ? o.event : null;
+    // A wrapper that only says "an event follows" names the event instead:
+    // the wrapper is still in the line, one click away.
+    if (ev) return [ev.type, ev.delta && ev.delta.type].filter(Boolean).join(" · ");
+    return [o.type || o.event, o.subtype || (o.item && o.item.type) || (o.step_update && o.step_update.state)].filter(Boolean).join(" · ");
+  }
+  /* The text a streaming fragment carries, so a run of them reads as a sentence. */
+  function piece(o) {
+    if (!o) return null;
+    var d = o.event && o.event.delta;
+    if (d) return d.text != null ? d.text : d.thinking != null ? d.thinking : d.partial_json != null ? d.partial_json : null;
+    if (o.step_update && o.step_update.text_delta != null) return o.step_update.text_delta;
+    return null;
+  }
+  /* Consecutive fragments of one kind collapse into a single row with a count.
+     Everything else is one row per line. Opening a group shows every line. */
+  function groups(lines) {
+    var out = [];
+    lines.forEach(function (l, i) {
+      var o = parse(l.x), k = l.s === "stderr" ? "stderr" : (label(o) || "text"), p = l.s === "stdout" ? piece(o) : null;
+      var last = out[out.length - 1];
+      if (p != null && last && last.piece && last.k === k) { last.items.push(i); last.text += p; return; }
+      out.push({ k: k, items: [i], piece: p != null, text: p, o: o });
+    });
+    return out;
+  }
+
+  function lineBox(turnId, l, idx) {
+    var key = turnId + ":" + idx, mode = S.fmt[key] || "formatted", o = parse(l.x);
+    var body = mode === "formatted" && o ? JSON.stringify(o, null, 2) : l.x;
+    return '<div class="box"><div class="bh"><span>line ' + (idx + 1) + " · " + l.s + " · " + kb(l.x.length) + '</span>' +
+      (o ? '<span class="seg" role="group" aria-label="How to show this line"><button data-act="fmt" data-key="' + key + '" data-v="formatted" aria-pressed="' + (mode === "formatted") + '">Formatted</button><button data-act="fmt" data-key="' + key + '" data-v="exact" aria-pressed="' + (mode === "exact") + '">Exact</button></span>' : "") +
+      "</div><pre>" + esc(body) + "</pre></div>";
+  }
+
+  function row(turnId, g, gi, lines, fresh) {
+    var first = lines[g.items[0]], key = turnId + ":g" + gi, open = S.line[turnId] === key;
+    var kind = g.k === "stderr" ? '<span class="err">stderr</span>' : esc(g.k) + (g.items.length > 1 ? ' <span class="n">×' + g.items.length + "</span>" : "");
+    var prev = g.piece ? "“" + g.text + "”" : first.x;
+    var h = '<button class="row' + (fresh ? " new" : "") + '" data-act="line" data-turn="' + turnId + '" data-key="' + key + '" aria-expanded="' + open + '"><span class="t">' + first.t.toFixed(2) + 's</span><span class="k">' + kind + '</span><span class="v">' + esc(prev) + "</span></button>";
+    if (open) {
+      h += '<div class="inner">' + (g.items.length === 1 ? lineBox(turnId, first, g.items[0])
+        : '<div class="rows">' + g.items.map(function (i) {
+            var l = lines[i], k2 = turnId + ":l" + i, o2 = S.line[turnId + "/sub"] === k2;
+            return '<button class="row" data-act="sub" data-turn="' + turnId + '" data-key="' + k2 + '" aria-expanded="' + o2 + '"><span class="t">' + l.t.toFixed(2) + 's</span><span class="k">line ' + (i + 1) + '</span><span class="v">' + esc(l.x) + "</span></button>" + (o2 ? '<div class="inner" style="margin-left:0">' + lineBox(turnId, l, i) + "</div>" : "");
+          }).join("") + "</div>") + "</div>";
+    }
+    return h;
+  }
+
+  function sentSection(id, t) {
+    var s = t.sent, mode = S.stdin[id] || "prompt";
+    var cmd = s.program + " " + s.args.map(function (a) { return /[\s"]/.test(a) || a === "" ? JSON.stringify(a) : a; }).join(" ");
+    return '<section class="xsec"><h4>Sent to ' + t.provider + (s.launched ? "" : ' <span class="meta">· never started</span>') + "</h4>" +
+      '<dl class="kv"><dt>command</dt><dd>' + esc(cmd) + "</dd><dt>folder</dt><dd>" + esc(s.cwd) + "</dd><dt>session</dt><dd>" +
+      (s.resume ? "continued " + esc(s.resume) : '<span class="quiet">new, nothing resumed</span>') + "</dd></dl>" +
+      '<div class="box"><div class="bh"><span>stdin · ' + kb(s.stdin.length) + " · " + n(s.prompt.length) + " characters of prompt</span>" +
+        '<span class="seg" role="group" aria-label="How to show what was sent"><button data-act="stdin" data-turn="' + id + '" data-v="prompt" aria-pressed="' + (mode === "prompt") + '">As the agent reads it</button><button data-act="stdin" data-turn="' + id + '" data-v="exact" aria-pressed="' + (mode === "exact") + '">Exact bytes</button></span></div>' +
+        "<pre>" + esc(mode === "prompt" ? s.prompt : s.stdin) + "</pre></div></section>";
+  }
+
+  function reportSection(t, done) {
+    var r = t.report;
+    if (!done) return '<section class="xsec"><h4>What ' + t.provider + " reported loading</h4>" + (r && r.model ? reportBody(t, r, false) : '<p class="expl" style="margin:0">Nothing yet. ' + t.provider + " says what it loaded in its first line.</p>") + "</section>";
+    return '<section class="xsec"><h4>What ' + t.provider + " reported loading</h4>" + reportBody(t, r, true) + "</section>";
+  }
+  function reportBody(t, r, withUsage) {
+    var h = "";
+    if (r.says) h += '<p class="expl" style="margin:0 0 8px">' + esc(r.says) + "</p>";
+    h += '<dl class="kv">';
+    if (r.version) h += "<dt>version</dt><dd>" + t.provider + " " + esc(r.version) + "</dd>";
+    if (r.model) h += "<dt>model</dt><dd>" + esc(r.model) + "</dd>";
+    if (r.permissionMode) h += "<dt>permissions</dt><dd>" + esc(r.permissionMode) + ' <span class="quiet">mode</span></dd>';
+    if (r.cwd) h += "<dt>folder</dt><dd>" + esc(r.cwd) + "</dd>";
+    if (r.sessionId) h += "<dt>session</dt><dd>" + esc(r.sessionId) + "</dd>";
+    if (r.tools) h += "<dt>tools</dt><dd>" + list(r.tools) + "</dd>";
+    if (r.skills) h += "<dt>skills</dt><dd>" + list(r.skills) + "</dd>";
+    if (r.agents) h += "<dt>agents</dt><dd>" + list(r.agents) + "</dd>";
+    if (r.mcp) h += "<dt>MCP servers</dt><dd>" + (r.mcp.length ? list(r.mcp) : '<span class="quiet">none</span>') + "</dd>";
+    h += "</dl>";
+    if (withUsage && r.usage) {
+      var u = r.usage;
+      h += '<div style="margin-top:12px" class="usage">' +
+        "<span>read</span><span class=\"n\">" + n(u.input) + "</span>" +
+        (u.fromCache != null ? '<span class="sub">from cache</span><span class="n sub">' + n(u.fromCache) + "</span>" : "") +
+        (u.toCache != null ? '<span class="sub">written to cache</span><span class="n sub">' + n(u.toCache) + "</span>" : "") +
+        "<span>wrote</span><span class=\"n\">" + n(u.output) + "</span>" +
+        (u.reasoning != null ? '<span class="sub">' + (u.reasoningWord || "reasoning") + '</span><span class="n sub">' + n(u.reasoning) + "</span>" : "") +
+        '<span class="tot">total tokens</span><span class="n tot">' + n(u.total) + "</span></div>" +
+        '<p class="expl">You sent ' + n(t.sent.prompt.length) + " characters. " + esc(t.provider) + " read " + n(u.input) + " tokens, because every call to the model carries its own instructions and tool list, and everything said so far in the turn, not only your message.</p>";
+    }
+    return h;
+  }
+  function list(xs) { return '<span class="tags">' + xs.map(function (x) { return '<span class="tag">' + esc(x) + "</span>"; }).join("") + "</span>"; }
+
+  function receivedSection(id, t, lines, opts) {
+    opts = opts || {};
+    var bytes = lines.reduce(function (a, l) { return a + l.x.length + 1; }, 0);
+    var gs = groups(lines);
+    var h = '<section class="xsec"><h4>Received <span class="meta">' + n(lines.length) + " lines · " + kb(bytes) + "</span>" +
+      (lines.length ? '<button class="btn-sm right" data-act="copy">Copy lines</button>' : "") + "</h4>";
+    if (!lines.length) {
+      h += opts.running ? '<p class="expl" style="margin:0">' + status("progress", "loader-circle", "Waiting for " + t.provider + "’s first line", true) + "</p>"
+        : '<p class="expl" style="margin:0">Nothing. ' + esc(opts.why || "") + "</p>";
+    } else {
+      h += '<div class="rows">' + gs.map(function (g, gi) { return row(id, g, gi, lines, opts.running && gi === gs.length - 1); }).join("") + "</div>";
+    }
+    if (opts.running && lines.length) h += '<div class="trunc">' + status("progress", "loader-circle", t.provider + " is still working. New lines appear as they arrive.", true) + "</div>";
+    if (opts.truncated) h += '<div class="trunc">' + status("warning", "triangle-alert", "Recording stopped at 16 MB for this turn.") + '<span style="color:var(--muted-foreground)">2.4 MB more, in 311 lines, reached sparstrowgen and was not kept. The turn itself was not affected.</span></div>';
+    return h + "</section>";
+  }
+
+  function header(t, extra) {
+    return '<div class="line"><span class="p-' + t.provider + '">' + t.provider + "</span><span>" + esc(t.model) + "</span><span>" + t.time + "</span>" + (t.usage ? "<span>· " + t.usage + "</span>" : "") + (extra || "") + "</div>";
+  }
+  function toggle(id, t, lines, running) {
+    var open = !!S.open[id], bytes = lines.reduce(function (a, l) { return a + l.x.length + 1; }, 0);
+    var last = lines.length ? lines[lines.length - 1].t : 0;
+    return '<button class="xtoggle" data-act="toggle" data-turn="' + id + '" aria-expanded="' + open + '">' + I("chevron-right", 14, "chev") +
+      "<span>" + (t.sent && !t.sent.launched ? "sent · " + t.provider + " never started"
+        : "sent and received · " + n(lines.length) + " lines · " + kb(bytes) + (running ? " so far" : " · " + last.toFixed(1) + "s")) + "</span></button>";
+  }
+
+  function turn(id, t, opts) {
+    opts = opts || {};
+    var lines = opts.lines || t.lines, open = !!S.open[id];
+    var h = "<article>" + header(t, opts.headExtra);
+    if (opts.notRecorded) {
+      h += '<div class="xnote">' + I("circle-minus", 14) + "<span>Not recorded. This turn ran before your computer’s sparstrowgen kept a record of what it sent and received, so only the saved answer below exists.</span></div>";
+      return h + '<pre class="body">' + esc(t.answer) + "</pre></article>";
+    }
+    h += toggle(id, t, lines, opts.running);
+    if (open) {
+      h += '<div class="xbody">';
+      if (opts.loading) {
+        h += '<section class="xsec"><h4>Sent to ' + t.provider + '</h4><div class="sk" style="width:90%;margin-bottom:6px"></div><div class="sk" style="width:40%;margin-bottom:6px"></div><div class="sk" style="height:64px;border-radius:8px"></div></section>' +
+             '<section class="xsec"><h4>Received</h4>' + [0, 1, 2, 3, 4, 5].map(function () { return '<div class="skrow"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>'; }).join("") + "</section>";
+      } else if (opts.error) {
+        h += '<div class="xnote" style="font-family:var(--font-sans);font-size:13px;line-height:20px">' + I("octagon-x", 16) + '<span style="color:var(--foreground)"><span style="color:var(--destructive-text);font-weight:500">Could not load this exchange.</span> The server did not answer. The saved answer below is unaffected. <button class="btn-sm" style="border:1px solid var(--border);color:var(--foreground)" data-act="retry">Try again</button></span></div>';
+      } else {
+        h += sentSection(id, t) + reportSection(t, !opts.running) + receivedSection(id, t, lines, opts);
+      }
+      h += "</div>";
+    }
+    if (opts.running) return h + "</article>";
+    if (opts.failure) return h + '<p style="margin:4px 0 0;font-size:13px">' + status("danger", "octagon-x", "turn did not finish: " + opts.failure) + "</p></article>";
+    return h + (open ? '<div class="saved">saved answer · what Rendered shows</div>' : "") + '<pre class="body">' + esc(t.answer) + "</pre></article>";
+  }
+
+  function you(text, time) { return '<div><div class="line"><span class="fg">you</span><span>' + time + '</span></div><pre class="body">' + esc(text) + "</pre></div>"; }
+  function replay() { return '<div class="line"><span>switched to</span><span class="p-claude">claude</span><span>Sonnet 4.6</span><span>· replayed 2 messages · 14 tokens</span></div>'; }
+
+  var OLD = { provider: "codex", model: "GPT-5.6 Sol", time: "Yesterday 4:12 PM", usage: "40.1k tokens", answer: "The retry loop in `dial.go` backs off exponentially but every client starts its first retry at exactly one second, so a server restart brings them all back in the same instant." };
+
+  function render() {
+    document.documentElement.classList.toggle("dark", S.theme === "dark");
+    var h = "";
+    if (S.ui === "not-recorded") {
+      h = you("Why do all the daemons reconnect at the same moment after a deploy?", "Yesterday 4:11 PM") + turn("o", OLD, { notRecorded: true });
+    } else if (S.ui === "never-ran") {
+      var NR = { provider: "codex", model: "GPT-5.6 Sol", time: "9:55 PM", usage: "", answer: "",
+        sent: { program: "codex", args: ["exec", "--json", "--ignore-user-config", "--skip-git-repo-check", "-m", "gpt-5.6-sol", "resume", "01a08db6-8502-7043-bd0a-e7a491a96c9f", "-"],
+          cwd: "D:\\old-checkout\\sparstrowgen", resume: "01a08db6-8502-7043-bd0a-e7a491a96c9f", prompt: "Run the daemon tests again.", stdin: "Run the daemon tests again.", launched: false },
+        report: { says: "codex never started, so it reported nothing." } };
+      S.open.n = S.open.n !== false;
+      h = you("Run the daemon tests again.", "9:55 PM") + turn("n", NR, { lines: [], why: "codex was never started, because the folder D:\\old-checkout\\sparstrowgen does not exist on this computer.", failure: "The folder D:\\old-checkout\\sparstrowgen does not exist on this computer. Choose another folder for this conversation." });
+    } else {
+      var cOpts = {};
+      if (S.ui === "loading") cOpts.loading = true;
+      if (S.ui === "error") cOpts.error = true;
+      if (S.ui === "running") { cOpts.running = true; cOpts.lines = CL.slice(0, S.live); }
+      if (S.ui === "truncated") cOpts.truncated = true;
+      h = you("Why do retries need jitter? One line.", "9:48 PM") + turn("a", TURNS.a) + replay() +
+          you("Read package.json and show me the name and version fields.", "9:51 PM") + turn("c", TURNS.c, cOpts);
+    }
+    document.getElementById("col").innerHTML = h;
+    bar();
+  }
+
+  function bar() {
+    function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-act="set" data-k="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
+    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype · Raw view</b>' + grp("State", "ui", ["populated", "running", "not-recorded", "never-ran", "truncated", "loading", "error"]) + grp("Theme", "theme", ["dark", "light"]) +
+      (S.ui === "running" ? '<span class="grp"><button data-act="replay-run">Replay the running turn</button></span>' : "");
+  }
+
+  /* The running turn: claude's real lines, arriving at their own pace. */
+  var timer = null;
+  function play() {
+    clearTimeout(timer); S.live = 0; S.open.c = true; S.ui = "running"; render();
+    (function next() {
+      if (S.ui !== "running") return;
+      if (S.live >= CL.length) { S.ui = "populated"; render(); return; }
+      S.live++; render();
+      timer = setTimeout(next, S.live < 2 ? 900 : 120);
+    })();
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var a = b.dataset.act, id = b.dataset.turn;
+    if (a === "set") { S[b.dataset.k] = b.dataset.v; if (b.dataset.k === "ui" && S.ui === "running") return play(); clearTimeout(timer); render(); }
+    if (a === "replay-run") play();
+    if (a === "toggle") { S.open[id] = !S.open[id]; render(); }
+    if (a === "line") { S.line[id] = S.line[id] === b.dataset.key ? null : b.dataset.key; render(); }
+    if (a === "sub") { S.line[id + "/sub"] = S.line[id + "/sub"] === b.dataset.key ? null : b.dataset.key; render(); }
+    if (a === "stdin") { S.stdin[id] = b.dataset.v; render(); }
+    if (a === "fmt") { S.fmt[b.dataset.key] = b.dataset.v; render(); }
+    if (a === "retry") { S.ui = "loading"; render(); setTimeout(function () { S.ui = "populated"; render(); }, 900); }
+    if (a === "copy") { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy lines"; }, 1200); }
+  });
+
+  if (S.ui === "running") play(); else render();
+})();
+</script>
+</body>
+</html>
