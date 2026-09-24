@@ -1363,3 +1363,43 @@ produce. A tool call or thinking block was always the CLI working; before, only 
 **One copy of the two-button switch.** Rendered / Raw was hand-built in the chat header; it is now
 [`choice-toggle.tsx`](../apps/web/components/chat/choice-toggle.tsx), used there and by the
 exchange's own switches, so adding it to the design system is one move (U-34).
+
+## D-054 — What each agent fed its model is read from the agent's own session store
+
+**2026-09-24.** US4 of the raw exchange spec: the owner wants to see every piece of context an agent
+fed its model, to turn off in each agent what he does not want read. He approved it and delegated the
+design and build ("design and build it yourself").
+
+**Read from the agent's own files, after the turn.** None of the three prints its instructions, but
+each writes them down: claude's project JSONL (`prompt_snapshot`, `instructions`, `skill_listing`
+and more, each with the text it rendered), codex's rollout (base instructions, context messages,
+turn settings), agy's conversation database (the model's input as a protobuf). The daemon finds the
+turn's session by the id the CLI reported, reads it once the CLI has exited, and sends the context
+records unchanged ([`sessionstore`](../server/internal/sessionstore/sessionstore.go)).
+
+**Selected on the computer, read on the server, as D-053 does for lines.** The daemon picks which
+records are context and hands them over as found; the server reads them into pieces each time a
+turn is opened ([`fed.go`](../server/internal/agent/fed.go)), so a better reading reaches turns
+already recorded, with a server deploy rather than a daemon release. Rejected: splitting into
+pieces on the computer, which would freeze every reading into the record, and sending whole session
+files, which carry every message and tool result again.
+
+**Stored once per conversation.** A claude prompt snapshot is over 100 KB and nearly identical turn
+to turn; each distinct record is stored once in its conversation, and turns point at theirs
+(migration 00020). Per conversation rather than across the database, so deleting a conversation
+deletes its records without asking who else points at them.
+
+**agy's database is copied, then read,** with `modernc.org/sqlite`: pure Go, so the daemon still
+builds on Windows without a C compiler, already in the module graph through goose, at the cost of a
+larger daemon. agy owns that file and keeps it in WAL mode; a reader must never be why it finds the
+file locked.
+
+**Private formats, so failures are said.** A store not found, or not in its expected shape, is
+recorded with its reason and shown; a record kind this build does not recognise is shown under
+Other ([`KnownGaps.md`](KnownGaps.md) G-49).
+
+**The screen** is the loaded section of the raw exchange, extended in the real app rather than a new
+prototype: grouped by kind (its own instructions, your files and rules, skills, tools, held-back
+tools, servers, sub-agents, settings), each piece with its size, its file where the agent recorded
+one, and its full text, with In order / Largest first. The init-line name tags give way to it when
+the record is there.

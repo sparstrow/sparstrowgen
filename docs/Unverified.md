@@ -622,3 +622,15 @@ components and describe the raw exchange under Chat, or record why not.
 Passing: a toast says "Copied N lines" and the paste is the turn's lines, one per line, stdout and
 stderr in the order they arrived.
 **Status:** open
+
+## U-36 — Raw shows what each agent was fed, on production
+
+**Raised:** 2026-09-24, D-054
+**Who can run it:** agent, with the testing account and a test daemon built from this change
+
+**The step:** after the change deploys, send one short message each to claude, codex and agy from a
+test daemon. In Raw, "Fed to the model" lists that agent's pieces: claude's system prompt by
+section, tools, skills and agents; codex's base instructions and skills with their files, and "does
+not record its tool definitions"; agy's sections with its own token counts, and its tools. A turn
+from before says it was not recorded.
+**Status:** open

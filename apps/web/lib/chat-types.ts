@@ -297,6 +297,34 @@ export type ExchangeReport = {
   usage?: ExchangeUsage;
 };
 
+/** One piece of what a CLI fed its model on a turn, read from the records the
+ *  CLI keeps about itself: one section of its instructions, one tool, one skill,
+ *  one instruction file. Mirrors protocol.ContextPiece. */
+export type ContextPiece = {
+  /** "instructions" | "file" | "skill" | "tool" | "deferred" | "server" |
+   *  "agent" | "environment" | "other". A kind this build does not know is
+   *  shown under "other", never dropped. */
+  kind: string;
+  name: string;
+  /** The file on the computer it came from, where the CLI recorded one. */
+  source?: string;
+  chars: number;
+  /** The CLI's own count. Only agy states one. */
+  tokens?: number;
+  text: string;
+};
+
+/** Everything a CLI fed its model on one turn (spec US4). */
+export type ExchangeContext = {
+  /** The file it was read from. */
+  from?: string;
+  /** Why nothing, or not everything, could be read. */
+  error?: string;
+  pieces: ContextPiece[];
+  /** What this CLI keeps no record of, in words. */
+  missing: string[];
+};
+
 /** How big one turn's record is, without its contents. */
 export type ExchangeSummary = {
   entryId: string;
@@ -319,6 +347,8 @@ export type Exchange = {
   /** What was not kept once the turn's record was full. */
   dropped?: { lines: number; bytes: number };
   report?: ExchangeReport;
+  /** Absent for a turn whose daemon did not read the CLI's own store. */
+  context?: ExchangeContext;
 };
 
 
