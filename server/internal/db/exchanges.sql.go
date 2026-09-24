@@ -44,13 +44,21 @@ func (q *Queries) AgentEntryFor(ctx context.Context, arg AgentEntryForParams) (A
 }
 
 const appendExchangeLines = `-- name: AppendExchangeLines :exec
-INSERT INTO exchange_lines (entry_id, seq, at_ms, stream, body)
-SELECT $1::uuid,
-       unnest($2::integer[]),
-       unnest($3::bigint[]),
-       unnest($4::text[]),
-       unnest($5::text[])
-ON CONFLICT (entry_id, seq) DO NOTHING
+WITH stored AS (
+    INSERT INTO exchange_lines (entry_id, seq, at_ms, stream, body)
+    SELECT $1::uuid,
+           unnest($2::integer[]),
+           unnest($3::bigint[]),
+           unnest($4::text[]),
+           unnest($5::text[])
+    ON CONFLICT (entry_id, seq) DO NOTHING
+    RETURNING at_ms, octet_length(body) AS bytes
+)
+UPDATE exchanges
+SET line_count = line_count + (SELECT count(*) FROM stored),
+    byte_count = byte_count + COALESCE((SELECT sum(bytes) FROM stored), 0),
+    last_at_ms = GREATEST(last_at_ms, COALESCE((SELECT max(at_ms) FROM stored), 0))
+WHERE exchanges.entry_id = $1::uuid
 `
 
 type AppendExchangeLinesParams struct {
@@ -63,7 +71,8 @@ type AppendExchangeLinesParams struct {
 
 // One batch in one statement: the four arrays are stepped through in lockstep,
 // which is what several unnests in one select list do. A repeated seq is a
-// batch already stored, and is skipped rather than failing the ones around it.
+// batch already stored, and is skipped rather than failing the ones around it,
+// and only the lines actually stored move the record's totals.
 func (q *Queries) AppendExchangeLines(ctx context.Context, arg AppendExchangeLinesParams) error {
 	_, err := q.db.Exec(ctx, appendExchangeLines,
 		arg.EntryID,
@@ -114,7 +123,7 @@ func (q *Queries) DeleteEveryExchangeLine(ctx context.Context) error {
 }
 
 const getExchange = `-- name: GetExchange :one
-SELECT entry_id, conversation_id, program, args, cwd, resume_session_id, prompt, stdin, launched, dropped_lines, dropped_bytes, created_at FROM exchanges WHERE entry_id = $1
+SELECT entry_id, conversation_id, program, args, cwd, resume_session_id, prompt, stdin, launched, dropped_lines, dropped_bytes, line_count, byte_count, last_at_ms, created_at FROM exchanges WHERE entry_id = $1
 `
 
 func (q *Queries) GetExchange(ctx context.Context, entryID pgtype.UUID) (Exchange, error) {
@@ -132,6 +141,9 @@ func (q *Queries) GetExchange(ctx context.Context, entryID pgtype.UUID) (Exchang
 		&i.Launched,
 		&i.DroppedLines,
 		&i.DroppedBytes,
+		&i.LineCount,
+		&i.ByteCount,
+		&i.LastAtMs,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -156,6 +168,51 @@ func (q *Queries) ListExchangeLines(ctx context.Context, entryID pgtype.UUID) ([
 			&i.AtMs,
 			&i.Stream,
 			&i.Body,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExchangeSummaries = `-- name: ListExchangeSummaries :many
+SELECT entry_id, launched, line_count, byte_count, last_at_ms, dropped_lines, dropped_bytes
+FROM exchanges
+WHERE conversation_id = $1
+`
+
+type ListExchangeSummariesRow struct {
+	EntryID      pgtype.UUID `json:"entry_id"`
+	Launched     bool        `json:"launched"`
+	LineCount    int32       `json:"line_count"`
+	ByteCount    int64       `json:"byte_count"`
+	LastAtMs     int64       `json:"last_at_ms"`
+	DroppedLines int64       `json:"dropped_lines"`
+	DroppedBytes int64       `json:"dropped_bytes"`
+}
+
+// How big each turn's record in one conversation is, without reading any of it.
+func (q *Queries) ListExchangeSummaries(ctx context.Context, conversationID pgtype.UUID) ([]ListExchangeSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listExchangeSummaries, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExchangeSummariesRow{}
+	for rows.Next() {
+		var i ListExchangeSummariesRow
+		if err := rows.Scan(
+			&i.EntryID,
+			&i.Launched,
+			&i.LineCount,
+			&i.ByteCount,
+			&i.LastAtMs,
+			&i.DroppedLines,
+			&i.DroppedBytes,
 		); err != nil {
 			return nil, err
 		}

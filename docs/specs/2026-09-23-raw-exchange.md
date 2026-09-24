@@ -88,8 +88,9 @@ explain a large token count, or an answer based on something I never said.
 
 ## Edge cases
 
-- **Thinking.** When an agent reports that it thought but not what it thought, the record shows
-  only that. The thoughts are never reconstructed. Today none of the three sends the words.
+- **Thinking.** When an agent sends what it thought, the record shows it. When it reports only that
+  it thought, the record shows only that. The thoughts are never reconstructed. Which one you get
+  depends on the agent and its version (Capabilities).
 - **Very large turns.** An agent that reads a 5,000-line file sends the whole file back. It is kept
   and shown in full. If anything ever has to be cut, the record says where and how much was
   cut. *(inferred)*
@@ -107,6 +108,5 @@ explain a large token count, or an answer based on something I never said.
 
 - **The agents' built-in instructions, word for word.** No agent reports them; only that they were
   loaded, and how large they were.
-- **Thinking text**, for the same reason.
 - **Editing what was sent and sending it again.** A possible later idea, not part of this.
 - **The everyday step-by-step view.** That is [See what the agent did](2026-09-24-agent-activity.md).

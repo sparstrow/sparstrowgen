@@ -154,7 +154,7 @@ func (x *Reporter) agy(text string) bool {
 		// NOT inside output_tokens; here it is folded in, to keep Output the
 		// whole of what was written. Whether cache_read_tokens is inside
 		// input_tokens is unverified: every capture so far has it at 0
-		// (docs/KnownGaps.md G-49).
+		// (docs/KnownGaps.md G-45).
 		u := ev.Result.Usage
 		x.r.Usage = &protocol.ExchangeUsage{
 			Input:     u.InputTokens,

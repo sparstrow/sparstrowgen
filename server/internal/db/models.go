@@ -71,6 +71,9 @@ type Exchange struct {
 	Launched        bool               `json:"launched"`
 	DroppedLines    int64              `json:"dropped_lines"`
 	DroppedBytes    int64              `json:"dropped_bytes"`
+	LineCount       int32              `json:"line_count"`
+	ByteCount       int64              `json:"byte_count"`
+	LastAtMs        int64              `json:"last_at_ms"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 

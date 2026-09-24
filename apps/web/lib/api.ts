@@ -3,6 +3,8 @@ import type {
   Conversation,
   DirListing,
   Entry,
+  Exchange,
+  ExchangeSummary,
   Model,
   Provider,
   ProviderId,
@@ -492,6 +494,20 @@ export const api = {
     return true;
   },
 
+  /** One turn's whole record: what was sent, every line printed, and what the
+   *  CLI said about itself. A turn with none answers `recorded: false`. */
+  async exchange(turnId: string): Promise<Exchange> {
+    return json(await request(`${BASE}/api/turns/${turnId}/exchange`, { cache: "no-store" }));
+  },
+
+  /** How big each turn's record in a conversation is, so every turn in Raw can
+   *  be labelled without opening any. */
+  async exchangeSummaries(conversationId: string): Promise<ExchangeSummary[]> {
+    return json(
+      await request(`${BASE}/api/conversations/${conversationId}/exchanges`, { cache: "no-store" }),
+    );
+  },
+
   async send(
     id: string,
     input: { text: string; provider: ProviderId; model: Model },
@@ -525,7 +541,10 @@ export type ServerEvent =
   | { type: "entry_delta"; conversationId: string; entryId: string; text: string }
   // Only ever an agent turn: entry_done is what closes one, and the user's own
   // messages and replay markers are complete the moment they are written.
-  | { type: "entry_done"; conversationId: string; entry: AgentMessage };
+  | { type: "entry_done"; conversationId: string; entry: AgentMessage }
+  // What is new in a running turn's record: the sent record once, then lines by
+  // seq, and the report whenever it changed.
+  | { type: "exchange"; conversationId: string; entryId: string; exchange: Exchange };
 
 /** Opens the live feed and keeps it open.
  *

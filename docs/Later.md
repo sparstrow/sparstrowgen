@@ -110,24 +110,6 @@ would add workspace wiring before anything works. The move is mechanical when it
 **Unblocks when:** a second consumer exists — `apps/desktop` (L-2) or `packages/views` gaining a
 view that the web app and something else both render.
 
-## L-10 — The raw view shows the stored text, not the provider's event stream
-
-**Status:** asked for 2026-09-23, spec drafted:
-[`specs/2026-09-23-raw-exchange.md`](specs/2026-09-23-raw-exchange.md) **Raised:** 2026-09-10
-
-The Raw toggle (`components/chat/raw-transcript.tsx`) prints the transcript exactly as it is stored,
-which is what the markdown renderer is handed — so any difference between the two views is the
-renderer's doing, and that is the question it was built to answer.
-
-It cannot answer the question one layer down. A CLI emits far more than its answer: reasoning
-events, tool calls, file edits, per-turn metadata. The daemon parses those, keeps the text and the
-usage, and discards the rest — so if a provider *said* something we never stored, no view in the app
-can show it. Seeing that needs the daemon to retain the raw event stream per turn, which is a
-storage decision (how much, for how long) rather than a UI one.
-
-**Unblocks when:** an answer looks wrong in a way the stored text cannot explain — most likely a
-turn that used tools, where what the agent *did* is invisible and only what it said survives.
-
 ## L-11 — The transcript does not record that a conversation moved
 
 **Status:** idea **Raised:** 2026-09-10, building the folder picker (B-3)

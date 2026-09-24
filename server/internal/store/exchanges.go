@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -14,6 +15,14 @@ import (
 // that never existed, or an entry that is not a turn. One answer for all three,
 // for the same reason as ErrNotFound.
 var ErrNoTurn = errors.New("that turn does not exist")
+
+// storable makes printed text fit a Postgres text column, which refuses one
+// byte: NUL. A CLI that prints binary would otherwise fail its whole batch and
+// lose the lines around it, so the NUL becomes U+FFFD, the same character JSON
+// already turned any invalid UTF-8 into on the way here.
+func storable(s string) string {
+	return strings.ReplaceAll(s, "\x00", "\uFFFD")
+}
 
 // RecordExchangeSent stores what a turn handed its CLI. Called from the daemon
 // path, for a turn the server itself started, so it takes no account.
@@ -34,7 +43,7 @@ func (s *Store) RecordExchangeSent(ctx context.Context, conversationID, entryID 
 		EntryID: entry, ConversationID: conv,
 		Program: sent.Program, Args: args, Cwd: sent.Cwd,
 		ResumeSessionID: sent.ResumeSessionID,
-		Prompt:          sent.Prompt, Stdin: sent.Stdin, Launched: sent.Launched,
+		Prompt:          storable(sent.Prompt), Stdin: storable(sent.Stdin), Launched: sent.Launched,
 	})
 }
 
@@ -51,7 +60,7 @@ func (s *Store) AppendExchangeLines(ctx context.Context, entryID string, lines [
 			p.Seqs = append(p.Seqs, l.Seq)
 			p.AtMs = append(p.AtMs, l.AtMs)
 			p.Streams = append(p.Streams, l.Stream)
-			p.Bodies = append(p.Bodies, l.Text)
+			p.Bodies = append(p.Bodies, storable(l.Text))
 		}
 		if err := s.q.AppendExchangeLines(ctx, p); err != nil {
 			return err
@@ -109,4 +118,32 @@ func (s *Store) Exchange(ctx context.Context, userID, entryID string) (protocol.
 		out.Lines = append(out.Lines, protocol.ExchangeLine{Seq: l.Seq, AtMs: l.AtMs, Stream: l.Stream, Text: l.Body})
 	}
 	return out, turn.Provider, nil
+}
+
+// ExchangeSummaries says how big each turn's record in one of this account's
+// conversations is.
+func (s *Store) ExchangeSummaries(ctx context.Context, userID, conversationID string) ([]protocol.ExchangeSummary, error) {
+	owner, uid, err := owned(userID, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.q.GetConversation(ctx, db.GetConversationParams{ID: uid, UserID: owner}); err != nil {
+		return nil, missing(err)
+	}
+	rows, err := s.q.ListExchangeSummaries(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]protocol.ExchangeSummary, 0, len(rows))
+	for _, r := range rows {
+		sum := protocol.ExchangeSummary{
+			EntryID: uuidToString(r.EntryID), Launched: r.Launched,
+			Lines: r.LineCount, Bytes: r.ByteCount, LastAtMs: r.LastAtMs,
+		}
+		if r.DroppedLines > 0 || r.DroppedBytes > 0 {
+			sum.Dropped = &protocol.ExchangeDropped{Lines: r.DroppedLines, Bytes: r.DroppedBytes}
+		}
+		out = append(out, sum)
+	}
+	return out, nil
 }

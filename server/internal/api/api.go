@@ -200,6 +200,7 @@ func (a *API) Routes() http.Handler {
 		r.Patch("/api/conversations/{id}", a.patchConversation)
 		r.Delete("/api/conversations/{id}", a.deleteConversation)
 		r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
+		r.Get("/api/conversations/{id}/exchanges", a.exchangeSummaries)
 		r.Get("/api/directories", a.listDirectories)
 		r.Get("/api/folders/recent", a.recentFolders)
 		r.Post("/api/conversations/{id}/messages", a.postMessage)
@@ -789,6 +790,18 @@ func (a *API) recordExchange(ctx context.Context, t *turn, msg protocol.DaemonMe
 	a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 		Type: protocol.EventExchange, ConversationID: t.ConversationID, EntryID: t.EntryID, Exchange: ev,
 	})
+}
+
+// exchangeSummaries answers with how big each turn's record is in one
+// conversation, so the Raw view can label every turn before any is opened.
+func (a *API) exchangeSummaries(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	list, err := a.store.ExchangeSummaries(r.Context(), user.ID, chi.URLParam(r, "id"))
+	if err != nil {
+		a.failConversation(w, err)
+		return
+	}
+	writeJSON(w, list)
 }
 
 // getExchange answers with one turn's whole record, and the report read from it.

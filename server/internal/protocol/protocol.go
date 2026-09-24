@@ -252,6 +252,18 @@ type ExchangeReport struct {
 	Usage          *ExchangeUsage `json:"usage,omitempty"`
 }
 
+// ExchangeSummary is how big one turn's record is, without its contents, so a
+// transcript can say which turns have one and how large before anything is
+// opened.
+type ExchangeSummary struct {
+	EntryID  string           `json:"entryId"`
+	Launched bool             `json:"launched"`
+	Lines    int32            `json:"lines"`
+	Bytes    int64            `json:"bytes"`
+	LastAtMs int64            `json:"lastAtMs"`
+	Dropped  *ExchangeDropped `json:"dropped,omitempty"`
+}
+
 // Exchange is one agent turn's record. As a live event it carries only what is
 // new: the sent record once, then lines, then the report when it changes.
 type Exchange struct {

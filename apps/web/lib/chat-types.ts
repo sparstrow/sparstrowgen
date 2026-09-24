@@ -241,6 +241,87 @@ export type PendingSwitch = {
 };
 
 
+/* ── A turn's exchange ────────────────────────────────────────────────────────
+   Everything that crossed between the daemon and one CLI in one turn
+   (docs/specs/2026-09-23-raw-exchange.md). Mirrors protocol.Exchange. */
+
+/** What the CLI was handed. The environment is never here: it carries the
+ *  sign-in token. */
+export type ExchangeSent = {
+  /** The resolved executable, or only the provider's name when it never started. */
+  program: string;
+  args: string[];
+  cwd: string;
+  /** Absent when the turn started a new session. */
+  resumeSessionId?: string;
+  /** The prompt as the agent reads it, catch-up included. */
+  prompt: string;
+  /** The exact bytes written to stdin. Empty when it never started. */
+  stdin: string;
+  /** False when the daemon refused the turn before starting the CLI. */
+  launched: boolean;
+};
+
+export type ExchangeLine = {
+  /** Order of arrival, from 1. A gap means a batch went missing. */
+  seq: number;
+  /** Milliseconds since the CLI started. */
+  atMs: number;
+  stream: "stdout" | "stderr";
+  text: string;
+};
+
+/** A CLI's own account of its tokens. `input` and `output` are the whole of
+ *  each; the optional fields are parts of them, absent when not broken out. */
+export type ExchangeUsage = {
+  input: number;
+  fromCache?: number;
+  toCache?: number;
+  output: number;
+  reasoning?: number;
+  total: number;
+};
+
+/** What the CLI said about itself, read from its lines on the server. A field it
+ *  did not report is absent, never guessed. */
+export type ExchangeReport = {
+  cliVersion?: string;
+  model?: string;
+  permissionMode?: string;
+  cwd?: string;
+  sessionId?: string;
+  tools?: string[];
+  skills?: string[];
+  agents?: string[];
+  mcpServers?: string[];
+  usage?: ExchangeUsage;
+};
+
+/** How big one turn's record is, without its contents. */
+export type ExchangeSummary = {
+  entryId: string;
+  launched: boolean;
+  lines: number;
+  /** UTF-8 bytes of the lines kept. */
+  bytes: number;
+  /** When the last line arrived, in ms since the CLI started. */
+  lastAtMs: number;
+  dropped?: { lines: number; bytes: number };
+};
+
+export type Exchange = {
+  entryId: string;
+  /** False for a turn with no record: from before recording, from a daemon that
+   *  does not record, or one that never reached a computer. */
+  recorded: boolean;
+  sent?: ExchangeSent;
+  lines: ExchangeLine[];
+  /** What was not kept once the turn's record was full. */
+  dropped?: { lines: number; bytes: number };
+  report?: ExchangeReport;
+};
+
+
 /* ── Directories ──────────────────────────────────────────────────────────────
    Only the daemon can see the owner's filesystem, so browsing goes through it
    (docs/Decisions.md D-020). These mirror protocol.DirListing. */

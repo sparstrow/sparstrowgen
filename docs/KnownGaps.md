@@ -546,3 +546,55 @@ the conversation, not the account.
   expect — most likely against a checkout that exists on the other machine.
 - **Clears when:** a conversation names its computer, or the owner says the workspace's set is
   enough and one of them being picked arbitrarily is fine.
+
+## G-45 — Whether agy's cached tokens are part of its input is unverified
+
+**Raised:** 2026-09-23, reading usage for the raw exchange (D-053)
+
+agy reports `input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens` and
+`total_tokens`. The captured totals show thinking is outside output (input + output + thinking is
+the total). Every capture so far has `cache_read_tokens` at 0, so whether it sits inside
+`input_tokens`, like codex's, or beside it, is unknown. The exchange shows it as "from cache" under
+"read", which assumes inside.
+
+- **If wrong:** an agy turn that did read from its cache shows "read" smaller than what it read,
+  and the parts not adding up to the total.
+- **Clears when:** an agy capture with a non-zero `cache_read_tokens` settles whether
+  input + output + thinking still equals `total_tokens`.
+
+## G-46 — agy's own log file is not part of a turn's record
+
+**Raised:** 2026-09-23, D-053
+
+agy writes some failures only to the file named by `--log-file`, and exits 0. The daemon reads it
+when agy ends a turn with nothing to show and turns it into the turn's failure, so the reason
+reaches the transcript. But the file itself is deleted after the turn and is not in the record, so
+a warning agy logged on a turn that DID answer is never shown anywhere.
+
+- **If wrong:** an agy turn misbehaves in a way only its log explains, and the record shows nothing.
+- **Clears when:** the log is appended to the record as a third stream, if a real case shows it
+  would have helped.
+
+## G-47 — The raw exchange's line grouping has no unit tests
+
+**Raised:** 2026-09-23, D-053
+
+[`lib/exchange.ts`](../apps/web/lib/exchange.ts) names each line from its JSON keys and collapses
+runs of streaming fragments. There is no test runner for the web app yet (the `testing` skill), so it
+was checked in the browser against real records rather than by a test.
+
+- **If wrong:** a CLI's new event shape is grouped with the wrong neighbours or named oddly. Nothing
+  is lost: every line stays one click away, exactly as printed.
+- **Clears when:** the web app gets a test runner; this file is the first thing worth testing in it.
+
+## G-48 — Each turn's record keeps everything the agent read, for as long as the conversation
+
+**Raised:** 2026-09-23, the raw exchange spec's inferred edge cases
+
+The record holds every line a CLI printed, and a tool result carries the file it read. If an agent
+opens a file of passwords in the project folder, that file is now on the server, with the
+conversation, until the conversation is deleted. The answer text could already quote it; the record
+keeps it whether quoted or not. The spec marked this *(inferred)* for the owner to overrule.
+
+- **If wrong:** he wants records to expire, or files the agent read to be left out.
+- **Clears when:** he confirms the spec's edge case, or says otherwise, and retention changes.

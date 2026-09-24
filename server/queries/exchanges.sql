@@ -10,14 +10,23 @@ ON CONFLICT (entry_id) DO NOTHING;
 -- name: AppendExchangeLines :exec
 -- One batch in one statement: the four arrays are stepped through in lockstep,
 -- which is what several unnests in one select list do. A repeated seq is a
--- batch already stored, and is skipped rather than failing the ones around it.
-INSERT INTO exchange_lines (entry_id, seq, at_ms, stream, body)
-SELECT @entry_id::uuid,
-       unnest(@seqs::integer[]),
-       unnest(@at_ms::bigint[]),
-       unnest(@streams::text[]),
-       unnest(@bodies::text[])
-ON CONFLICT (entry_id, seq) DO NOTHING;
+-- batch already stored, and is skipped rather than failing the ones around it,
+-- and only the lines actually stored move the record's totals.
+WITH stored AS (
+    INSERT INTO exchange_lines (entry_id, seq, at_ms, stream, body)
+    SELECT @entry_id::uuid,
+           unnest(@seqs::integer[]),
+           unnest(@at_ms::bigint[]),
+           unnest(@streams::text[]),
+           unnest(@bodies::text[])
+    ON CONFLICT (entry_id, seq) DO NOTHING
+    RETURNING at_ms, octet_length(body) AS bytes
+)
+UPDATE exchanges
+SET line_count = line_count + (SELECT count(*) FROM stored),
+    byte_count = byte_count + COALESCE((SELECT sum(bytes) FROM stored), 0),
+    last_at_ms = GREATEST(last_at_ms, COALESCE((SELECT max(at_ms) FROM stored), 0))
+WHERE exchanges.entry_id = @entry_id::uuid;
 
 -- name: SetExchangeDropped :exec
 -- The daemon sends running totals, so this sets rather than adds.
@@ -37,6 +46,12 @@ WHERE e.id = @id
       SELECT 1 FROM workspace_members m
       WHERE m.workspace_id = c.workspace_id AND m.user_id = @user_id
   );
+
+-- name: ListExchangeSummaries :many
+-- How big each turn's record in one conversation is, without reading any of it.
+SELECT entry_id, launched, line_count, byte_count, last_at_ms, dropped_lines, dropped_bytes
+FROM exchanges
+WHERE conversation_id = $1;
 
 -- name: GetExchange :one
 SELECT * FROM exchanges WHERE entry_id = $1;

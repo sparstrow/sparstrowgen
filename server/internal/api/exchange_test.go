@@ -91,8 +91,44 @@ func TestATurnsRecordIsStoredToldAndReadBack(t *testing.T) {
 	}
 
 	// Another account reads nothing, and is told nothing it could learn from.
-	if _, status := r.secondAccount().exchange(turn.EntryID); status != http.StatusNotFound {
+	other := r.secondAccount()
+	if _, status := other.exchange(turn.EntryID); status != http.StatusNotFound {
 		t.Errorf("another account reading the record got %d, want 404", status)
+	}
+
+	// How big it is, without reading it: what the Raw view labels turns with.
+	var sums []protocol.ExchangeSummary
+	decodeInto(t, r.get("/api/conversations/"+c.ID+"/exchanges"), &sums)
+	want := int64(len(claudeInit) + len("a warning of its own") + len(claudeResult))
+	if len(sums) != 1 || sums[0].EntryID != turn.EntryID || sums[0].Lines != 3 || sums[0].Bytes != want ||
+		sums[0].LastAtMs != 4000 || !sums[0].Launched || sums[0].Dropped == nil {
+		t.Errorf("summaries = %+v, want 3 lines, %d bytes, 4000ms, launched, dropped", sums, want)
+	}
+	if res := other.get("/api/conversations/" + c.ID + "/exchanges"); res.StatusCode != http.StatusNotFound {
+		t.Errorf("another account read the summaries: %s", res.Status)
+	}
+}
+
+// Postgres text refuses one byte, NUL. A CLI printing binary must not lose
+// the batch around it.
+func TestALineWithANulByteIsKeptRatherThanLosingItsBatch(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("claude")
+	turn := sendTurn(r, d, c)
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID,
+		Sent: &protocol.ExchangeSent{Program: "claude", Prompt: "say hi", Launched: true}})
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID, Lines: []protocol.ExchangeLine{
+		{Seq: 1, Stream: protocol.StreamStderr, Text: "before"},
+		{Seq: 2, Stream: protocol.StreamStderr, Text: "bin\x00ary"},
+		{Seq: 3, Stream: protocol.StreamStderr, Text: "after"},
+	}})
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonDone, TurnID: turn.TurnID, Full: "hi", Tokens: 5})
+	r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Usage != nil })
+
+	ex, _ := r.exchange(turn.EntryID)
+	if len(ex.Lines) != 3 || ex.Lines[1].Text != "bin\uFFFDary" || ex.Lines[2].Text != "after" {
+		t.Errorf("lines = %+v", ex.Lines)
 	}
 }
 

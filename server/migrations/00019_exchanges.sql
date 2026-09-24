@@ -33,6 +33,11 @@ CREATE TABLE exchanges (
     -- kept. Zero almost always; the record says so when it is not.
     dropped_lines     bigint      NOT NULL DEFAULT 0,
     dropped_bytes     bigint      NOT NULL DEFAULT 0,
+    -- Running totals of the lines below, kept as they are appended, so a
+    -- transcript can say how big each turn's record is without reading it.
+    line_count        integer     NOT NULL DEFAULT 0,
+    byte_count        bigint      NOT NULL DEFAULT 0,
+    last_at_ms        bigint      NOT NULL DEFAULT 0,
     created_at        timestamptz NOT NULL DEFAULT now()
 );
 
