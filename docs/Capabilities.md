@@ -244,11 +244,40 @@ first three rows are kept**, per turn; before it, the "Before D-053" column is w
 | The CLI's stderr | codex's refusals appear **only** here (Agent activity, above) | **never read**: no adapter attached stderr, so it went to the null device |
 | What the CLI loaded by itself | claude's `system:init`: `cwd`, `model`, `claude_code_version`, `permissionMode`, `tools`, `skills`, `slash_commands`, `agents`, `mcp_servers`, `plugins`, `output_style`. codex's `thread.started`: the thread id only. agy's `init`: conversation id and `cwd` only | nothing |
 | How much it loaded | usage, all three (table above). The captured claude turn: 4 new input tokens, 30,219 read from cache, 9,177 written to it — about 39k tokens of claude's own context behind a short message | the total only |
-| The text of a CLI's built-in instructions | **not emitted by any of the three** | — |
+| The text of a CLI's built-in instructions | **not emitted by any of the three** on their output — but **each keeps it in its own session files on the computer**; see the next section | — |
 | Thinking text | **depends on the version.** The 2.1.90 capture (Sonnet 4.6) streams it as `thinking_delta` text; the 2.1.280 capture sent the block empty, signature only. codex and agy: none seen | — |
 
 **Size.** The captured claude turn is 22.5 KB of events for a two-message answer, mostly
 `--include-partial-messages` deltas. A turn whose tools read files carries those files in full.
+
+### What each agent loaded, word for word — from its own session files (2026-09-24)
+
+Asked by the owner: the tokens an agent reads beyond your message are its own instructions, skills,
+tools and rules, and he wants to see them, to turn off what he does not want fed. **None of the three
+prints them. All three write them to disk**, in their own session store on the computer the daemon
+already runs on. **Verified 2026-09-24 by reading the files the test turns of U-32 left behind** (and,
+for agy, a recent conversation); no CLI was run.
+
+| | Where | What is in it | What is not |
+|---|---|---|---|
+| **claude** 2.1.280 | `~/.claude/projects/<folder, non-alphanumerics as ->/<session id>.jsonl`, one JSON object per line | a `prompt_snapshot` attachment: the **whole system prompt** (15 sections for the test turn — the largest, 12,971 characters, is its "auto memory" instructions) and **every tool's full definition** (14; Bash alone is 22 KB). Also `instructions` (each CLAUDE.md with its **path**, Project or User, and content), `nested_memory` (CLAUDE.md files in subfolders), `skill_listing` (the skills offered, with descriptions), `mcp_instructions_delta` (each MCP server's instructions), `deferred_tools_delta` (tools held back until searched for), `agent_listing_delta`, `invoked_skills` | a skill's file path |
+| **codex** 0.154 | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-…-<thread id>.jsonl`, JSON lines | `session_meta.base_instructions` (**the system prompt**, 17,730 characters for GPT-5.6 Sol), developer messages: `<skills_instructions>` (42 skills with descriptions **and file paths**, 22,695 characters), the agent-role and multi-agent instructions, `<recommended_plugins>`; a `world_state` (AGENTS.md, host skills, permissions, personality); `turn_context` (sandbox `read-only`, approval `never`, model) | **tool definitions** (only mentioned by name in calls) |
+| **agy** 1.2.3 | `~/.gemini/antigravity-cli/conversations/<conversation id>.db`, SQLite; the prompt is a **protobuf blob** in `gen_metadata` | the whole generation input: an `<identity>` system prompt (28,997 characters), `<user_rules>` (11,875 characters), tool definitions as JSON schemas, `<artifacts>` instructions, and the conversation | a published schema: the text is readable, but which piece is which is read off tags like `<identity>` and `<user_rules>`; where the rules came from is not recorded |
+
+**What this makes possible:** after each turn the daemon reads that turn's entry from the agent's own
+store, by the session id it already has, and adds it to the turn's record. So each turn can show
+every piece that was fed, its size, and, for claude's instruction files and codex's skills, which
+file it came from.
+
+**What it costs, and the risk:**
+- **These are private files, not an interface.** Any CLI update can move or reshape them, as `claude`
+  and `codex` do often. It must fail visibly ("could not read claude's session file"), never quietly
+  show nothing.
+- **Size.** claude's snapshot is about 127 KB per turn, agy's about 116 KB, codex's about 60 KB. They
+  are mostly the same from turn to turn, so they are worth storing once and pointing at.
+- **They hold his own rules and memory** (CLAUDE.md, GEMINI.md, claude's memory instructions), which
+  would then sit on the server with the rest of the record (G-48).
+- **agy's store is written while a turn runs,** so it is copied before it is read, never opened in place.
 
 ## Real caveats found while capturing (2026-09-09)
 
