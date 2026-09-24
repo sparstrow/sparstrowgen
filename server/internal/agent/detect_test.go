@@ -46,6 +46,54 @@ func TestClaudeModelsComeFromTheCLI(t *testing.T) {
 	}
 }
 
+// B-54: the picker Anthropic moved the owner's account to on 2026-09-23 names
+// families ("Opus") and puts the version in the description. The app has to
+// say which Opus — and run the 1M-context Fable the picker actually offers.
+// Captured verbatim from the owner's CLI, signed in the way his daemon is.
+func TestAFamilyNamedRowIsLabelledWithItsVersion(t *testing.T) {
+	out, err := os.ReadFile("testdata/claude-list-models-families.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, everyday, ok := parseClaudeModels(out)
+	if !ok {
+		t.Fatal("a successful reply was not read")
+	}
+	var got []string
+	for _, m := range models {
+		got = append(got, m.ID+"="+m.Label)
+	}
+	want := []string{
+		"claude-sonnet-5=Sonnet 5",
+		"claude-fable-5-1[1m]=Fable 5.1",
+		"claude-opus-5-5=Opus 5.5",
+		"claude-haiku-4-5-20251001=Haiku 4.5",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("models:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if everyday != "claude-sonnet-5" {
+		t.Errorf("a new conversation starts on %q, want claude-sonnet-5", everyday)
+	}
+}
+
+// A name that already carries its version is kept, and a description that is
+// about something else is never promoted to a label.
+func TestALabelIsTakenFromTheDescriptionOnlyWhenItNamesTheSameModel(t *testing.T) {
+	for _, c := range []struct{ name, desc, want string }{
+		{"Opus 5.5", "Best for everyday, complex tasks", "Opus 5.5"},
+		{"Opus", "Opus 5.5 · Best for everyday, complex tasks", "Opus 5.5"},
+		{"Opus", "Best for everyday, complex tasks", "Opus"},
+		{"Opus", "Sonnet 5 · for comparison", "Opus"},
+		{"Default (recommended)", "Sonnet 5 · Efficient for routine tasks", "Default (recommended)"},
+		{"", "", "claude-x"},
+	} {
+		if got := claudeModelLabel(claudeModelInfo{DisplayName: c.name, Description: c.desc}, "claude-x"); got != c.want {
+			t.Errorf("%q / %q labelled %q, want %q", c.name, c.desc, got, c.want)
+		}
+	}
+}
+
 // Two tokens for one model show once. A signed-out CLI answers with its
 // built-in defaults, in which a legacy "Opus 4.1" row resolves to Opus 5.
 func TestAModelNamedTwiceIsOfferedOnce(t *testing.T) {

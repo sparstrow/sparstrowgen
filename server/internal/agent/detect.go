@@ -132,7 +132,47 @@ type claudeModelInfo struct {
 	Value         string `json:"value"`
 	ResolvedModel string `json:"resolvedModel"`
 	DisplayName   string `json:"displayName"`
+	Description   string `json:"description"`
 	Disabled      bool   `json:"disabled"`
+}
+
+// claudeModelID is what a row runs, and what gets stored and passed to
+// --model. The context-window tag rides along from the picker token:
+// "claude-fable-5-1[1m]" resolves to "claude-fable-5-1", and dropping the tag
+// would quietly run a different variant from the one offered.
+func claudeModelID(m claudeModelInfo) string {
+	value := strings.TrimSpace(m.Value)
+	id := strings.TrimSpace(m.ResolvedModel)
+	if id == "" {
+		return value
+	}
+	if strings.HasSuffix(value, "[1m]") && !strings.HasSuffix(id, "[1m]") {
+		id += "[1m]"
+	}
+	return id
+}
+
+// claudeModelLabel names a row the way the transcript should.
+//
+// On 2026-09-23 Anthropic moved the owner's account to a picker that names
+// a family — "Opus" — and puts the version in the description: "Opus 5.5 ·
+// Best for everyday, complex tasks". Showing the family alone is how the app
+// came to say "Opus" with no way to tell which (docs/Bugs.md B-54). So when
+// the name has no version and the description leads with that name and one,
+// the description's lead is the label.
+func claudeModelLabel(m claudeModelInfo, id string) string {
+	name := strings.TrimSpace(m.DisplayName)
+	lead, _, _ := strings.Cut(strings.TrimSpace(m.Description), "·")
+	lead = strings.TrimSpace(lead)
+	const digits = "0123456789"
+	if name != "" && !strings.ContainsAny(name, digits) && strings.ContainsAny(lead, digits) &&
+		strings.HasPrefix(strings.ToLower(lead), strings.ToLower(name)+" ") {
+		return lead
+	}
+	if name != "" {
+		return name
+	}
+	return id
 }
 
 // parseClaudeModels reads the list_models reply out of the CLI's stdout.
@@ -171,10 +211,7 @@ func parseClaudeModels(out []byte) (models []protocol.Model, everyday string, ok
 		seen := map[string]bool{}
 		var recommended, sonnet string
 		for _, m := range resp.Response.Response.Models {
-			id := strings.TrimSpace(m.ResolvedModel)
-			if id == "" {
-				id = strings.TrimSpace(m.Value)
-			}
+			id := claudeModelID(m)
 			if id == "" || m.Disabled {
 				continue
 			}
@@ -189,11 +226,7 @@ func parseClaudeModels(out []byte) (models []protocol.Model, everyday string, ok
 				continue
 			}
 			seen[id] = true
-			label := strings.TrimSpace(m.DisplayName)
-			if label == "" {
-				label = id
-			}
-			models = append(models, protocol.Model{ID: id, Label: label})
+			models = append(models, protocol.Model{ID: id, Label: claudeModelLabel(m, id)})
 		}
 		if len(models) == 0 {
 			return nil, "", false

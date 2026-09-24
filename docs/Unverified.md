@@ -549,3 +549,15 @@ turn. The published `sparstrowgen-setup.exe` itself has not been installed anywh
 **The step:** on a candidate-channel computer, install 0.3.1. Open the composer's model menu on a
 claude conversation and check it lists Opus 5.5. Then promote 0.3.1 with **Promote a daemon
 candidate** (Actions tab). Every computer with automatic updates on installs it within the hour.
+
+## U-31 — A turn on Fable 5.1 with 1M context
+
+**Raised:** 2026-09-23, B-54
+**Who can run it:** the owner — it spends usage credits
+
+The picker now offers Fable only as `claude-fable-5-1[1m]`, and the daemon passes that to `--model`
+unchanged. That is the picker's own value, but no turn has been run on it here, because the CLI
+says it "Requires usage credits".
+
+**The step:** in a claude conversation, choose Fable 5.1 and send something short. The reply should
+arrive labelled Fable 5.1. A failure naming the model means the `[1m]` tag needs to come off.
