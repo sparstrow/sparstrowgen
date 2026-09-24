@@ -5,7 +5,12 @@ import (
 
 	"github.com/sparstrow/sparstrowgen/server/internal/agent"
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
+	"github.com/sparstrow/sparstrowgen/server/internal/sessionstore"
 )
+
+// readContext reads what a CLI fed its model from its own session store. A
+// variable so a test's fake agent is not looked for in the real stores.
+var readContext = sessionstore.Read
 
 /* A turn's record, on its way to the server (docs/specs/2026-09-23-raw-exchange.md).
 
@@ -90,6 +95,13 @@ func (r *exchangeRecord) flush() {
 	// Retrying would only reorder it behind lines sent after it.
 	_ = r.send(msg)
 	r.pending, r.pendingBytes, r.droppedNew = nil, 0, false
+}
+
+// context records what the CLI fed its model, once, after the last lines. A
+// store that could not be read still sends its reason, so the record can say
+// why it has nothing rather than looking like a daemon that never tried.
+func (r *exchangeRecord) context(c protocol.ContextRecord) {
+	_ = r.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: r.turnID, Context: &c})
 }
 
 // notLaunched records a turn the daemon refused before starting the CLI: what

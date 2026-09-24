@@ -771,6 +771,16 @@ func (a *API) recordExchange(ctx context.Context, t *turn, msg protocol.DaemonMe
 			return
 		}
 	}
+	if msg.Context != nil {
+		if err := a.store.RecordExchangeContext(ctx, t.ConversationID, t.EntryID, *msg.Context); err != nil {
+			a.log.Error("record what a turn's agent was fed", "turn", t.EntryID, "err", err)
+		}
+		// Nothing to tell browsers now: it arrives just before the turn's end,
+		// and the end is what makes an open Raw view read the record again.
+		if msg.Sent == nil && len(msg.Lines) == 0 && msg.Dropped == nil {
+			return
+		}
+	}
 
 	ev := &protocol.Exchange{
 		EntryID: t.EntryID, Recorded: true,
@@ -807,7 +817,7 @@ func (a *API) exchangeSummaries(w http.ResponseWriter, r *http.Request) {
 // getExchange answers with one turn's whole record, and the report read from it.
 func (a *API) getExchange(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
-	ex, provider, err := a.store.Exchange(r.Context(), user.ID, chi.URLParam(r, "turnId"))
+	ex, provider, docs, err := a.store.Exchange(r.Context(), user.ID, chi.URLParam(r, "turnId"))
 	if errors.Is(err, store.ErrNoTurn) {
 		a.fail(w, err, http.StatusNotFound)
 		return
@@ -819,6 +829,17 @@ func (a *API) getExchange(w http.ResponseWriter, r *http.Request) {
 	if ex.Recorded {
 		report := agent.Report(provider, ex.Lines)
 		ex.Report = &report
+	}
+	// Read on every request from the records as the CLI kept them, so a better
+	// reading reaches turns already recorded.
+	if ex.Context != nil {
+		pieces, missing := agent.FedContext(provider, docs)
+		if pieces != nil {
+			ex.Context.Pieces = pieces
+		}
+		if missing != nil {
+			ex.Context.Missing = missing
+		}
 	}
 	writeJSON(w, ex)
 }

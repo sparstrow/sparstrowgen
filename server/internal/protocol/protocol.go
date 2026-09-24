@@ -264,6 +264,58 @@ type ExchangeSummary struct {
 	Dropped  *ExchangeDropped `json:"dropped,omitempty"`
 }
 
+// ContextDocument is one record an agent CLI keeps about its own context, as
+// the daemon found it in that CLI's session store on the computer: a claude
+// attachment, a codex rollout item, agy's generation input. Unchanged, so a
+// better reading of it later improves old turns (docs/Capabilities.md, "What
+// each agent loaded, word for word").
+type ContextDocument struct {
+	// Which CLI's record, and which kind of it: "claude.attachment",
+	// "codex.session_meta", "codex.message", "codex.world_state",
+	// "codex.turn_context", "agy.gen_metadata".
+	Kind string `json:"kind"`
+	// JSON for claude and codex; base64 of the protobuf for agy.
+	Body string `json:"body"`
+}
+
+// ContextRecord is what the daemon read from a CLI's session store after a
+// turn. Daemon to server only.
+type ContextRecord struct {
+	// The file it was read from, so the owner can open it himself.
+	From string `json:"from,omitempty"`
+	// Why nothing could be read: the file was not where this CLI keeps it, or
+	// was not in the shape it had. The rest of the turn's record is unaffected.
+	Error     string            `json:"error,omitempty"`
+	Documents []ContextDocument `json:"documents,omitempty"`
+}
+
+// ContextPiece is one piece of what a CLI fed its model on a turn, read from
+// the documents above: one section of its instructions, one tool, one skill,
+// one instruction file.
+type ContextPiece struct {
+	// instructions | file | skill | tool | deferred | server | agent |
+	// environment | other. A client that meets a kind it does not know shows it
+	// under "other" rather than dropping it.
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	// The file on the computer it came from, where the CLI recorded one.
+	Source string `json:"source,omitempty"`
+	Chars  int    `json:"chars"`
+	// The CLI's own count of this piece's tokens. Only agy states one.
+	Tokens *int64 `json:"tokens,omitempty"`
+	Text   string `json:"text"`
+}
+
+// ExchangeContext is everything a CLI fed its model on one turn.
+type ExchangeContext struct {
+	From   string         `json:"from,omitempty"`
+	Error  string         `json:"error,omitempty"`
+	Pieces []ContextPiece `json:"pieces"`
+	// What this CLI keeps no record of at all, in words: "codex does not record
+	// its tool definitions." Said, so absence is never read as "none".
+	Missing []string `json:"missing"`
+}
+
 // Exchange is one agent turn's record. As a live event it carries only what is
 // new: the sent record once, then lines, then the report when it changes.
 type Exchange struct {
@@ -275,6 +327,9 @@ type Exchange struct {
 	Lines    []ExchangeLine   `json:"lines"`
 	Dropped  *ExchangeDropped `json:"dropped,omitempty"`
 	Report   *ExchangeReport  `json:"report,omitempty"`
+	// What the CLI fed its model, from its own session store. Absent for a turn
+	// run by a daemon that did not read it.
+	Context *ExchangeContext `json:"context,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -454,6 +509,8 @@ type DaemonMessage struct {
 	Sent    *ExchangeSent    `json:"sent,omitempty"`
 	Lines   []ExchangeLine   `json:"lines,omitempty"`
 	Dropped *ExchangeDropped `json:"dropped,omitempty"`
+	// Once, after the last lines and before the turn's ending.
+	Context *ContextRecord `json:"context,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

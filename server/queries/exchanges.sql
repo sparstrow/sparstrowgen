@@ -72,3 +72,45 @@ DELETE FROM exchange_lines;
 
 -- name: DeleteEveryExchange :exec
 DELETE FROM exchanges;
+
+-- name: PutContextDocuments :exec
+-- A record this conversation already holds is kept, not stored again.
+INSERT INTO context_documents (conversation_id, hash, kind, body)
+SELECT @conversation_id::uuid,
+       unnest(@hashes::bytea[]),
+       unnest(@kinds::text[]),
+       unnest(@bodies::text[])
+ON CONFLICT (conversation_id, hash) DO NOTHING;
+
+-- name: LinkExchangeContext :exec
+INSERT INTO exchange_context (entry_id, ord, conversation_id, hash)
+SELECT @entry_id::uuid,
+       unnest(@ords::integer[]),
+       @conversation_id::uuid,
+       unnest(@hashes::bytea[])
+ON CONFLICT (entry_id, ord) DO NOTHING;
+
+-- name: SetExchangeContext :exec
+UPDATE exchanges
+SET context_read = true, context_from = @context_from, context_error = @context_error
+WHERE entry_id = @entry_id;
+
+-- name: ListExchangeContext :many
+SELECT d.kind, d.body
+FROM exchange_context c
+JOIN context_documents d ON d.conversation_id = c.conversation_id AND d.hash = c.hash
+WHERE c.entry_id = $1
+ORDER BY c.ord;
+
+-- name: DeleteConversationExchangeContext :exec
+DELETE FROM exchange_context WHERE conversation_id = $1;
+
+-- name: DeleteConversationContextDocuments :exec
+DELETE FROM context_documents WHERE conversation_id = $1;
+
+-- name: DeleteEveryExchangeContext :exec
+-- Tests only, with the other DeleteEvery* in users.sql.
+DELETE FROM exchange_context;
+
+-- name: DeleteEveryContextDocument :exec
+DELETE FROM context_documents;

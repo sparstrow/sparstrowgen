@@ -81,7 +81,7 @@ func (a printingAgent) Execute(context.Context, string, agent.ExecOptions) (*age
 			msgs <- agent.Message{Type: agent.MessageLine, Line: &l}
 		}
 		close(msgs)
-		res <- agent.Result{Text: "ok", Tokens: 12}
+		res <- agent.Result{Text: "ok", Tokens: 12, SessionID: "s-9"}
 	}()
 	return &agent.Session{Messages: msgs, Result: res, Sent: protocol.ExchangeSent{
 		Program: `C:\bin\fake.exe`, Args: []string{"-p"}, Prompt: "hello", Stdin: "hello", Launched: true,
@@ -116,6 +116,36 @@ func TestATurnsRecordIsSentFirstAndCompleteBeforeTheTurnEnds(t *testing.T) {
 	}
 	if lines[1].Stream != protocol.StreamStderr || lines[1].AtMs != 9 {
 		t.Errorf("stderr line = %+v", lines[1])
+	}
+}
+
+func TestWhatTheAgentWasFedIsSentAfterItsLinesAndBeforeTheEnd(t *testing.T) {
+	original := readContext
+	readContext = func(provider, session string) protocol.ContextRecord {
+		return protocol.ContextRecord{From: provider + ":" + session,
+			Documents: []protocol.ContextDocument{{Kind: "claude.attachment", Body: "{}"}}}
+	}
+	t.Cleanup(func() { readContext = original })
+
+	d, got := wired(t, printingAgent{lines: []agent.Line{{Stream: protocol.StreamStdout, Text: `{"type":"result"}`}}})
+	d.runTurn(context.Background(), aTurn())
+	msgs := until(t, got, protocol.DaemonDone)
+
+	lastLines, ctx := -1, -1
+	for i, m := range msgs {
+		if m.Type == protocol.DaemonExchange && len(m.Lines) > 0 {
+			lastLines = i
+		}
+		if m.Type == protocol.DaemonExchange && m.Context != nil {
+			ctx = i
+		}
+	}
+	if ctx < 0 || ctx < lastLines || ctx != len(msgs)-2 {
+		t.Fatalf("context at %d, last lines at %d, of %d messages", ctx, lastLines, len(msgs))
+	}
+	// Read for the session the agent reported, which is how its store is found.
+	if c := msgs[ctx].Context; c.From != "fake:s-9" || len(c.Documents) != 1 {
+		t.Errorf("context = %+v", c)
 	}
 }
 
