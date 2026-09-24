@@ -43,3 +43,17 @@ UPDATE entries
 SET body = body || $2::text
 WHERE id = $1
 RETURNING *;
+
+-- name: EndOrphanedTurns :execrows
+-- Agent turns still open when the server starts. A turn is open until
+-- FinishAgentEntry stamps it, and only this process tracks running turns, so at
+-- startup every open one belonged to a process that is gone. Recognised by
+-- tokens as well as finished_at: entries finished before finished_at existed
+-- (00013) have no finished_at but always have tokens, which a placeholder never
+-- has.
+UPDATE entries
+SET failure = @failure, finished_at = now()
+WHERE role = 'agent'
+  AND finished_at IS NULL
+  AND tokens IS NULL
+  AND failure IS NULL;

@@ -630,3 +630,58 @@ func storeOwner(t *testing.T, s *Store) User {
 	}
 	return u
 }
+
+// B-57: a deploy replaces the server mid-turn, and only the old process knew
+// the turn was running. At startup every open turn is closed out with a reason;
+// finished and failed ones are left exactly as they were.
+func TestTurnsLeftOpenByTheLastServerAreClosedOutAtStartup(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	c := newConversation(t, s)
+	model := protocol.Model{ID: "m", Label: "M"}
+
+	open, err := s.AppendAgentPlaceholder(ctx, c.ID, "agy", model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, _ := s.AppendAgentPlaceholder(ctx, c.ID, "claude", model)
+	if _, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: done.ID, Provider: "claude", Text: "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	failed, _ := s.AppendAgentPlaceholder(ctx, c.ID, "codex", model)
+	if _, err := s.FinishTurn(ctx, TurnResult{ConversationID: c.ID, EntryID: failed.ID, Provider: "codex", Failure: "blocked"}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.EndOrphanedTurns(ctx, "the server restarted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 1 {
+		t.Fatalf("closed %d turns, want the open one", n)
+	}
+	got, err := s.Get(ctx, storeOwner(t, s).ID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range got.Entries {
+		switch e.ID {
+		case open.ID:
+			if e.Failure != "the server restarted" {
+				t.Errorf("open turn failure = %q", e.Failure)
+			}
+		case done.ID:
+			if e.Failure != "" || e.Text != "ok" {
+				t.Errorf("a finished turn was touched: %+v", e)
+			}
+		case failed.ID:
+			if e.Failure != "blocked" {
+				t.Errorf("a failed turn's reason was replaced: %q", e.Failure)
+			}
+		}
+	}
+	// Run again: nothing is left open, so nothing changes.
+	if n, _ := s.EndOrphanedTurns(ctx, "again"); n != 0 {
+		t.Errorf("second run closed %d", n)
+	}
+}

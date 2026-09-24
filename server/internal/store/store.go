@@ -789,3 +789,15 @@ func (s *Store) LastSeq(ctx context.Context, conversationID string) (int32, erro
 	}
 	return rows[len(rows)-1].Seq, nil
 }
+
+// EndOrphanedTurns closes out every agent turn that was running when the
+// server last stopped, and says how many.
+//
+// Running turns are tracked in this process's memory, and a deploy replaces the
+// process. The computer running the turn loses its connection at the same
+// moment and stops the agent, so no answer is coming: left alone, the turn
+// stayed an empty entry for good, with nothing to say what happened
+// (docs/Bugs.md B-57). Only safe at startup, before any turn can begin.
+func (s *Store) EndOrphanedTurns(ctx context.Context, reason string) (int64, error) {
+	return s.q.EndOrphanedTurns(ctx, &reason)
+}

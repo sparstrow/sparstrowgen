@@ -633,4 +633,15 @@ test daemon. In Raw, "Fed to the model" lists that agent's pieces: claude's syst
 section, tools, skills and agents; codex's base instructions and skills with their files, and "does
 not record its tool definitions"; agy's sections with its own token counts, and its tools. A turn
 from before says it was not recorded.
-**Status:** open
+**Status:** verified 2026-09-24 on production, testing account, test daemon from #71, one
+conversation in a scratch folder. agy (Gemini 3.8 Flash Low) "ok": 29 pieces read from
+`~/.gemini/antigravity-cli/conversations/e30e232c-….db`, each section with agy's own count (user rules
+2,643 characters, 885 tokens; its instructions 3,203 tokens), 17 tools, and "agy does not record
+which files its user rules came from". claude (Haiku 4.5) "ok": 70 pieces from its project JSONL, 16
+instruction sections (28,287 characters), 14 tools (104,896), 13 skills, 18 held-back tools, 5
+sub-agents. codex (GPT-5.6 Sol) "ok": 52 pieces from its rollout, 42 skills each with its file
+(`C:/Users/gsrih/.agents/skills/superpowers-main/…/using-superpowers/SKILL.md`), "did not report its
+version or model", and "does not record its tool definitions". In the browser: Largest first put
+agy's tools first; groups and pieces opened. Two fixes came out of it, shipped in the follow-up:
+plugin skill names cut before the part that differs, and file paths cut before the file's name. A
+turn sent seconds before the deploy was lost to it: B-57.
