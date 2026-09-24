@@ -586,7 +586,7 @@ run". **Copy lines is not verified:** the Browser pane refuses clipboard writes 
 is "denied") and the app said "Could not copy the lines"; see U-35. Two fixes came out of the walk
 (the saved-answer label over a failure, and a group's count cut off), shipped in the follow-up PR.
 
-## U-33 — The owner's own computer records its turns once 0.3.3 is installed
+## U-33 — The owner's own computer records its turns once 0.3.4 is installed
 
 **Raised:** 2026-09-23, D-053
 **Who can run it:** the owner — promoting a candidate is his step (docs/runbooks/daemon-release.md)
@@ -594,8 +594,10 @@ is "denied") and the app said "Could not copy the lines"; see U-35. Two fixes ca
 Recording happens in the daemon, so until his computer runs a daemon from this change, his turns
 show "Not recorded" in Raw. Nothing else changes for him.
 
-**The step:** promote candidate 0.3.3 with **Promote a daemon candidate** (Actions tab). Once his
-computer updates, send any message and open Raw: the new turn has a record.
+**The step:** promote candidate **0.3.4** with **Promote a daemon candidate** (Actions tab). It
+supersedes 0.3.3 and holds all of it, plus what each agent was fed (D-054). It is about 6 MB larger
+than 0.3.2, for the SQLite reader agy's store needs. Once his computer updates, send any message and
+open Raw: the new turn has a record, and "Fed to the model" lists what the agent was fed.
 **Status:** open
 
 ## U-34 — The design system has no entry for the raw exchange or the two-button switch
