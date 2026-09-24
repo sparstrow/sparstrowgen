@@ -231,6 +231,24 @@ should be allowed to do is the owner's decision: docs/Later.md L-33.
 
 agy also looked in its own scratch folder rather than the conversation's; fixed in B-55.
 
+### The raw exchange — what one turn's record can hold (2026-09-23)
+
+For [the raw-exchange spec](specs/2026-09-23-raw-exchange.md). **Verified by reading the daemon and
+the captured streams** in `server/internal/agent/testdata`; no new CLI run.
+
+| | What exists | Kept today |
+|---|---|---|
+| What we send | All of it is ours: the daemon builds the prompt (the catch-up framing is `buildPrompt` in `cmd/daemon/main.go`), the arguments, the folder and the resume id | only the user's message, and a replay marker with a count and tokens |
+| The CLI's stdout | every event, all three providers | parsed for text, session id, usage, cost and limits; the rest is discarded |
+| The CLI's stderr | codex's refusals appear **only** here (Agent activity, above) | **never read**: no adapter attaches stderr, so it goes to the null device |
+| What the CLI loaded by itself | claude's `system:init`: `cwd`, `model`, `claude_code_version`, `permissionMode`, `tools`, `skills`, `slash_commands`, `agents`, `mcp_servers`, `plugins`, `output_style`. codex's `thread.started`: the thread id only. agy's `init`: conversation id and `cwd` only | nothing |
+| How much it loaded | usage, all three (table above). The captured claude turn: 4 new input tokens, 30,219 read from cache, 9,177 written to it — about 39k tokens of claude's own context behind a short message | the total only |
+| The text of a CLI's built-in instructions | **not emitted by any of the three** | — |
+| Thinking text | **not emitted** (Agent activity, above) | — |
+
+**Size.** The captured claude turn is 22.5 KB of events for a two-message answer, mostly
+`--include-partial-messages` deltas. A turn whose tools read files carries those files in full.
+
 ## Real caveats found while capturing (2026-09-09)
 
 - **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`

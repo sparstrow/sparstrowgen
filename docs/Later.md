@@ -112,7 +112,8 @@ view that the web app and something else both render.
 
 ## L-10 — The raw view shows the stored text, not the provider's event stream
 
-**Status:** idea **Raised:** 2026-09-10
+**Status:** asked for 2026-09-23, spec drafted:
+[`specs/2026-09-23-raw-exchange.md`](specs/2026-09-23-raw-exchange.md) **Raised:** 2026-09-10
 
 The Raw toggle (`components/chat/raw-transcript.tsx`) prints the transcript exactly as it is stored,
 which is what the markdown renderer is handed — so any difference between the two views is the
