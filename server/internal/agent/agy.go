@@ -52,6 +52,14 @@ func agyArgs(opts ExecOptions, logPath string) []string {
 		// Some failures appear only here, with exit code 0 (agyLogFailure).
 		args = append(args, "--log-file", logPath)
 	}
+	if opts.Cwd != "" {
+		// Running in the folder is not enough. agy reports the right cwd in
+		// its init event and then resolves "notes.txt" against its own scratch
+		// workspace, so it never saw the project a conversation is about
+		// (docs/Bugs.md B-55). Adding the folder to its workspace is what makes
+		// it look there — verified on agy 1.2.3.
+		args = append(args, "--add-dir", opts.Cwd)
+	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}
