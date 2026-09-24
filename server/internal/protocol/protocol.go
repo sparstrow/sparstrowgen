@@ -175,6 +175,97 @@ type Conversation struct {
 }
 
 // ---------------------------------------------------------------------------
+// Exchange: everything that crossed between the daemon and one CLI in one turn
+// ---------------------------------------------------------------------------
+
+// ExchangeSent is what the daemon handed the CLI, exactly. The environment is
+// deliberately absent: it carries the sign-in token (CLAUDE_CODE_OAUTH_TOKEN),
+// and a record meant for reading back must never hold a secret.
+type ExchangeSent struct {
+	// The resolved executable, so which install of a CLI ran is on record.
+	Program string   `json:"program"`
+	Args    []string `json:"args"`
+	Cwd     string   `json:"cwd"`
+	// Empty when the turn started a new provider session.
+	ResumeSessionID string `json:"resumeSessionId,omitempty"`
+	// The prompt as the agent reads it, catch-up included. Also inside Stdin,
+	// which is how a CLI actually receives it; kept apart because the envelope
+	// escapes every newline and a prompt is only readable without it.
+	Prompt string `json:"prompt"`
+	// The bytes written to the CLI's stdin. Empty when it never started.
+	Stdin string `json:"stdin"`
+	// False when the daemon refused the turn before starting the CLI: the
+	// folder was missing, an update was installing, the stop overtook the start.
+	// Prompt then says what would have been sent, and nothing else is claimed.
+	Launched bool `json:"launched"`
+}
+
+const (
+	StreamStdout = "stdout"
+	StreamStderr = "stderr"
+)
+
+// ExchangeLine is one line a CLI printed, as printed.
+type ExchangeLine struct {
+	// Order of arrival at the daemon, from 1, per turn. The browser uses it to
+	// notice a missed batch rather than trusting that none was.
+	Seq int32 `json:"seq"`
+	// Milliseconds since the CLI was started.
+	AtMs   int64  `json:"atMs"`
+	Stream string `json:"stream"`
+	Text   string `json:"text"`
+}
+
+// ExchangeDropped counts what reached the daemon after a turn's record was full
+// and was not kept. The record says so rather than ending quietly.
+type ExchangeDropped struct {
+	Lines int64 `json:"lines"`
+	Bytes int64 `json:"bytes"`
+}
+
+// ExchangeUsage is a CLI's own account of the tokens one turn used, in one
+// shape for all three. Input and Output are the whole of each; the optional
+// fields are PARTS of them that a CLI broke out, and are absent when it did not.
+type ExchangeUsage struct {
+	Input     int64  `json:"input"`
+	FromCache *int64 `json:"fromCache,omitempty"`
+	ToCache   *int64 `json:"toCache,omitempty"`
+	Output    int64  `json:"output"`
+	Reasoning *int64 `json:"reasoning,omitempty"`
+	Total     int64  `json:"total"`
+}
+
+// ExchangeReport is what a CLI said about itself during a turn. Derived from
+// the stored lines each time it is read, never stored, so a better reading of
+// an old turn's lines improves that turn too. A field a CLI does not report is
+// empty, and the surface says so rather than guessing.
+type ExchangeReport struct {
+	CLIVersion     string         `json:"cliVersion,omitempty"`
+	Model          string         `json:"model,omitempty"`
+	PermissionMode string         `json:"permissionMode,omitempty"`
+	Cwd            string         `json:"cwd,omitempty"`
+	SessionID      string         `json:"sessionId,omitempty"`
+	Tools          []string       `json:"tools,omitempty"`
+	Skills         []string       `json:"skills,omitempty"`
+	Agents         []string       `json:"agents,omitempty"`
+	MCPServers     []string       `json:"mcpServers,omitempty"`
+	Usage          *ExchangeUsage `json:"usage,omitempty"`
+}
+
+// Exchange is one agent turn's record. As a live event it carries only what is
+// new: the sent record once, then lines, then the report when it changes.
+type Exchange struct {
+	EntryID string `json:"entryId"`
+	// False for a turn that has no record: it ran before recording existed, on
+	// a daemon that does not record, or it never reached a computer.
+	Recorded bool             `json:"recorded"`
+	Sent     *ExchangeSent    `json:"sent,omitempty"`
+	Lines    []ExchangeLine   `json:"lines"`
+	Dropped  *ExchangeDropped `json:"dropped,omitempty"`
+	Report   *ExchangeReport  `json:"report,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
 // Server → daemon
 // ---------------------------------------------------------------------------
 
@@ -261,6 +352,10 @@ const (
 	DaemonStopped = "stopped"
 	// DaemonDirListing answers a ServerListDir, echoing its RequestID.
 	DaemonDirListing = "dir_listing"
+	// DaemonExchange carries part of a turn's record: first what was sent, then
+	// the lines the CLI printed in batches, and anything dropped. Always before
+	// the turn's done, failed or stopped. A server that predates it ignores it.
+	DaemonExchange = "exchange"
 )
 
 // Why a directory is unusable, as a value rather than a sentence.
@@ -342,6 +437,11 @@ type DaemonMessage struct {
 	// dir_listing
 	RequestID string      `json:"requestId,omitempty"`
 	Listing   *DirListing `json:"listing,omitempty"`
+
+	// exchange
+	Sent    *ExchangeSent    `json:"sent,omitempty"`
+	Lines   []ExchangeLine   `json:"lines,omitempty"`
+	Dropped *ExchangeDropped `json:"dropped,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +472,9 @@ const (
 	// browser refetches it, because unlike a conversation there is no partial
 	// update worth patching in and the list is three rows long.
 	EventWorkspaces = "workspaces"
+	// EventExchange carries what is new in a running turn's record, so an open
+	// Raw view grows while the agent works.
+	EventExchange = "exchange"
 )
 
 type ClientEvent struct {
@@ -386,6 +489,8 @@ type ClientEvent struct {
 	// With EventDaemon: the connected computer is too old to be sent work, so
 	// the surface says to update it rather than offering a send that will fail.
 	TooOld bool `json:"tooOld,omitempty"`
+	// With EventExchange.
+	Exchange *Exchange `json:"exchange,omitempty"`
 }
 
 // SpendTicksPerUSD is the fixed-point scale for money. Cost is stored and moved

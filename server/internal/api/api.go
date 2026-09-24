@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/websocket"
 
+	"github.com/sparstrow/sparstrowgen/server/internal/agent"
 	"github.com/sparstrow/sparstrowgen/server/internal/auth"
 	"github.com/sparstrow/sparstrowgen/server/internal/hub"
 	"github.com/sparstrow/sparstrowgen/server/internal/mail"
@@ -95,6 +96,9 @@ type turn struct {
 	// Text accumulated from deltas, so a provider that streams and then also
 	// sends a final message does not double up.
 	Streamed string
+	// Reads the turn's record as it arrives, so a Raw view open on a running
+	// turn learns what the CLI loaded without waiting for the turn to end.
+	Report *agent.Reporter
 }
 
 func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
@@ -203,6 +207,7 @@ func (a *API) Routes() http.Handler {
 		// is running" would be ambiguous the moment a turn ends between the
 		// click and the request, and would then stop the wrong one.
 		r.Post("/api/turns/{turnId}/stop", a.stopTurn)
+		r.Get("/api/turns/{turnId}/exchange", a.getExchange)
 
 		r.Post("/api/auth/password", a.changePassword)
 		r.Get("/api/appearance", a.getAppearance)
@@ -571,6 +576,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	a.turns[turnID] = &turn{
 		UserID: user.ID, ConversationID: id, EntryID: agentEntry.ID,
 		Provider: body.Provider, Model: body.Model, MachineID: target.MachineID,
+		Report: agent.NewReporter(body.Provider),
 	}
 	a.mu.Unlock()
 
@@ -679,6 +685,9 @@ func (a *API) handleDaemonMessage(userID string, msg protocol.DaemonMessage) {
 			EntryID: t.EntryID, Text: msg.Text,
 		})
 
+	case protocol.DaemonExchange:
+		a.recordExchange(ctx, t, msg)
+
 	case protocol.DaemonDone:
 		a.finishTurn(ctx, msg.TurnID, msg.Full, msg.Tokens, msg.SpendTicks, "", false)
 
@@ -743,6 +752,62 @@ func (a *API) abandonTurns(userID, reason string) {
 		}
 		a.finishTurn(context.Background(), id, t.Streamed, 0, 0, reason, false)
 	}
+}
+
+// recordExchange stores part of a running turn's record and tells the
+// account's browsers what is new. A store failure is logged and the turn goes on:
+// the record is for checking the turn, and must never be why one breaks.
+func (a *API) recordExchange(ctx context.Context, t *turn, msg protocol.DaemonMessage) {
+	if msg.Sent != nil {
+		if err := a.store.RecordExchangeSent(ctx, t.ConversationID, t.EntryID, *msg.Sent); err != nil {
+			a.log.Error("record what a turn sent", "turn", t.EntryID, "err", err)
+			return
+		}
+	}
+	if len(msg.Lines) > 0 || msg.Dropped != nil {
+		if err := a.store.AppendExchangeLines(ctx, t.EntryID, msg.Lines, msg.Dropped); err != nil {
+			a.log.Error("record a turn's lines", "turn", t.EntryID, "err", err)
+			return
+		}
+	}
+
+	ev := &protocol.Exchange{
+		EntryID: t.EntryID, Recorded: true,
+		Sent: msg.Sent, Lines: msg.Lines, Dropped: msg.Dropped,
+	}
+	if ev.Lines == nil {
+		ev.Lines = []protocol.ExchangeLine{}
+	}
+	changed := false
+	for _, l := range msg.Lines {
+		changed = t.Report.Add(l.Stream, l.Text) || changed
+	}
+	if changed {
+		r := t.Report.Report()
+		ev.Report = &r
+	}
+	a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
+		Type: protocol.EventExchange, ConversationID: t.ConversationID, EntryID: t.EntryID, Exchange: ev,
+	})
+}
+
+// getExchange answers with one turn's whole record, and the report read from it.
+func (a *API) getExchange(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	ex, provider, err := a.store.Exchange(r.Context(), user.ID, chi.URLParam(r, "turnId"))
+	if errors.Is(err, store.ErrNoTurn) {
+		a.fail(w, err, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.fail(w, err, http.StatusInternalServerError)
+		return
+	}
+	if ex.Recorded {
+		report := agent.Report(provider, ex.Lines)
+		ex.Report = &report
+	}
+	writeJSON(w, ex)
 }
 
 func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spendTicks int64, failure string, stopped bool) {

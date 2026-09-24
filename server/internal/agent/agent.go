@@ -3,8 +3,9 @@
 // Shape borrowed from Multica's server/pkg/agent: one Backend interface, a
 // Session carrying a message channel plus a single result, and per-provider
 // files that translate each CLI's stream into the same events. Ours is far
-// smaller — three providers, text only — because the design shows text, code,
-// usage and failure and nothing else (AGENTS.md rule 4).
+// smaller: three providers, and the parsers keep only the text, usage and
+// failure the chat shows. Everything else a CLI prints is kept verbatim in the
+// turn's record instead (record.go), rather than interpreted here.
 package agent
 
 import (
@@ -33,6 +34,10 @@ const (
 	// MessageLimit reports a usage window. Only claude emits one, and only
 	// during a turn — there is no way to ask a provider for it.
 	MessageLimit MessageType = "limit"
+	// MessageLine is one line the CLI printed, on stdout or stderr, for the
+	// turn's record (record.go). Every line, including the ones the parser
+	// also turned into one of the messages above.
+	MessageLine MessageType = "line"
 )
 
 type Message struct {
@@ -40,6 +45,7 @@ type Message struct {
 	Text      string
 	SessionID string
 	Headroom  *protocol.Headroom
+	Line      *Line
 }
 
 type Result struct {
@@ -57,6 +63,8 @@ type Result struct {
 type Session struct {
 	Messages <-chan Message
 	Result   <-chan Result
+	// Sent is exactly what the CLI was handed, for the turn's record.
+	Sent protocol.ExchangeSent
 }
 
 // parsed is what one turn's stream yielded. Every provider's parser returns

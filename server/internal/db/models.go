@@ -59,6 +59,29 @@ type Entry struct {
 	FinishedAt       pgtype.Timestamptz `json:"finished_at"`
 }
 
+type Exchange struct {
+	EntryID         pgtype.UUID        `json:"entry_id"`
+	ConversationID  pgtype.UUID        `json:"conversation_id"`
+	Program         string             `json:"program"`
+	Args            []string           `json:"args"`
+	Cwd             string             `json:"cwd"`
+	ResumeSessionID string             `json:"resume_session_id"`
+	Prompt          string             `json:"prompt"`
+	Stdin           string             `json:"stdin"`
+	Launched        bool               `json:"launched"`
+	DroppedLines    int64              `json:"dropped_lines"`
+	DroppedBytes    int64              `json:"dropped_bytes"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type ExchangeLine struct {
+	EntryID pgtype.UUID `json:"entry_id"`
+	Seq     int32       `json:"seq"`
+	AtMs    int64       `json:"at_ms"`
+	Stream  string      `json:"stream"`
+	Body    string      `json:"body"`
+}
+
 type Machine struct {
 	ID               pgtype.UUID        `json:"id"`
 	UserID           pgtype.UUID        `json:"user_id"`

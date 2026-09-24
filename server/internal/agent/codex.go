@@ -45,6 +45,8 @@ func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*S
 	}
 	// The prompt, then end of input: codex reads to the end before starting.
 	cmd.Stdin = strings.NewReader(prompt)
+	messages := make(chan Message, 8)
+	rec := record(cmd, messages)
 	// launch rather than cmd.Start: a stop has to take the tool subprocesses
 	// with it, not just the CLI (D-021).
 	proc, err := launch(ctx, cmd, stdout)
@@ -52,15 +54,17 @@ func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*S
 		return nil, err
 	}
 
-	messages := make(chan Message, 8)
 	result := make(chan Result, 1)
 
 	go func() {
 		defer close(result)
-		p := parseCodex(stdout, messages)
-		close(messages)
+		p := parseCodex(rec.stdout(stdout), messages)
 
+		// Reaped before Messages closes: codex says why it was refused on
+		// stderr and nowhere else, so its last lines matter most.
 		waitErr := proc.Wait()
+		rec.finish()
+		close(messages)
 		if p.Err != nil {
 			waitErr = p.Err
 		}
@@ -74,7 +78,7 @@ func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*S
 		}
 	}()
 
-	return &Session{Messages: messages, Result: result}, nil
+	return &Session{Messages: messages, Result: result, Sent: sentBy(cmd, opts, prompt, []byte(prompt))}, nil
 }
 
 func parseCodex(r io.Reader, out chan<- Message) parsed {
@@ -142,7 +146,14 @@ type codexUsage struct {
 	ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
 }
 
+// total is what the turn read plus what it wrote.
+//
+// The cache and reasoning figures are PARTS of the other two, not additions to
+// them. codex's own TokenUsage says so: non_cached_input is input_tokens minus
+// cached_input_tokens, and blended_total is that plus output_tokens with no
+// reasoning added (codex-rs/protocol/src/protocol.rs; Multica reads it the same
+// way). Summing all five counted the cached input twice, so a turn that read
+// 39k tokens was shown as 71k (docs/Bugs.md B-56).
 func (u codexUsage) total() int64 {
-	return u.InputTokens + u.CachedInputTokens + u.CacheWriteInputTokens +
-		u.OutputTokens + u.ReasoningOutputTokens
+	return u.InputTokens + u.OutputTokens
 }

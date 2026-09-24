@@ -477,8 +477,14 @@ func (d *daemon) listDir(msg protocol.ServerMessage) {
 func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	log := d.log.With("turn", t.TurnID, "provider", t.Provider, "model", t.Model.ID)
 
+	// Built first, so that a turn refused below still records what it would
+	// have sent (docs/specs/2026-09-23-raw-exchange.md, US1).
+	prompt := buildPrompt(t)
+	rec := newExchangeRecord(t.TurnID, d.send)
+
 	backend, ok := d.backends[t.Provider]
 	if !ok {
+		rec.sent(notLaunched(t, prompt))
 		_ = d.send(protocol.DaemonMessage{
 			Type: protocol.DaemonFailed, TurnID: t.TurnID,
 			Error: fmt.Sprintf("no adapter for provider %q", t.Provider),
@@ -489,6 +495,7 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	// naming the executable (B-30), which reads as a broken agent install.
 	if problem := folderProblem(t.Cwd); problem != "" {
 		log.Info("turn refused: conversation folder unusable", "cwd", t.Cwd)
+		rec.sent(notLaunched(t, prompt))
 		_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: problem})
 		return
 	}
@@ -502,6 +509,7 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		if d.turns.closedForUpdate() {
 			// Arrived in the moment between the last idle check and handing over.
 			log.Info("turn refused: this copy is installing an update")
+			rec.sent(notLaunched(t, prompt))
 			_ = d.send(protocol.DaemonMessage{
 				Type: protocol.DaemonFailed, TurnID: t.TurnID,
 				Error: "this computer is installing a sparstrowgen update — send the message again in a moment",
@@ -512,11 +520,11 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		// and no text to keep — but the turn still has to be closed out, or the
 		// server waits on it forever.
 		log.Info("turn was stopped before it started")
+		rec.sent(notLaunched(t, prompt))
 		_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
 		return
 	}
 
-	prompt := buildPrompt(t)
 	log.Info("running turn", "replay", len(t.Replay), "resume", t.ResumeSessionID != "")
 
 	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
@@ -525,6 +533,7 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		ResumeSessionID: t.ResumeSessionID,
 	})
 	if err != nil {
+		rec.sent(notLaunched(t, prompt))
 		if d.turns.end(t.TurnID) {
 			_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonStopped, TurnID: t.TurnID})
 			return
@@ -535,9 +544,15 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		return
 	}
 
+	rec.sent(session.Sent)
+	flushTick := time.NewTicker(flushEvery)
+	defer flushTick.Stop()
+
 	// The watchdog. A CLI that wedges produces nothing and never exits, and
 	// before this the turn simply never ended (docs/Bugs.md B-8). Every message
-	// is a sign of life and resets the budget.
+	// is a sign of life and resets the budget — including every line the CLI
+	// prints, on either stream, since the record began carrying them: output
+	// the parsers skip (a tool call, a thinking block) is still the CLI working.
 	idle := time.NewTimer(idleBudget)
 	defer idle.Stop()
 	wentQuiet := false
@@ -552,6 +567,10 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 			}
 			idle.Reset(idleBudget)
 			switch msg.Type {
+			case agent.MessageLine:
+				if msg.Line != nil && rec.add(*msg.Line) {
+					rec.flush()
+				}
 			case agent.MessageStarted:
 				_ = d.send(protocol.DaemonMessage{
 					Type: protocol.DaemonStarted, TurnID: t.TurnID, SessionID: msg.SessionID,
@@ -567,6 +586,9 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 				})
 			}
 
+		case <-flushTick.C:
+			rec.flush()
+
 		case <-idle.C:
 			// Cancel, but keep draining. Messages is unbuffered past its
 			// capacity and the parser blocks writing to it, so abandoning the
@@ -577,6 +599,8 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 		}
 	}
 
+	// Before the ending, so the record is complete by the time the turn is.
+	rec.flush()
 	result := <-session.Result
 
 	// One place decides how the turn ended, and it reads the stop flag exactly

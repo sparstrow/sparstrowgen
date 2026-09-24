@@ -197,8 +197,10 @@ func TestParseCodex(t *testing.T) {
 	if p.SessionID != "01a08caf-32e6-7531-a336-c4e5c756fde2" {
 		t.Errorf("session id = %q", p.SessionID)
 	}
-	if p.Tokens != 32046 {
-		t.Errorf("tokens = %d, want 32046", p.Tokens)
+	// Input plus output. The 12,288 cached tokens are part of the 19,753 read,
+	// and adding them again showed a turn as using far more than it did (B-56).
+	if p.Tokens != 19758 {
+		t.Errorf("tokens = %d, want 19758 (input_tokens + output_tokens)", p.Tokens)
 	}
 
 	// codex is verified to emit no deltas. If this ever starts failing, the CLI
