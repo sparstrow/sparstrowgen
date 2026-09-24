@@ -202,6 +202,35 @@ agent to fetch the bytes itself (`multica attachment download <id>`); its prompt
 carries the id and filename rather than a URL, because a signed URL can expire before the agent
 gets to it (`server/internal/daemon/prompt.go`). Materialising first has no such failure mode.
 
+### Agent activity — what each CLI says about the work it does (2026-09-24)
+
+**Verified** from one real turn per provider, with the daemon's exact arguments and a clean
+environment, in a scratch folder. The prompt asked each agent to read a file, append a line to it,
+run `git --version`, search the web, and answer in one sentence.
+
+| | `claude` 2.1.280 | `codex` 0.154.0 | `agy` 1.2.3 |
+|---|---|---|---|
+| Live, step by step | **yes** — `content_block_start` for each `tool_use` as it begins, the arguments streamed as `input_json_delta`, the result in a following `user` message as `tool_result` | **yes** — `item.started` then `item.completed` per item | **yes** — `step_update` with `state` `ACTIVE` → `DONE` / `ERROR` and `duration_seconds` |
+| Thinking | a `thinking` block whose **text is empty**, only a signature. That it thought, and when, is known; what it thought is not | none seen (`reasoning_output_tokens: 0`) | a `thinking_tokens` count only |
+| Read a file | `Read` with `file_path`; the result is the content | refused (see below) | `view_file` with `AbsolutePath` |
+| Edit a file | `Edit` with `file_path`, `old_string`, `new_string` — so lines added and removed can be counted | refused | refused |
+| Run a command | `PowerShell` (on Windows) with `command` and `description`; the result is the output | refused | `run_command` with `CommandLine`, refused |
+| Search the web | `WebSearch` with `query`, refused | `web_search` item with `query` — **no sources** | `search_web` with `query` — **no sources** |
+| Narration between steps | `text` blocks between tool calls ("The edit was denied. Let me retry it…") | `agent_message` items, several per turn | the one `result.response` |
+| Refusals | `tool_result` with `is_error: true` and the reason; `system:permission_denied`; `result.permission_denials` lists each | `CreateProcess … rejected: blocked by policy` on **stderr only** | `step_update` `state: ERROR` and `result.denied_actions` |
+
+**What cannot be shown, so must not be designed:** thinking *text* from any of the three, and the
+sources a web search read. Only claude's result contains search results at all, and that was
+refused in this capture, so its shape is unverified.
+
+**Under the daemon's current arguments, the agents mostly cannot act.** claude read the file and
+ran the command, but was refused the edit (twice) and the web search. codex could not read, write
+or run anything and could only search. agy's command was auto-denied ("a tool required the
+`command` permission that headless mode cannot prompt for"). No file was changed. What the agents
+should be allowed to do is the owner's decision: docs/Later.md L-33.
+
+agy also looked in its own scratch folder rather than the conversation's; fixed in B-55.
+
 ## Real caveats found while capturing (2026-09-09)
 
 - **`codex exec` loads the owner's global `CODEX_HOME` config by default — and `--ignore-user-config`
