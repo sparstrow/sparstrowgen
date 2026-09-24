@@ -121,6 +121,29 @@ func (q *Queries) CountEntries(ctx context.Context, conversationID pgtype.UUID) 
 	return count, err
 }
 
+const endOrphanedTurns = `-- name: EndOrphanedTurns :execrows
+UPDATE entries
+SET failure = $1, finished_at = now()
+WHERE role = 'agent'
+  AND finished_at IS NULL
+  AND tokens IS NULL
+  AND failure IS NULL
+`
+
+// Agent turns still open when the server starts. A turn is open until
+// FinishAgentEntry stamps it, and only this process tracks running turns, so at
+// startup every open one belonged to a process that is gone. Recognised by
+// tokens as well as finished_at: entries finished before finished_at existed
+// (00013) have no finished_at but always have tokens, which a placeholder never
+// has.
+func (q *Queries) EndOrphanedTurns(ctx context.Context, failure *string) (int64, error) {
+	result, err := q.db.Exec(ctx, endOrphanedTurns, failure)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const finishAgentEntry = `-- name: FinishAgentEntry :one
 UPDATE entries
 SET body = $2, tokens = $3, spend_ticks = $4, failure = $5, stopped = $6,

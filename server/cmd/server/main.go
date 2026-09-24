@@ -28,6 +28,10 @@ import (
 	"github.com/sparstrow/sparstrowgen/server/internal/store"
 )
 
+// errServerRestarted is written into a turn that was running when the server
+// stopped. Said as what happened, and what to do: the message can be sent again.
+const errServerRestarted = "sparstrowgen's server restarted while this turn was running, so it was ended. Send the message again."
+
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -62,6 +66,14 @@ func main() {
 	h := hub.New(log)
 	st := store.New(pool)
 	a := api.New(st, h, log, cfg)
+
+	// Before listening, so no turn can have started yet: any still open was
+	// running when the last server stopped (docs/Bugs.md B-57).
+	if n, err := st.EndOrphanedTurns(ctx, errServerRestarted); err != nil {
+		log.Warn("could not close out turns left open by the last server", "err", err)
+	} else if n > 0 {
+		log.Info("closed out turns left open by the last server", "turns", n)
+	}
 
 	// Said once at startup, because it is the first thing to check when a new
 	// deployment has nobody who can sign in: the owner creates their account

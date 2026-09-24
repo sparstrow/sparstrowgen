@@ -1332,3 +1332,25 @@ output, and `TestParseCodex` expects 19,758 for its fixture instead of 32,046. T
 for earlier turns keep their old figure.
 
 **Release note:** Fixed: codex turns no longer show about twice the tokens they actually used.
+
+## B-57 — A turn running when the server restarted stayed empty for good
+
+**Found:** 2026-09-24, verifying U-36 on production: an agy turn was sent seconds before #71's deploy
+restarted the server **Status:** fixed 2026-09-24
+**Repro:** Send a message, and restart or redeploy the server before the answer arrives.
+**Expected / Actual:** the turn ends saying why / it stayed an empty agent entry with no answer, no
+failure and no usage, however long anyone waited.
+
+Running turns are tracked in the server process's memory, and a deploy replaces the process. The
+computer running the turn loses its connection at the same moment and stops the agent (turns run
+under the connection), so no answer was ever coming, and nothing was left that knew the turn existed
+to close it. Every merge deploys, so any turn in flight during one was lost this way.
+
+**Fix:** at startup, before it listens, the server closes every agent turn still open, with "sparstrowgen's
+server restarted while this turn was running, so it was ended. Send the message again."
+(`EndOrphanedTurns`, `cmd/server/main.go`). Open means no finish time, no tokens and no failure:
+entries finished before `finished_at` existed still have tokens, so they are not touched.
+`TestTurnsLeftOpenByTheLastServerAreClosedOutAtStartup` covers open, finished and failed turns.
+
+**Release note:** Fixed: a message whose answer was cut off by an update to sparstrowgen now says
+so, instead of sitting empty.

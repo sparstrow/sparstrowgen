@@ -469,6 +469,23 @@ function FedGroup({ label, items, chars }: { label: string; items: ContextPiece[
   );
 }
 
+/** A plugin's skill is "plugin:skill", and a plugin's name can be a long id:
+ *  sixteen of codex's read "app-6a3293e1…:" before the part that tells them
+ *  apart. The prefix gives way when space runs out; the skill's own name does
+ *  not. */
+function PieceName({ name }: { name: string }) {
+  const i = name.lastIndexOf(":");
+  if (i <= 0 || i === name.length - 1) {
+    return <span className="max-w-[40ch] truncate" title={name}>{name}</span>;
+  }
+  return (
+    <span className="flex max-w-[40ch] min-w-0" title={name}>
+      <span className="min-w-0 truncate text-muted-foreground">{name.slice(0, i + 1)}</span>
+      <span className="shrink-0">{name.slice(i + 1)}</span>
+    </span>
+  );
+}
+
 function FedPiece({ piece: p }: { piece: ContextPiece }) {
   const [open, setOpen] = useState(false);
   return (
@@ -479,8 +496,12 @@ function FedPiece({ piece: p }: { piece: ContextPiece }) {
         onClick={() => setOpen(!open)}
         className="-ml-1.5 grid w-full grid-cols-[minmax(0,max-content)_minmax(0,1fr)_max-content] items-baseline gap-x-2.5 rounded-md px-1.5 py-px text-left text-xs leading-5 hover:bg-accent aria-expanded:bg-muted"
       >
-        <span className="max-w-[40ch] truncate" title={p.name}>{p.name}</span>
-        <span className="min-w-0 truncate text-muted-foreground" title={p.source}>{p.source ?? ""}</span>
+        <PieceName name={p.name} />
+        {/* Cut from the start: the file's own name is the end of its path, and
+            the part worth seeing when the column is narrow. */}
+        <span className="min-w-0 truncate text-left text-muted-foreground [direction:rtl]" title={p.source}>
+          <bdi>{p.source ?? ""}</bdi>
+        </span>
         <span className="text-right text-muted-foreground tabular-nums">
           {p.chars.toLocaleString()} chars{p.tokens !== undefined && ` · ${p.tokens.toLocaleString()} tokens`}
         </span>
