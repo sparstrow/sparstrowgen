@@ -1264,3 +1264,34 @@ Opus 5.5 turn, and the file was not written again. A new terminal also gets that
 daemon, which strips the host's variables, or strip them explicitly.
 
 **Release note:** none — nothing shipped.
+
+## B-54 — After 0.3.1, the model menu said "Opus" with no version
+
+**Found:** 2026-09-23, reported by the owner on daemon 0.3.1: the menu showed "Sonnet, Fable, Opus,
+Haiku". Fixed the same turn.
+
+B-52's fix worked at 15:32: the daemon reported 10 claude models. At 18:07 its new half-hourly
+check reported 4. Nothing had changed on the computer; the CLI was still 2.1.280. Anthropic had
+moved the account to a simpler Claude Code picker, and its reply is now different:
+
+- There are only four rows, one per family. The older explicit rows (Opus 5, Opus 4.8 and so on)
+  are gone from Claude Code's own `/model` menu as well.
+- `displayName` is the family alone ("Opus"). The version moved into `description` ("Opus 5.5 ·
+  Best for everyday, complex tasks").
+- Fable is offered only as its 1M-context variant, `claude-fable-5-1[1m]`, marked "Requires usage
+  credits".
+
+**Fixed** in [`detect.go`](../server/internal/agent/detect.go):
+- When a name has no version and the description starts with that name plus one, the description's
+  start is the label: "Opus 5.5".
+- The `[1m]` tag on the picker token is kept on the stored id, so the variant offered is the one
+  that runs.
+
+Tested against the owner's reply, captured verbatim. A test daemon built from the fix showed
+Sonnet 5, Fable 5.1, Opus 5.5 and Haiku 4.5 in the composer's menu, and a conversation already on
+Opus 5.5 kept its check mark.
+
+The half-hourly check is what exposed this within three hours of the change, rather than never.
+
+**Release note:** The model menu shows each Claude model's version again, such as "Opus 5.5"
+rather than "Opus".
