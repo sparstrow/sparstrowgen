@@ -484,3 +484,29 @@ account's files — which is an operating-system question (a second Windows user
 one.
 
 **Unblocks when:** two daemons on one computer prove annoying enough to be worth a protocol change.
+
+## L-33 — What may the agents do on your computer?
+
+**Status:** question for the owner **Raised:** 2026-09-24, capturing agent activity
+
+Under the arguments the daemon runs them with today, the agents mostly cannot act. In one real
+turn per agent (docs/Capabilities.md, "Agent activity"):
+- claude could read and run a command, but was refused the edit and the web search;
+- codex could not even read the file;
+- agy's command was auto-denied.
+
+So "Fix the flaky test" today can end in an answer that says what it *would* change.
+
+Each CLI can be told what is allowed. The choice is yours, because it decides what software may do
+to your files unattended:
+
+| Option | What it means | Tradeoff |
+|---|---|---|
+| **A. Keep it read-only** (today) | Agents read and answer; you make the changes | Safe and predictable; "fix it" never actually fixes anything |
+| **B. Edits and commands inside the conversation's folder** | Each CLI is given its own "work in this folder" mode: claude `acceptEdits` plus an allow list for commands, codex's `workspace-write` sandbox, agy allow rules | The agents can change your project; everything they do is visible in the activity trail and in git |
+| **C. Everything, no questions** | The "skip permissions" flags | Fastest, and the one that can do damage outside the project |
+
+**Recommendation: B.** It's what "coding agent" means, it's bounded to the folder you chose for
+the conversation, and the activity trail being built now is exactly what makes it safe to watch.
+It should be a per-workspace setting whose default is A, so nothing changes until you turn it on.
+The trail shows refusals honestly either way, so it can ship before this is decided.
