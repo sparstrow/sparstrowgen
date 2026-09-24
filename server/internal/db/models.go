@@ -15,6 +15,13 @@ type AccessRequest struct {
 	TimesRequested   int32              `json:"times_requested"`
 }
 
+type ContextDocument struct {
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Hash           []byte      `json:"hash"`
+	Kind           string      `json:"kind"`
+	Body           string      `json:"body"`
+}
+
 type Conversation struct {
 	ID          pgtype.UUID        `json:"id"`
 	Title       *string            `json:"title"`
@@ -75,6 +82,16 @@ type Exchange struct {
 	ByteCount       int64              `json:"byte_count"`
 	LastAtMs        int64              `json:"last_at_ms"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ContextRead     bool               `json:"context_read"`
+	ContextFrom     string             `json:"context_from"`
+	ContextError    string             `json:"context_error"`
+}
+
+type ExchangeContext struct {
+	EntryID        pgtype.UUID `json:"entry_id"`
+	Ord            int32       `json:"ord"`
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Hash           []byte      `json:"hash"`
 }
 
 type ExchangeLine struct {

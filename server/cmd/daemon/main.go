@@ -602,6 +602,9 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	// Before the ending, so the record is complete by the time the turn is.
 	rec.flush()
 	result := <-session.Result
+	// What the CLI fed its model, from its own session store: only readable
+	// now, once the CLI has finished writing it for this turn.
+	rec.context(readContext(t.Provider, result.SessionID))
 
 	// One place decides how the turn ended, and it reads the stop flag exactly
 	// once. A killed CLI usually also reports an error on its way out, so this

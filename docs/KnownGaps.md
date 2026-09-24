@@ -598,3 +598,18 @@ keeps it whether quoted or not. The spec marked this *(inferred)* for the owner 
 
 - **If wrong:** he wants records to expire, or files the agent read to be left out.
 - **Clears when:** he confirms the spec's edge case, or says otherwise, and retention changes.
+
+## G-49 — What an agent was fed is read from files that are not an interface
+
+**Raised:** 2026-09-24, D-054
+
+claude's project JSONL, codex's rollout and agy's conversation database are each CLI's private
+store. They were read as claude 2.1.280, codex 0.154 and agy 1.2.3 write them. Any update can move
+them, rename a record, or change agy's protobuf field numbers. The reader says when it finds nothing
+("its format may have changed") and shows unrecognised records under Other, but a subtler change,
+such as a record split differently, would show a wrong grouping without an error.
+
+- **If wrong:** after an agent update, "Fed to the model" is empty with a warning, or its groups look
+  wrong for that agent.
+- **Clears when:** never fully. `SPARSTROWGEN_REAL_STORES` (the `sessionstore` real-store test) is
+  the check to run after an agent update, against a fresh turn's session.

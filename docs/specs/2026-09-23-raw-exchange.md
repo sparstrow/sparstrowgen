@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Approved 2026-09-23 ("I approve the spec"). **US4 added 2026-09-24 as a Draft**, for the owner to approve |
+| **Status** | Approved 2026-09-23 ("I approve the spec"). US4 added and approved 2026-09-24 ("I approve US4, design and build it yourself") |
 | **Created** | 2026-09-23 |
 | **Trigger** | "I want to see what actually being sent raw to agent and what the agent replied exactly and everything." Why: "Rendered is formatted chat, but I also want to see if we rendered properly from AI, and also what see what are the context AI agent are feeding, reading, thinking etc." |
 | **Design** | [`docs/design/prototypes/Chat/raw-exchange.dc.html`](../design/prototypes/Chat/raw-exchange.dc.html), chosen by the agent at the owner's request |
@@ -86,7 +86,7 @@ explain a large token count, or an answer based on something I never said.
 - **Given** an agent that reports little or nothing about what it loaded, **then** that is said
   plainly for that agent, not left blank.
 
-### US4 — Everything the agent was fed, word for word (P1) — **Draft, added 2026-09-24**
+### US4 — Everything the agent was fed, word for word (P1) — approved 2026-09-24
 
 **Trigger:** "Those 15,917 if agy's own instruction, skills, mcp and more will be fed. Is it possible
 for us to read that bring it to our app. I want to see them." Why: "Later I am gonna bring tools, and

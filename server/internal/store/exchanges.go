@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"strings"
 
@@ -74,33 +75,81 @@ func (s *Store) AppendExchangeLines(ctx context.Context, entryID string, lines [
 	return nil
 }
 
-// Exchange reads one turn's record for its owner, and the provider that ran
-// it, which is what the record has to be read with. A turn with no record is
-// an answer (Recorded false), not an error.
-func (s *Store) Exchange(ctx context.Context, userID, entryID string) (protocol.Exchange, string, error) {
+// RecordExchangeContext stores what a turn's CLI fed its model, in one
+// transaction: the records this conversation does not hold yet, the turn's
+// pointers to all of them in order, and where they were read from.
+func (s *Store) RecordExchangeContext(ctx context.Context, conversationID, entryID string, rec protocol.ContextRecord) error {
+	conv, err := parseUUID(conversationID)
+	if err != nil {
+		return err
+	}
+	entry, err := parseUUID(entryID)
+	if err != nil {
+		return err
+	}
+	put := db.PutContextDocumentsParams{ConversationID: conv}
+	link := db.LinkExchangeContextParams{EntryID: entry, ConversationID: conv}
+	for i, d := range rec.Documents {
+		body := storable(d.Body)
+		sum := sha256.Sum256([]byte(d.Kind + "\x00" + body))
+		put.Hashes = append(put.Hashes, sum[:])
+		put.Kinds = append(put.Kinds, d.Kind)
+		put.Bodies = append(put.Bodies, body)
+		link.Ords = append(link.Ords, int32(i))
+		link.Hashes = append(link.Hashes, sum[:])
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	q := s.q.WithTx(tx)
+	if len(rec.Documents) > 0 {
+		if err := q.PutContextDocuments(ctx, put); err != nil {
+			return err
+		}
+		if err := q.LinkExchangeContext(ctx, link); err != nil {
+			return err
+		}
+	}
+	if err := q.SetExchangeContext(ctx, db.SetExchangeContextParams{
+		EntryID: entry, ContextFrom: rec.From, ContextError: rec.Error,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// Exchange reads one turn's record for its owner, the provider that ran it
+// (which is what the record has to be read with), and the context records its
+// CLI kept, in order. A turn with no record is an answer (Recorded false), not
+// an error. Context is set, with From and Error, only when the daemon tried to
+// read the CLI's store; the pieces are the caller's to read from the records.
+func (s *Store) Exchange(ctx context.Context, userID, entryID string) (protocol.Exchange, string, []protocol.ContextDocument, error) {
 	owner, err := parseUUID(userID)
 	if err != nil {
-		return protocol.Exchange{}, "", err
+		return protocol.Exchange{}, "", nil, err
 	}
 	id, err := parseUUID(entryID)
 	if err != nil {
-		return protocol.Exchange{}, "", ErrNoTurn
+		return protocol.Exchange{}, "", nil, ErrNoTurn
 	}
 	turn, err := s.q.AgentEntryFor(ctx, db.AgentEntryForParams{ID: id, UserID: owner})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return protocol.Exchange{}, "", ErrNoTurn
+		return protocol.Exchange{}, "", nil, ErrNoTurn
 	}
 	if err != nil {
-		return protocol.Exchange{}, "", err
+		return protocol.Exchange{}, "", nil, err
 	}
 
 	out := protocol.Exchange{EntryID: entryID, Lines: []protocol.ExchangeLine{}}
 	row, err := s.q.GetExchange(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return out, turn.Provider, nil
+		return out, turn.Provider, nil, nil
 	}
 	if err != nil {
-		return protocol.Exchange{}, "", err
+		return protocol.Exchange{}, "", nil, err
 	}
 	out.Recorded = true
 	out.Sent = &protocol.ExchangeSent{
@@ -112,12 +161,27 @@ func (s *Store) Exchange(ctx context.Context, userID, entryID string) (protocol.
 	}
 	lines, err := s.q.ListExchangeLines(ctx, id)
 	if err != nil {
-		return protocol.Exchange{}, "", err
+		return protocol.Exchange{}, "", nil, err
 	}
 	for _, l := range lines {
 		out.Lines = append(out.Lines, protocol.ExchangeLine{Seq: l.Seq, AtMs: l.AtMs, Stream: l.Stream, Text: l.Body})
 	}
-	return out, turn.Provider, nil
+	if !row.ContextRead {
+		return out, turn.Provider, nil, nil
+	}
+	out.Context = &protocol.ExchangeContext{
+		From: row.ContextFrom, Error: row.ContextError,
+		Pieces: []protocol.ContextPiece{}, Missing: []string{},
+	}
+	docs, err := s.q.ListExchangeContext(ctx, id)
+	if err != nil {
+		return protocol.Exchange{}, "", nil, err
+	}
+	out2 := make([]protocol.ContextDocument, 0, len(docs))
+	for _, d := range docs {
+		out2 = append(out2, protocol.ContextDocument{Kind: d.Kind, Body: d.Body})
+	}
+	return out, turn.Provider, out2, nil
 }
 
 // ExchangeSummaries says how big each turn's record in one of this account's

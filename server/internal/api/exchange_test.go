@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/sparstrow/sparstrowgen/server/internal/protocol"
+	"github.com/sparstrow/sparstrowgen/server/internal/testdb"
 )
 
 /* A turn's record (docs/specs/2026-09-23-raw-exchange.md): what the daemon
@@ -184,5 +187,106 @@ func TestDeletingAConversationDeletesItsRecords(t *testing.T) {
 	}
 	if _, status := r.exchange(turn.EntryID); status != http.StatusNotFound {
 		t.Errorf("the record outlived its conversation: status %d", status)
+	}
+}
+
+// What the agent was fed (US4): stored once per conversation however many turns
+// repeat it, read into pieces on request, and deleted with the conversation.
+func TestWhatTheAgentWasFedIsStoredOnceAndReadIntoPieces(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("claude")
+
+	files := protocol.ContextDocument{Kind: "claude.attachment", Body: `{"attachment":{"type":"instructions","files":[{"path":"D:\\work\\CLAUDE.md","type":"Project","content":"Keep it short."}]},"rendered":null}`}
+	skills := protocol.ContextDocument{Kind: "claude.attachment", Body: `{"attachment":{"type":"skill_listing","isInitial":true,"content":"- dataviz: charts\n- loop: repeat"},"rendered":null}`}
+	later := protocol.ContextDocument{Kind: "claude.attachment", Body: `{"attachment":{"type":"mcp_instructions_delta","addedNames":["context7"],"addedBlocks":["## context7\nDocs."],"removedNames":[]},"rendered":null}`}
+
+	run := func(docs ...protocol.ContextDocument) protocol.RunTurn {
+		turn := sendTurn(r, d, c)
+		d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID,
+			Sent: &protocol.ExchangeSent{Program: "claude", Prompt: "say hi", Launched: true}})
+		d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID,
+			Context: &protocol.ContextRecord{From: `C:\Users\me\.claude\projects\x\s.jsonl`, Documents: docs}})
+		d.send(protocol.DaemonMessage{Type: protocol.DaemonDone, TurnID: turn.TurnID, Full: "hi", Tokens: 5})
+		r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Usage != nil })
+		return turn
+	}
+	first := run(files, skills)
+	second := run(files, skills, later)
+
+	ex, _ := r.exchange(first.EntryID)
+	if ex.Context == nil || ex.Context.From != `C:\Users\me\.claude\projects\x\s.jsonl` || ex.Context.Error != "" {
+		t.Fatalf("context = %+v", ex.Context)
+	}
+	got := map[string]string{}
+	for _, p := range ex.Context.Pieces {
+		got[p.Kind+":"+p.Name] = p.Source
+	}
+	if len(ex.Context.Pieces) != 3 || got["file:CLAUDE.md · project"] != `D:\work\CLAUDE.md` {
+		t.Errorf("pieces = %+v", ex.Context.Pieces)
+	}
+	if _, ok := got["skill:loop"]; !ok {
+		t.Errorf("no loop skill in %v", got)
+	}
+	if len(ex.Context.Missing) != 1 {
+		t.Errorf("missing = %v", ex.Context.Missing)
+	}
+	// The second turn has its own view, the server added, from the same records.
+	if ex2, _ := r.exchange(second.EntryID); ex2.Context == nil || len(ex2.Context.Pieces) != 4 {
+		t.Errorf("second turn's pieces = %+v", ex2.Context)
+	}
+
+	// Five records sent over two turns, three different: three stored.
+	pool := testdb.Pool(t)
+	var stored int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM context_documents WHERE conversation_id = $1`, c.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != 3 {
+		t.Errorf("stored %d records, want 3", stored)
+	}
+
+	res := r.do(http.MethodDelete, "/api/conversations/"+c.ID, nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %s", res.Status)
+	}
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM context_documents WHERE conversation_id = $1`, c.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != 0 {
+		t.Errorf("%d records outlived their conversation", stored)
+	}
+}
+
+// A store that could not be read is recorded as such: the turn says why it has
+// nothing, which is different from a daemon that never tried.
+func TestAnUnreadableStoreIsSaidAndAnOlderDaemonsTurnHasNoContext(t *testing.T) {
+	r := newRig(t)
+	d := r.connectDaemon()
+	c := r.conversation("claude")
+
+	turn := sendTurn(r, d, c)
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID,
+		Sent: &protocol.ExchangeSent{Program: "claude", Prompt: "say hi", Launched: true}})
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: turn.TurnID,
+		Context: &protocol.ContextRecord{Error: "claude's record of session s was not found"}})
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonDone, TurnID: turn.TurnID, Full: "hi", Tokens: 5})
+	r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Usage != nil })
+
+	ex, _ := r.exchange(turn.EntryID)
+	if ex.Context == nil || !strings.Contains(ex.Context.Error, "was not found") || ex.Context.Pieces == nil || len(ex.Context.Pieces) != 0 {
+		t.Errorf("context = %+v", ex.Context)
+	}
+
+	older := sendTurn(r, d, c)
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonExchange, TurnID: older.TurnID,
+		Sent: &protocol.ExchangeSent{Program: "claude", Prompt: "say hi", Launched: true}})
+	d.send(protocol.DaemonMessage{Type: protocol.DaemonDone, TurnID: older.TurnID, Full: "hi", Tokens: 5})
+	r.awaitEntry(c.ID, older.EntryID, func(e protocol.Entry) bool { return e.Usage != nil })
+	if ex, _ := r.exchange(older.EntryID); ex.Context != nil {
+		t.Errorf("a daemon that never read the store was shown as having read it: %+v", ex.Context)
 	}
 }

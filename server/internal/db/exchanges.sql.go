@@ -84,6 +84,24 @@ func (q *Queries) AppendExchangeLines(ctx context.Context, arg AppendExchangeLin
 	return err
 }
 
+const deleteConversationContextDocuments = `-- name: DeleteConversationContextDocuments :exec
+DELETE FROM context_documents WHERE conversation_id = $1
+`
+
+func (q *Queries) DeleteConversationContextDocuments(ctx context.Context, conversationID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteConversationContextDocuments, conversationID)
+	return err
+}
+
+const deleteConversationExchangeContext = `-- name: DeleteConversationExchangeContext :exec
+DELETE FROM exchange_context WHERE conversation_id = $1
+`
+
+func (q *Queries) DeleteConversationExchangeContext(ctx context.Context, conversationID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteConversationExchangeContext, conversationID)
+	return err
+}
+
 const deleteConversationExchangeLines = `-- name: DeleteConversationExchangeLines :exec
 DELETE FROM exchange_lines
 WHERE entry_id IN (SELECT entry_id FROM exchanges WHERE conversation_id = $1)
@@ -103,12 +121,31 @@ func (q *Queries) DeleteConversationExchanges(ctx context.Context, conversationI
 	return err
 }
 
+const deleteEveryContextDocument = `-- name: DeleteEveryContextDocument :exec
+DELETE FROM context_documents
+`
+
+func (q *Queries) DeleteEveryContextDocument(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryContextDocument)
+	return err
+}
+
 const deleteEveryExchange = `-- name: DeleteEveryExchange :exec
 DELETE FROM exchanges
 `
 
 func (q *Queries) DeleteEveryExchange(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteEveryExchange)
+	return err
+}
+
+const deleteEveryExchangeContext = `-- name: DeleteEveryExchangeContext :exec
+DELETE FROM exchange_context
+`
+
+// Tests only, with the other DeleteEvery* in users.sql.
+func (q *Queries) DeleteEveryExchangeContext(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteEveryExchangeContext)
 	return err
 }
 
@@ -123,7 +160,7 @@ func (q *Queries) DeleteEveryExchangeLine(ctx context.Context) error {
 }
 
 const getExchange = `-- name: GetExchange :one
-SELECT entry_id, conversation_id, program, args, cwd, resume_session_id, prompt, stdin, launched, dropped_lines, dropped_bytes, line_count, byte_count, last_at_ms, created_at FROM exchanges WHERE entry_id = $1
+SELECT entry_id, conversation_id, program, args, cwd, resume_session_id, prompt, stdin, launched, dropped_lines, dropped_bytes, line_count, byte_count, last_at_ms, created_at, context_read, context_from, context_error FROM exchanges WHERE entry_id = $1
 `
 
 func (q *Queries) GetExchange(ctx context.Context, entryID pgtype.UUID) (Exchange, error) {
@@ -145,8 +182,70 @@ func (q *Queries) GetExchange(ctx context.Context, entryID pgtype.UUID) (Exchang
 		&i.ByteCount,
 		&i.LastAtMs,
 		&i.CreatedAt,
+		&i.ContextRead,
+		&i.ContextFrom,
+		&i.ContextError,
 	)
 	return i, err
+}
+
+const linkExchangeContext = `-- name: LinkExchangeContext :exec
+INSERT INTO exchange_context (entry_id, ord, conversation_id, hash)
+SELECT $1::uuid,
+       unnest($2::integer[]),
+       $3::uuid,
+       unnest($4::bytea[])
+ON CONFLICT (entry_id, ord) DO NOTHING
+`
+
+type LinkExchangeContextParams struct {
+	EntryID        pgtype.UUID `json:"entry_id"`
+	Ords           []int32     `json:"ords"`
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Hashes         [][]byte    `json:"hashes"`
+}
+
+func (q *Queries) LinkExchangeContext(ctx context.Context, arg LinkExchangeContextParams) error {
+	_, err := q.db.Exec(ctx, linkExchangeContext,
+		arg.EntryID,
+		arg.Ords,
+		arg.ConversationID,
+		arg.Hashes,
+	)
+	return err
+}
+
+const listExchangeContext = `-- name: ListExchangeContext :many
+SELECT d.kind, d.body
+FROM exchange_context c
+JOIN context_documents d ON d.conversation_id = c.conversation_id AND d.hash = c.hash
+WHERE c.entry_id = $1
+ORDER BY c.ord
+`
+
+type ListExchangeContextRow struct {
+	Kind string `json:"kind"`
+	Body string `json:"body"`
+}
+
+func (q *Queries) ListExchangeContext(ctx context.Context, entryID pgtype.UUID) ([]ListExchangeContextRow, error) {
+	rows, err := q.db.Query(ctx, listExchangeContext, entryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExchangeContextRow{}
+	for rows.Next() {
+		var i ListExchangeContextRow
+		if err := rows.Scan(&i.Kind, &i.Body); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listExchangeLines = `-- name: ListExchangeLines :many
@@ -224,6 +323,33 @@ func (q *Queries) ListExchangeSummaries(ctx context.Context, conversationID pgty
 	return items, nil
 }
 
+const putContextDocuments = `-- name: PutContextDocuments :exec
+INSERT INTO context_documents (conversation_id, hash, kind, body)
+SELECT $1::uuid,
+       unnest($2::bytea[]),
+       unnest($3::text[]),
+       unnest($4::text[])
+ON CONFLICT (conversation_id, hash) DO NOTHING
+`
+
+type PutContextDocumentsParams struct {
+	ConversationID pgtype.UUID `json:"conversation_id"`
+	Hashes         [][]byte    `json:"hashes"`
+	Kinds          []string    `json:"kinds"`
+	Bodies         []string    `json:"bodies"`
+}
+
+// A record this conversation already holds is kept, not stored again.
+func (q *Queries) PutContextDocuments(ctx context.Context, arg PutContextDocumentsParams) error {
+	_, err := q.db.Exec(ctx, putContextDocuments,
+		arg.ConversationID,
+		arg.Hashes,
+		arg.Kinds,
+		arg.Bodies,
+	)
+	return err
+}
+
 const recordExchange = `-- name: RecordExchange :exec
 INSERT INTO exchanges (
     entry_id, conversation_id, program, args, cwd, resume_session_id, prompt, stdin, launched
@@ -258,6 +384,23 @@ func (q *Queries) RecordExchange(ctx context.Context, arg RecordExchangeParams) 
 		arg.Stdin,
 		arg.Launched,
 	)
+	return err
+}
+
+const setExchangeContext = `-- name: SetExchangeContext :exec
+UPDATE exchanges
+SET context_read = true, context_from = $1, context_error = $2
+WHERE entry_id = $3
+`
+
+type SetExchangeContextParams struct {
+	ContextFrom  string      `json:"context_from"`
+	ContextError string      `json:"context_error"`
+	EntryID      pgtype.UUID `json:"entry_id"`
+}
+
+func (q *Queries) SetExchangeContext(ctx context.Context, arg SetExchangeContextParams) error {
+	_, err := q.db.Exec(ctx, setExchangeContext, arg.ContextFrom, arg.ContextError, arg.EntryID)
 	return err
 }
 
