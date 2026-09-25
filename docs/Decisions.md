@@ -1403,3 +1403,22 @@ prototype: grouped by kind (its own instructions, your files and rules, skills, 
 tools, servers, sub-agents, settings), each piece with its size, its file where the agent recorded
 one, and its full text, with In order / Largest first. The init-line name tags give way to it when
 the record is there.
+
+## D-055 — The message box gives its text the full width, with the pickers under it
+
+**2026-09-24.** The owner pointed at a long pasted message wrapping in the right two thirds of the
+box while the agent and model pickers held an empty column on its left: "the agent and model
+selector is in the way." Of three directions in
+[`composer.dc.html`](design/prototypes/Chat/composer.dc.html), he chose **A: the text runs across the
+whole box, and agent, model and send share one row under it.** B, a "To" line above the text, kept
+the send button in a column of its own. C moved the picker into the agent strip, further from where
+he types, and hid the chosen agent's limit.
+
+**Why it carries over:** the text a person is writing gets the room; controls sit around it, never
+beside it in a way that narrows it. The row stays on an empty box too, so nothing moves when typing
+starts.
+
+**The box grows to 40% of the window before it scrolls**, where it used to stop at 200 px (about
+eight lines, which is where his screenshot scrolled). My choice, shown in the prototype and not
+objected to. It is also sized on every change of its text now, not only on typing, so it shrinks back
+when a send clears it or another conversation's draft loads.

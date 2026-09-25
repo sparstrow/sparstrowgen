@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en" data-surface="mono" data-accent="neutral" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Composer (prototype)</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  :root { --r-md: calc(var(--radius) - 2px); --r-lg: var(--radius); --r-xl: calc(var(--radius) + 4px); --r-2xl: calc(var(--radius) + 8px);
+          --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+          --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+  button:disabled { cursor: default; opacity: .5; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 4px; }
+  .ic { flex: none; }
+  .p-claude { color: var(--provider-claude); } .p-codex { color: var(--provider-codex); } .p-agy { color: var(--provider-agy); }
+  .muted { color: var(--muted-foreground); }
+
+  /* Prototype controls: not part of the design. */
+  .proto-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 8px 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; }
+  .proto-bar .grp { display: flex; align-items: center; gap: 4px; }
+  .proto-bar b { font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
+  .proto-bar button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); }
+  .proto-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .proto-note { flex: none; padding: 8px 16px; font-size: 12px; color: var(--muted-foreground); border-bottom: 1px dashed var(--border); }
+  .proto-note strong { color: var(--foreground); font-weight: 500; }
+
+  /* The conversation pane, as it is in the app: header, agent strip,
+     transcript, composer. Width is a prototype control (B-51: a narrow pane). */
+  .stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--background); }
+  .pane { flex: 1; min-width: 0; max-width: 100%; display: flex; flex-direction: column; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .pane[data-w="narrow"] { flex: none; width: 460px; }
+  .head { flex: none; height: 56px; display: flex; flex-direction: column; justify-content: center; padding: 0 20px; border-bottom: 1px solid var(--border); }
+  .head .t { font-weight: 600; }
+  .head .f { font-size: 12px; color: var(--muted-foreground); }
+
+  .strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .chip { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 12px; border-radius: var(--r-md); border: 1px solid transparent; }
+  .chip .n { font-size: 14px; font-weight: 500; }
+  .chip .h { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .bar { width: 40px; height: 4px; border-top: 1px dashed var(--border); }
+  /* Direction C only: the strip is the picker. */
+  .strip[data-pick] .chip { cursor: pointer; }
+  .strip[data-pick] .chip:hover { background: var(--accent); }
+  .strip[data-pick] .chip[aria-pressed="true"] { background: var(--muted); border-color: var(--border); }
+  .strip[data-pick] .chip[aria-disabled="true"] { cursor: default; opacity: .5; background: none; }
+  .chip .mdl { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; margin: -2px -6px -2px 0; border-radius: var(--r-md); font-size: 12px; color: var(--muted-foreground); }
+  .chip .mdl:hover { background: var(--accent); color: var(--foreground); }
+
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+  .msgs { max-width: 48rem; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
+  .you { align-self: flex-end; max-width: 80%; text-align: right; }
+  .you .b { display: inline-block; text-align: left; padding: 10px 16px; border-radius: var(--r-2xl); background: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .you .m { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; }
+  .ag .m { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); margin-bottom: 6px; }
+  .ag .m .who { font-size: 14px; font-weight: 500; }
+  .ag p { margin: 0; line-height: 1.6; }
+  .ag .u { margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
+  .working { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── The composer ───────────────────────────────────────────────── */
+  .composer { flex: none; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--card) 40%, transparent); }
+  .cwrap { max-width: 48rem; margin: 0 auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .notice { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: var(--r-lg); border: 1px solid var(--border); font-size: 14px; }
+  .notice[data-tone="warning"] { border-color: color-mix(in oklch, var(--warning) 30%, transparent); background: color-mix(in oklch, var(--warning-fill) 50%, transparent); color: var(--warning-text); }
+  .notice[data-tone="neutral"] { background: color-mix(in oklch, var(--muted) 55%, transparent); }
+  .notice[data-tone="switch"] { border-style: dashed; }
+  .notice .grow { flex: 1; min-width: 0; }
+  .notice .grow .muted { color: var(--muted-foreground); }
+  .ghost-sm { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r-md); font-size: 13px; white-space: nowrap; }
+  .ghost-sm:hover { background: var(--accent); }
+
+  .box { border: 1px solid var(--border); background: var(--background); border-radius: var(--r-2xl); padding: 8px; }
+  .box:focus-within { box-shadow: 0 0 0 2px var(--ring); }
+  .ta { display: block; width: 100%; resize: none; border: 0; outline: none; background: transparent; color: inherit;
+        font: inherit; font-size: 15px; line-height: 22px; padding: 7px 6px; min-height: 36px; overflow-y: auto; }
+  .ta::placeholder { color: var(--muted-foreground); }
+  .ta:disabled { opacity: .5; }
+
+  .row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+  .row.end { align-items: flex-end; gap: 8px; }
+  .spacer { flex: 1; }
+  .pick { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: var(--r-xl); min-width: 0; font-size: 14px; }
+  .pick:hover:not(:disabled) { background: var(--accent); }
+  .pick.model { color: var(--muted-foreground); font-size: 12px; max-width: 13rem; }
+  .pick.model .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick .ic.cv { color: var(--muted-foreground); }
+  .dot { color: var(--muted-foreground); padding: 0 2px; }
+  .send { flex: none; width: 36px; height: 36px; border-radius: var(--r-xl); display: inline-grid; place-items: center; background: var(--primary); color: var(--primary-foreground); }
+  .send.stop { background: var(--secondary); color: var(--secondary-foreground); }
+
+  /* B: the header line inside the box. */
+  .to { display: flex; align-items: center; gap: 2px; padding: 0 0 4px; margin: 0 0 2px; border-bottom: 1px solid var(--border); min-width: 0; }
+  .to .lead { font-size: 12px; color: var(--muted-foreground); padding: 0 4px 0 6px; }
+  .to .pick { height: 28px; }
+
+  /* Menus */
+  .menu { position: fixed; z-index: 20; min-width: 14rem; padding: 4px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px color-mix(in oklch, var(--foreground) 12%, transparent); }
+  .menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-md); font-size: 14px; }
+  .menu button:hover:not(:disabled) { background: var(--accent); }
+  .menu .why { font-size: 12px; color: var(--muted-foreground); }
+  .menu .grow { flex: 1; }
+
+  /* Loading agents: the pickers wait, the text box does not. */
+  .sk { display: inline-block; height: 12px; border-radius: 4px; background: var(--muted); }
+</style>
+</head>
+<body>
+<div class="proto-bar" id="bar"></div>
+<div class="proto-note" id="note"></div>
+<div class="stage"><div class="pane" id="pane"></div></div>
+<div id="menus"></div>
+
+<script src="../icons.js"></script>
+<script>
+(function () {
+  var ICONS = window.SPG_ICONS, MARKS = window.SPG_MARKS;
+  var Q = new URLSearchParams(location.search);
+  function pick(v, ok, d) { return ok.indexOf(v) > -1 ? v : d; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // Two glyphs the shared set lacks, from lucide: square (stop) and undo-2.
+  var EXTRA = { square: [["rect", { x: "5", y: "5", width: "14", height: "14", rx: "2", fill: "currentColor" }]],
+                "undo-2": [["path", { d: "M9 14 4 9l5-5" }], ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" }]] };
+  function I(n, s, cls) {
+    s = s || 16;
+    var nodes = (ICONS[n] || EXTRA[n] || []).map(function (x) { return "<" + x[0] + " " + Object.keys(x[1]).map(function (k) { return k + '="' + x[1][k] + '"'; }).join(" ") + "/>"; }).join("");
+    return '<svg class="ic ' + (cls || "") + '" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes + "</svg>";
+  }
+  function M(p, s) { return '<svg class="ic p-' + p + '" width="' + (s || 16) + '" height="' + (s || 16) + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="' + MARKS[p] + '"/></svg>'; }
+
+  /* Model names are the ones the daemon reports (server/internal/agent/detect.go).
+     agy's list is abridged: it offers fourteen. */
+  var PROVIDERS = [
+    { id: "claude", head: "limit unknown yet", models: ["Opus 5.5", "Sonnet 5", "Haiku 4.5"] },
+    { id: "codex", head: "no limit data", models: ["GPT-5.6 Sol", "GPT-5.6 Luna", "GPT-5.6 Terra"] },
+    { id: "agy", head: "no limit data", models: ["Gemini 3.1 Pro (High)", "Gemini 3.1 Pro (Low)", "Gemini 3.8 Flash (High)", "Gemini 3.8 Flash (Low)", "Claude Sonnet 5 (Thinking)", "GPT-OSS 120B (Medium)"] },
+  ];
+  var TEXTS = {
+    empty: "",
+    short: "Check the 850 mapping for Fabrikam again.",
+    long: "Here is the vendor's note on the 850 changes, pasted as they sent it. Compare it against our mapping in edi-mappings/fabrikam/850.map and list every segment where we differ, with the line number on our side.\n\n" +
+      "1. Ship-to must be sent as N1*ST with the GLN in N104, qualifier 9 in N103. We will reject N1*SH from 1 October.\n" +
+      "2. The requested delivery date moves from DTM*002 to DTM*106. DTM*002 will be ignored rather than rejected, so an order sent the old way arrives with no date at all.\n" +
+      "3. PO1 lines must carry the buyer's item number in PO106/PO107 as BP, and our item number as VN in PO108/PO109. Either order is fine, but both must be present.\n" +
+      "4. Unit of measure EA only. CA will be rejected unless a PO4 pack segment says how many each are in the case.\n" +
+      "5. CTT01 must equal the number of PO1 segments, not the sum of quantities. Several of your orders last month had the sum.\n" +
+      "6. Allowances go in SAC at header level, never at line level. We will ignore line-level SAC from 1 October.\n\n" +
+      "Also check whether our NAV export still writes the old ship-to qualifier anywhere, because the mapping only covers what arrives in the file. If it does, tell me which report object writes it and I will raise it with the NAV team on Monday.",
+  };
+  var NOTICES = {
+    unreachable: { tone: "warning", icon: "triangle-alert", text: "Your machine is unreachable, so nothing new can be sent. Everything already said stays readable." },
+    none: { tone: "neutral", icon: "info", text: "You have not connected a computer yet, so there is nothing to run agents on. Connect one in Machines. Everything already said stays readable." },
+  };
+
+  var S = {
+    dir: pick(Q.get("dir"), ["a", "b", "c", "today"], "a"),
+    text: pick(Q.get("text"), ["empty", "short", "long"], "long"),
+    st: pick(Q.get("state"), ["ready", "running", "switch", "unreachable", "none", "loading"], "ready"),
+    w: pick(Q.get("w"), ["wide", "narrow"], "wide"),
+    theme: pick(Q.get("theme"), ["dark", "light"], "dark"),
+    provider: "claude", model: "Haiku 4.5",
+    pendingFrom: null,          // set while a switch waits for the next send
+    draft: null, sent: [],
+  };
+  S.draft = TEXTS[S.text];
+
+  var DIRS = [
+    ["a", "A · Controls under"], ["b", "B · Controls above"], ["c", "C · Pick in the strip"], ["today", "Today"],
+  ];
+  var NOTES = {
+    a: "<strong>A · Controls under the text.</strong> The text gets the whole width; agent, model and send share one row underneath. The row is there on an empty box too, so nothing moves when you start typing.",
+    b: "<strong>B · Controls above the text.</strong> The box opens with who it goes to, like the To line of an email. The text runs full width underneath; only the send button keeps a column, at the bottom right.",
+    c: "<strong>C · Pick the agent in the strip.</strong> The agent strip above the transcript is already there, so it becomes the picker: click an agent, and the model sits beside it. The box is only text and send.",
+    today: "<strong>Today</strong>, for comparison: agent and model sit left of the text, and a long message leaves the space under them empty.",
+  };
+
+  function setQ() {
+    var q = new URLSearchParams({ dir: S.dir, text: S.text, state: S.st, w: S.w, theme: S.theme });
+    history.replaceState(null, "", "?" + q.toString());
+  }
+
+  function bar() {
+    function grp(label, key, opts) {
+      return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) {
+        return '<button data-set="' + key + '" data-v="' + o[0] + '" aria-pressed="' + (S[key] === o[0]) + '">' + o[1] + "</button>";
+      }).join("") + "</span>";
+    }
+    document.getElementById("bar").innerHTML =
+      grp("Direction", "dir", DIRS) +
+      grp("Text", "text", [["empty", "Empty"], ["short", "One line"], ["long", "Long"]]) +
+      grp("State", "st", [["ready", "Ready"], ["running", "Running"], ["switch", "Switch pending"], ["unreachable", "Unreachable"], ["none", "No computer"], ["loading", "Agents loading"]]) +
+      grp("Pane", "w", [["wide", "Wide"], ["narrow", "Narrow"]]) +
+      grp("Theme", "theme", [["dark", "Dark"], ["light", "Light"]]);
+    document.getElementById("note").innerHTML = NOTES[S.dir];
+  }
+
+  function shown() {
+    return S.st === "switch" ? { provider: "codex", model: "GPT-5.6 Sol" } : { provider: S.provider, model: S.model };
+  }
+  var locked = function () { return S.st === "running" || S.st === "unreachable" || S.st === "none"; };
+
+  function strip() {
+    var sh = shown(), pickable = S.dir === "c" && S.st !== "loading";
+    if (S.st === "loading") return '<div class="strip"><span class="chip"><span class="sk" style="width:180px"></span></span></div>';
+    return '<div class="strip"' + (pickable ? " data-pick" : "") + ">" + PROVIDERS.map(function (p) {
+      var on = pickable && p.id === sh.provider;
+      var tag = pickable ? "button" : "span";
+      var attrs = pickable ? ' data-provider="' + p.id + '" aria-pressed="' + on + '"' + (locked() ? ' aria-disabled="true"' : "") : "";
+      var model = on ? '<span class="mdl" role="button" tabindex="0" data-menu="model" aria-label="Model: ' + esc(sh.model) + '">' + esc(sh.model) + I("chevron-down", 12) + "</span>"
+                     : '<span class="h">' + esc(p.head) + '</span><span class="bar"></span>';
+      return "<" + tag + ' class="chip"' + attrs + ">" + M(p.id, 16) + '<span class="n">' + p.id + "</span>" + model + "</" + tag + ">";
+    }).join("") + "</div>";
+  }
+
+  function transcript() {
+    var html = '<div class="you"><div class="b">What is the time now?</div><div class="m">08:13 PM</div></div>' +
+      '<div class="ag"><div class="m">' + M("claude", 16) + '<span class="who p-claude">claude</span>Haiku 4.5 · 08:13 PM</div>' +
+      "<p>According to the system context, today's date is <strong>2026-09-24</strong>, but I don't have the current time of day. You can check your system clock for the precise time.</p>" +
+      '<div class="u">30.0k tokens · $0.03</div></div>';
+    S.sent.forEach(function (t) { html += '<div class="you"><div class="b">' + esc(t) + '</div><div class="m">Just now</div></div>'; });
+    if (S.st === "running") html += '<div class="working">' + I("loader-circle", 14, "spin") + "claude is working…</div>";
+    return '<div class="scroll" id="scroll"><div class="msgs">' + html + "</div></div>";
+  }
+
+  function pickers(compact) {
+    var sh = shown(), dis = locked() ? " disabled" : "";
+    if (S.st === "loading") return '<span class="pick"><span class="sk" style="width:70px"></span></span><span class="pick"><span class="sk" style="width:60px"></span></span>';
+    return '<button class="pick" data-menu="provider"' + dis + ' aria-label="Agent: ' + sh.provider + '">' + M(sh.provider, 16) + "<span>" + sh.provider + "</span>" + I("chevron-down", 14, "cv") + "</button>" +
+      '<button class="pick model" data-menu="model"' + dis + ' aria-label="Model: ' + esc(sh.model) + '"><span class="lbl">' + esc(sh.model) + "</span>" + I("chevron-down", 14, "cv") + "</button>";
+  }
+  function sendBtn() {
+    if (S.st === "running") return '<button class="send stop" data-act="stop" aria-label="Stop this turn" title="Stop this turn">' + I("square", 14) + "</button>";
+    var off = locked() || !S.draft.trim();
+    return '<button class="send" data-act="send" aria-label="Send message"' + (off ? " disabled" : "") + ">" + I("arrow-up", 16) + "</button>";
+  }
+  function textarea() {
+    var sh = shown();
+    var ph = S.st === "running" ? sh.provider + " is working — stop it to type" : locked() ? "Unavailable" : "Message " + sh.provider + "…";
+    return '<textarea class="ta" id="ta" rows="1" aria-label="Message" placeholder="' + esc(ph) + '"' + (locked() ? " disabled" : "") + ">" + esc(S.draft) + "</textarea>";
+  }
+
+  function composer() {
+    var n = "";
+    if (S.st === "switch")
+      n += '<div class="notice" data-tone="switch">' + M("codex", 14) + '<span class="grow"><span class="muted"><span class="p-codex">codex</span> hasn\u2019t seen this conversation. It will catch up on </span>2 messages<span class="muted"> (~</span><span style="font-family:var(--font-mono)">1.2k tokens</span><span class="muted">) when you send.</span></span>' +
+        '<button class="ghost-sm" data-act="keep">' + I("undo-2", 14) + "Keep claude</button></div>";
+    if (NOTICES[S.st]) { var x = NOTICES[S.st]; n += '<div class="notice" data-tone="' + x.tone + '">' + I(x.icon, 16) + '<span class="grow">' + x.text + "</span></div>"; }
+
+    var box;
+    if (S.dir === "a")
+      box = '<div class="box">' + textarea() + '<div class="row">' + pickers() + '<span class="spacer"></span>' + sendBtn() + "</div></div>";
+    else if (S.dir === "b")
+      box = '<div class="box"><div class="to"><span class="lead">To</span>' + pickers() + '</div><div class="row end">' + textarea() + sendBtn() + "</div></div>";
+    else if (S.dir === "c")
+      box = '<div class="box"><div class="row end">' + textarea() + sendBtn() + "</div></div>";
+    else
+      box = '<div class="box"><div class="row end"><span class="row" style="flex:none;align-self:flex-end;height:36px">' + pickers() + "</span>" + textarea() + sendBtn() + "</div></div>";
+    return '<div class="composer"><div class="cwrap">' + n + box + "</div></div>";
+  }
+
+  // The text grows with what is typed, up to 40% of the window, then scrolls.
+  // Today's cap is 200px (about eight lines), which is what the screenshot hit.
+  function grow() {
+    var ta = document.getElementById("ta"); if (!ta) return;
+    ta.style.height = "auto";
+    var cap = S.dir === "today" ? 200 : Math.round(window.innerHeight * 0.4);
+    ta.style.height = Math.min(ta.scrollHeight, cap) + "px";
+  }
+
+  function render() {
+    document.documentElement.classList.toggle("dark", S.theme === "dark");
+    bar(); closeMenu();
+    var pane = document.getElementById("pane");
+    pane.dataset.w = S.w;
+    pane.innerHTML = '<div class="head"><span class="t">What is the time now?</span><span class="f">D:\\sparstrowgen</span></div>' + strip() + transcript() + composer();
+    grow();
+    var sc = document.getElementById("scroll"); sc.scrollTop = sc.scrollHeight;
+    setQ();
+  }
+
+  /* ── Menus ── */
+  function closeMenu() { document.getElementById("menus").innerHTML = ""; }
+  function openMenu(kind, anchor) {
+    var sh = shown(), r = anchor.getBoundingClientRect(), items;
+    if (kind === "provider")
+      items = PROVIDERS.map(function (p) { return '<button data-choose-p="' + p.id + '">' + M(p.id, 16) + '<span class="grow">' + p.id + "</span>" + (p.id === sh.provider ? I("check", 16) : "") + "</button>"; }).join("") +
+        '<button disabled>' + '<svg class="ic" width="16" height="16"></svg><span class="grow">gemini</span><span class="why">Not installed</span></button>';
+    else
+      items = PROVIDERS.filter(function (p) { return p.id === sh.provider; })[0].models.map(function (m) {
+        return '<button data-choose-m="' + esc(m) + '">' + (m === sh.model ? I("check", 16) : '<svg class="ic" width="16" height="16"></svg>') + '<span class="grow">' + esc(m) + "</span></button>";
+      }).join("");
+    var host = document.getElementById("menus");
+    host.innerHTML = '<div class="menu" role="menu">' + items + "</div>";
+    var m = host.firstChild, mh = m.offsetHeight;
+    // Opens toward the room: up from the composer, down from the strip.
+    var up = r.top > window.innerHeight / 2;
+    m.style.left = Math.min(r.left, window.innerWidth - m.offsetWidth - 8) + "px";
+    m.style.top = (up ? r.top - mh - 6 : r.bottom + 6) + "px";
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("button, [data-menu]");
+    if (!t) { closeMenu(); return; }
+    if (t.dataset.set) {
+      S[t.dataset.set] = t.dataset.v;
+      if (t.dataset.set === "text") S.draft = TEXTS[S.text];
+      render(); return;
+    }
+    if (t.dataset.menu) { e.stopPropagation(); if (t.disabled || locked()) return; openMenu(t.dataset.menu, t); return; }
+    if (t.dataset.chooseP) { var p = PROVIDERS.filter(function (x) { return x.id === t.dataset.chooseP; })[0]; S.provider = p.id; S.model = p.models[0]; if (S.st === "switch") S.st = "ready"; render(); return; }
+    if (t.dataset.chooseM) { if (S.st === "switch") { S.st = "ready"; S.provider = "codex"; } S.model = t.dataset.chooseM; render(); return; }
+    if (t.dataset.provider) {
+      if (locked()) return;
+      if (t.dataset.provider === shown().provider) return;
+      var q = PROVIDERS.filter(function (x) { return x.id === t.dataset.provider; })[0];
+      S.provider = q.id; S.model = q.models[0]; if (S.st === "switch") S.st = "ready"; render(); return;
+    }
+    if (t.dataset.act === "keep") { S.st = "ready"; render(); return; }
+    if (t.dataset.act === "stop") { S.st = "ready"; render(); return; }
+    if (t.dataset.act === "send") { send(); return; }
+    closeMenu();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeMenu();
+    if (e.target.id === "ta" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.target.dataset && e.target.dataset.menu && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openMenu(e.target.dataset.menu, e.target); }
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.id !== "ta") return;
+    S.draft = e.target.value; grow();
+    var b = document.querySelector('[data-act="send"]'); if (b) b.disabled = locked() || !S.draft.trim();
+  });
+  window.addEventListener("resize", grow);
+
+  function send() {
+    if (locked() || !S.draft.trim()) return;
+    if (S.st === "switch") { S.provider = "codex"; S.model = "GPT-5.6 Sol"; }
+    S.sent.push(S.draft); S.draft = ""; S.text = "empty"; S.st = "running";
+    render();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

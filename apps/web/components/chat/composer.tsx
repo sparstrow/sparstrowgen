@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { ArrowUp, Check, ChevronDown, Square, Undo2 } from "lucide-react";
 import { cn } from "cn";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
@@ -54,6 +54,18 @@ export function Composer({
   onStop,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Fit the box to its text on every change, not only on typing, so it also
+  // shrinks back when a send clears it or another conversation's draft loads.
+  // It grows to 40% of the window (max-h), then scrolls; the old 200px cap
+  // scrolled a pasted paragraph after eight lines.
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   const shown = pending
     ? { provider: pending.to, model: pending.toModel }
     : { provider: activeProvider, model: activeModel };
@@ -133,110 +145,16 @@ export function Composer({
       )}
 
       <div className="mx-auto max-w-3xl px-4 py-3">
-        <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
-          {/* Provider first, then that provider's models. One merged menu was
-              tolerable at two models each; agy alone offers fourteen. */}
-          {/* Allowed to shrink, and the model name truncates first. With both
-              held at full width, a narrow conversation pane left the message
-              box two letters wide (docs/Bugs.md B-51). */}
-          <div className="flex min-w-0 shrink items-center gap-0.5">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled}
-                    aria-label={`Provider: ${shown.provider}`}
-                    className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5"
-                  />
-                }
-              >
-                <ProviderIcon
-                  provider={shown.provider}
-                  className={`size-4 ${c.text}`}
-                />
-                <span className="text-sm">{shown.provider}</span>
-                <ChevronDown className="size-3.5 text-muted-foreground" />
-              </DropdownMenuTrigger>
-
-              {/* Anchored to the bottom of the window, so it opens upward.
-                  Never set a max-height here — the base component already caps
-                  it at --available-height, and overriding that is what makes a
-                  long menu run off the bottom of the screen. */}
-              <DropdownMenuContent side="top" align="start" className="w-56">
-                {providers.map((p) => {
-                  const blocked = p.availability === "blocked";
-                  const pc = providerStyle(p.id);
-                  return (
-                    <DropdownMenuItem
-                      key={p.id}
-                      disabled={blocked}
-                      onClick={() => onSelect(p.id, p.model ?? p.models[0])}
-                    >
-                      <ProviderIcon
-                        provider={p.id}
-                        className={`size-4 ${blocked ? "text-muted-foreground" : pc.text}`}
-                      />
-                      <span className="flex-1">{p.label}</span>
-                      {p.id === shown.provider ? (
-                        <Check className="size-4" />
-                      ) : blocked ? (
-                        <span className="text-xs text-muted-foreground">
-                          {p.unavailableReason}
-                        </span>
-                      ) : null}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled || shownProvider.models.length === 0}
-                    aria-label={`Model: ${shown.model.label}`}
-                    className="h-9 min-w-0 max-w-52 shrink gap-1.5 rounded-xl px-2.5 text-muted-foreground"
-                  />
-                }
-              >
-                <span className="truncate text-xs">{shown.model.label}</span>
-                <ChevronDown className="size-3.5 shrink-0" />
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent side="top" align="start" className="w-64">
-                {shownProvider.models.map((m) => (
-                  <DropdownMenuItem
-                    key={m.id}
-                    onClick={() => onSelect(shownProvider.id, m)}
-                  >
-                    {m.id === shown.model.id ? (
-                      <Check className="size-4" />
-                    ) : (
-                      <span className="size-4" aria-hidden />
-                    )}
-                    <span className="flex-1">{m.label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
+        {/* The text takes the whole width, with agent, model and send in one row
+            under it (D-055). Beside the text, the pickers left a long message
+            wrapping in two thirds of the box over an empty column. */}
+        <div className="rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
           <textarea
             ref={taRef}
             rows={1}
             value={value}
             disabled={disabled}
-            onChange={(e) => {
-              onChange(e.target.value);
-              const el = e.currentTarget;
-              el.style.height = "auto";
-              el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-            }}
+            onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -251,32 +169,125 @@ export function Composer({
                   : `Message ${shown.provider}…`
             }
             aria-label="Message"
-            className="max-h-50 min-h-9 min-w-28 flex-1 resize-none bg-transparent py-2 text-[15px] outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            className="block max-h-[40vh] min-h-9 w-full resize-none bg-transparent px-1.5 py-2 text-[15px] outline-none placeholder:text-muted-foreground disabled:opacity-50"
           />
 
-          {running ? (
-            <Button
-              size="icon"
-              variant="secondary"
-              className="size-9 shrink-0 rounded-xl"
-              onClick={onStop}
-              aria-label="Stop this turn"
-              title="Stop this turn"
-            >
-              {/* A filled square, the one stop glyph nobody has to learn. */}
-              <Square className="size-3.5 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              size="icon"
-              className="size-9 shrink-0 rounded-xl"
-              disabled={disabled || !value.trim()}
-              onClick={onSend}
-              aria-label="Send message"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Provider first, then that provider's models. One merged menu was
+                tolerable at two models each; agy alone offers fourteen. */}
+            {/* Allowed to shrink, and the model name truncates first, so a narrow
+                pane still has room for the send button (docs/Bugs.md B-51). */}
+            <div className="flex min-w-0 shrink items-center gap-0.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={disabled}
+                      aria-label={`Provider: ${shown.provider}`}
+                      className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5"
+                    />
+                  }
+                >
+                  <ProviderIcon
+                    provider={shown.provider}
+                    className={`size-4 ${c.text}`}
+                  />
+                  <span className="text-sm">{shown.provider}</span>
+                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                </DropdownMenuTrigger>
+  
+                {/* Anchored to the bottom of the window, so it opens upward.
+                    Never set a max-height here — the base component already caps
+                    it at --available-height, and overriding that is what makes a
+                    long menu run off the bottom of the screen. */}
+                <DropdownMenuContent side="top" align="start" className="w-56">
+                  {providers.map((p) => {
+                    const blocked = p.availability === "blocked";
+                    const pc = providerStyle(p.id);
+                    return (
+                      <DropdownMenuItem
+                        key={p.id}
+                        disabled={blocked}
+                        onClick={() => onSelect(p.id, p.model ?? p.models[0])}
+                      >
+                        <ProviderIcon
+                          provider={p.id}
+                          className={`size-4 ${blocked ? "text-muted-foreground" : pc.text}`}
+                        />
+                        <span className="flex-1">{p.label}</span>
+                        {p.id === shown.provider ? (
+                          <Check className="size-4" />
+                        ) : blocked ? (
+                          <span className="text-xs text-muted-foreground">
+                            {p.unavailableReason}
+                          </span>
+                        ) : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+  
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={disabled || shownProvider.models.length === 0}
+                      aria-label={`Model: ${shown.model.label}`}
+                      className="h-9 min-w-0 max-w-52 shrink gap-1.5 rounded-xl px-2.5 text-muted-foreground"
+                    />
+                  }
+                >
+                  <span className="truncate text-xs">{shown.model.label}</span>
+                  <ChevronDown className="size-3.5 shrink-0" />
+                </DropdownMenuTrigger>
+  
+                <DropdownMenuContent side="top" align="start" className="w-64">
+                  {shownProvider.models.map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onClick={() => onSelect(shownProvider.id, m)}
+                    >
+                      {m.id === shown.model.id ? (
+                        <Check className="size-4" />
+                      ) : (
+                        <span className="size-4" aria-hidden />
+                      )}
+                      <span className="flex-1">{m.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+  
+            {running ? (
+              <Button
+                size="icon"
+                variant="secondary"
+                className="ml-auto size-9 shrink-0 rounded-xl"
+                onClick={onStop}
+                aria-label="Stop this turn"
+                title="Stop this turn"
+              >
+                {/* A filled square, the one stop glyph nobody has to learn. */}
+                <Square className="size-3.5 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                className="ml-auto size-9 shrink-0 rounded-xl"
+                disabled={disabled || !value.trim()}
+                onClick={onSend}
+                aria-label="Send message"
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
