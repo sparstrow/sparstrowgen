@@ -231,6 +231,37 @@ should be allowed to do is the owner's decision: docs/Later.md L-33.
 
 agy also looked in its own scratch folder rather than the conversation's; fixed in B-55.
 
+### What a turn changed: diffs, from the daemon rather than the agent (2026-09-24)
+
+**No agent reports a diff we can use for all three.** claude's `Edit` carries the old and new text
+but no line numbers. codex and agy were refused every edit, so their shapes are unseen. And a file
+changed by a *command* (a formatter, `sed`, a code generator) is reported by nobody.
+
+**The daemon can record it itself, the same way for every agent, verified on git 2.53 (Windows).**
+It keeps a separate git store of its own for the conversation, outside the folder, and points it at
+the folder with `--work-tree`, using an index file of its own. Before a step and after it, `add -A`
+plus `write-tree` records a snapshot. `diff-tree -p` between two snapshots gives a unified diff with
+real line numbers, and `--numstat` gives the +/− counts. In a scratch test: an edited file, a new file
+and a deleted file were all reported correctly. The folder's own `.gitignore` was honoured
+(`node_modules/` stayed out). The folder's own git repository was left untouched, including what the
+user had staged, and no stash was created.
+
+| What the design can show | Deliverable |
+|---|---|
+| Per turn: which files were created, edited or deleted, with +/− counts | **yes** |
+| The diff itself, with old and new line numbers | **yes** |
+| Per step (which edit or command changed what) | **yes**, a snapshot after each step. Steps that run in parallel share one diff |
+| Live, while the turn runs | **yes**, at each step's end |
+| The whole conversation's changes ("all changes") | **yes**, from the snapshot before its first turn to the latest |
+| The unchanged lines between hunks, expanded | not designed; the snapshots hold them, but storing them means storing whole files |
+| Changes the person made between turns | **no**: each turn's snapshot starts afresh, so these are not the agent's and are not shown |
+
+**Limits to design for:** the computer needs git. Claude Code on Windows requires Git for Windows,
+but a computer with only codex or agy may not have it, so "changes are not recorded" is a real state.
+A folder with no `.gitignore` and a huge tree (`D:\`) needs a cap. The diff is sent to the server and
+kept with the turn, bounded like the raw exchange, so it survives a refresh and shows on another
+device.
+
 ### The raw exchange — what one turn's record can hold (2026-09-23)
 
 For [the raw-exchange spec](specs/2026-09-23-raw-exchange.md). **Verified by reading the daemon and
