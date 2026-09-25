@@ -245,7 +245,8 @@ export function fileKind(name: string, mediaType?: string): FileKind {
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  const mb = n / (1024 * 1024);
+  return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
 }
 
 /** What an agent can do with a file sent to it, said before sending. Mirrors

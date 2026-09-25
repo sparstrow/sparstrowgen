@@ -275,6 +275,34 @@ func replayFiles(e protocol.ReplayEntry, p preparedFiles) string {
 	return fmt.Sprintf("\n(Files %s: %s)", verb, strings.Join(names, ", "))
 }
 
+// maxReplayPictures keeps a long catch-up from attaching every picture the
+// conversation ever held.
+const maxReplayPictures = 8
+
+// replayPictures are the pictures earlier messages carried, as paths on this
+// computer, newest last and at most maxReplayPictures of them.
+func replayPictures(replay []protocol.ReplayEntry, p preparedFiles) []string {
+	if p.Folder == "" {
+		return nil
+	}
+	var out []string
+	for _, e := range replay {
+		for _, f := range e.Files {
+			if !pictureExt[strings.ToLower(filepath.Ext(f.Name))] {
+				continue
+			}
+			path := filepath.Join(p.Folder, subfolder(f.Origin), f.Name)
+			if _, err := os.Stat(path); err == nil {
+				out = append(out, path)
+			}
+		}
+	}
+	if len(out) > maxReplayPictures {
+		out = out[len(out)-maxReplayPictures:]
+	}
+	return out
+}
+
 // ---------------------------------------------------------------------------
 // what the agent made
 // ---------------------------------------------------------------------------

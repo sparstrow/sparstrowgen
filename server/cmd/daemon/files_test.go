@@ -165,6 +165,34 @@ func TestACatchUpSaysWhichFilesEachMessageCarried(t *testing.T) {
 	}
 }
 
+// codex, catching up, is handed the pictures earlier messages carried, since
+// it cannot open them by path.
+func TestCodexCatchingUpGetsTheEarlierPictures(t *testing.T) {
+	dir := t.TempDir()
+	p := preparedFiles{Folder: dir, Outputs: filepath.Join(dir, "outputs")}
+	for _, f := range []string{"uploads/shot.png", "outputs/flow.jpg", "uploads/orders.csv"} {
+		full := filepath.Join(dir, filepath.FromSlash(f))
+		_ = os.MkdirAll(filepath.Dir(full), 0o755)
+		_ = os.WriteFile(full, []byte("x"), 0o644)
+	}
+	turn := protocol.RunTurn{Provider: "codex", Prompt: "and now?", Replay: []protocol.ReplayEntry{
+		{Role: "user", Text: "look", Files: []protocol.ReplayFile{
+			{Origin: protocol.FileUpload, Name: "shot.png"}, {Origin: protocol.FileUpload, Name: "orders.csv"},
+			{Origin: protocol.FileUpload, Name: "gone.png"},
+		}},
+		{Role: "agent", Provider: "agy", Text: "here", Files: []protocol.ReplayFile{{Origin: protocol.FileOutput, Name: "flow.jpg"}}},
+	}}
+	_, images := buildPrompt(turn, p)
+	want := []string{filepath.Join(dir, "uploads", "shot.png"), filepath.Join(dir, "outputs", "flow.jpg")}
+	if strings.Join(images, "|") != strings.Join(want, "|") {
+		t.Errorf("codex was given %v, want %v", images, want)
+	}
+	turn.Provider = "agy"
+	if _, images := buildPrompt(turn, p); len(images) != 0 {
+		t.Errorf("agy, which reads the folder, was given %v", images)
+	}
+}
+
 func TestWhatTheAgentMadeIsCollectedAndSent(t *testing.T) {
 	var sent []string
 	c := testFiles(t, fakeServer(t, nil, &sent))
