@@ -658,3 +658,17 @@ folders than fit. The list scrolls inside its bordered box; nothing shows over t
 the Cancel and Run here buttons. Scroll the conversation list and a long chat too, which share the
 scroll area, and confirm they still scroll to the end.
 **Status:** open
+
+## U-38 — claude reads a file and a picture from the conversation's files folder
+
+**Raised:** 2026-09-24, checking the approved files spec (Capabilities, "Files the owner drops")
+**Who can run it:** owner; or the agent, once claude's sign-in on the computer used for the test works
+
+claude could not be checked: on the owner's computer, run from a stripped environment, it answered
+"Failed to authenticate: OAuth session expired and could not be refreshed". Its credentials file was
+not changed by that run (still dated 2026-09-23 12:02). It was not retried.
+
+**The step:** in a conversation on claude, attach a PNG with legible text and a small CSV, and ask
+for both values. Both come back in the answer. If the answer says it cannot read files outside the
+project, the uploads folder is not reaching claude's `--add-dir`.
+**Status:** open
