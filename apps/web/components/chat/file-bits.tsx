@@ -63,7 +63,8 @@ function FileTile({ file, large }: { file: ConversationFile; large?: boolean }) 
         src={api.fileUrl(file.id)}
         alt={file.name}
         loading="lazy"
-        className={cn("block", large ? "max-h-96 w-full object-contain" : "h-28 w-auto max-w-64 object-cover")}
+        // Whole, never cropped: a screenshot's point is often at its edge.
+        className={cn("block object-contain", large ? "max-h-96 w-full" : "h-28 w-auto max-w-64")}
       />
       {large && (
         <span className="flex items-center gap-1.5 border-t bg-card px-2.5 py-1.5 text-xs text-muted-foreground">

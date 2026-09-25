@@ -174,7 +174,7 @@ function Section({
     <section className="px-3 pt-3">
       <h3 className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
         {icon}
-        {title}
+        <span className="shrink-0 whitespace-nowrap">{title}</span>
         {path && (
           // Where it is on the computer, so a file can be found, opened
           // elsewhere or removed there. The end of the path is what tells two
@@ -559,7 +559,7 @@ function TextView({ blob, kind, size }: { blob: Blob; kind: "text" | "csv" | "ma
   return (
     <>
       <pre className="m-0 py-3 font-mono text-xs leading-[19px]">
-        {text.data.split("\n").map((line, i) => (
+        {text.data.replace(/\r?\n$/, "").split("\n").map((line, i) => (
           <div key={i} className="flex">
             <span className="w-11 shrink-0 pr-3 text-right text-muted-foreground/60 select-none">{i + 1}</span>
             <span className="pr-4 whitespace-pre">{line}</span>

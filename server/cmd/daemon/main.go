@@ -714,6 +714,11 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 // had already committed to them.
 func buildPrompt(t protocol.RunTurn, files preparedFiles) (string, []string) {
 	note, images := filesPrompt(t.Provider, files)
+	// codex cannot open a file by its path, so a picture from a message it is
+	// catching up on reaches it the only way one can: attached.
+	if t.Provider == "codex" {
+		images = append(replayPictures(t.Replay, files), images...)
+	}
 	if len(t.Replay) == 0 {
 		return t.Prompt + note, images
 	}

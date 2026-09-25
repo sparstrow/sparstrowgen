@@ -240,8 +240,8 @@ export function Composer({
               <DropdownMenuContent side="top" align="start" className="w-80">
                 <DropdownMenuItem onClick={() => fileInput.current?.click()}>
                   <Paperclip className="size-4" />
-                  <span className="font-medium">Add photos &amp; files</span>
-                  <span className="text-muted-foreground">Upload from your computer</span>
+                  <span className="font-medium whitespace-nowrap">Add photos &amp; files</span>
+                  <span className="truncate text-muted-foreground">Upload from your computer</span>
                 </DropdownMenuItem>
                 <p className="mt-1 border-t px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
                   Or drop them on the conversation, or paste a screenshot. Up to{" "}

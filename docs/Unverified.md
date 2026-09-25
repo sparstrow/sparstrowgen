@@ -677,7 +677,7 @@ project, the uploads folder is not reaching claude's `--add-dir`.
 
 **Raised:** 2026-09-24, D-056
 **Who can run it:** agent, with the testing account and a test computer on protocol 2; then the owner
-on his own computer once 0.3.5 is promoted (U-40)
+on his own computer once 0.3.6 is promoted (U-40)
 
 **The step:** in a conversation, add a PNG with legible text and a small CSV with + and send them to
 agy; the answer uses both values, and both show above the message and under This chat. Switch to
@@ -686,16 +686,16 @@ the answer and under Outputs. Open Working folder, go into a folder, open a file
 computer disconnected, the pane says the computer is unreachable and This chat still lists the files.
 **Status:** open
 
-## U-40 — The owner's computer handles files once candidate 0.3.5 is promoted
+## U-40 — The owner's computer handles files once candidate 0.3.6 is promoted
 
 **Raised:** 2026-09-24, D-056
 **Who can run it:** the owner — promoting a candidate is his step
 
-Files need protocol 2 on the computer. Until his computer runs 0.3.5, a message with files is refused
+Files need protocol 2 on the computer. Until his computer runs 0.3.6, a message with files is refused
 with "your computer's sparstrowgen is too old for files", and Working folder says the same; messages
 without files are unaffected.
 
-**The step:** promote candidate **0.3.5** with **Promote a daemon candidate** (Actions tab). Once his
+**The step:** promote candidate **0.3.6** with **Promote a daemon candidate** (Actions tab). Once his
 computer updates, attach a screenshot to a message and send it.
 **Status:** open
 
