@@ -5,7 +5,7 @@
 | **Prototype** | `composer.dc.html` |
 | **Provenance** | The owner, 2026-09-24: "if I type a block of text, there is an empty space which can be expanded for the text. The agent and model selector is in the way." |
 | **Mode** | explore — three directions, and the composer as it is today for comparison |
-| **Status** | draft, waiting for the owner to pick a direction |
+| **Status** | reviewed 2026-09-24: the owner chose A (D-055) |
 | **Design system** | the Claude artifact linked from `CLAUDE.md` |
 
 ## What this is
