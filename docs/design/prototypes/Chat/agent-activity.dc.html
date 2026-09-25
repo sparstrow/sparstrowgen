@@ -10,19 +10,41 @@
           --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
           --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
-  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; overflow: hidden; }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 4px; }
   .ic { flex: none; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* Prototype controls: not part of the design. */
-  .proto-bar { position: sticky; top: 0; z-index: 5; height: 40px; display: flex; align-items: center; gap: 18px; padding: 0 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; overflow-x: auto; white-space: nowrap; }
+  .proto-bar { height: 40px; display: flex; align-items: center; gap: 18px; padding: 0 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; overflow-x: auto; white-space: nowrap; }
   .proto-bar .grp { display: flex; align-items: center; gap: 4px; }
   .proto-bar b { font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
   .proto-bar button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); }
   .proto-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+  /* The conversation and, beside it, the Changes pane. */
+  .app { display: flex; height: calc(100vh - 40px); }
+  .chat { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .app[data-max="true"] .chat { display: none; }
+  .ch { flex: none; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+  .ch .ttl { min-width: 0; flex: 1; }
+  .ch .ttl .n { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch .ttl .f { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .toggle2 { display: inline-flex; padding: 2px; border-radius: var(--r-md); background: var(--muted); font-size: 12px; }
+  .toggle2 span { padding: 2px 8px; border-radius: 6px; color: var(--muted-foreground); }
+  .toggle2 span.on { background: var(--background); color: var(--foreground); }
+  .hbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border); font-size: 13px; transition: background-color 150ms ease-out; }
+  .hbtn:hover { background: var(--accent); }
+  .hbtn[aria-pressed="true"] { background: var(--muted); }
+  .hbtn .cnt { font-family: var(--font-mono); font-size: 12px; }
+  .hbtn .lbl { color: var(--foreground); }
+  .ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-md); color: var(--muted-foreground); transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .ibtn:hover { background: var(--accent); color: var(--foreground); }
+  .ibtn[aria-pressed="true"] { color: var(--foreground); background: var(--muted); }
+  .scroll { flex: 1; overflow-y: auto; }
 
   /* The transcript column, as in the app: agent prose at 15px, 48rem wide. */
   .col { max-width: 48rem; margin: 0 auto; padding: 32px 24px 96px; display: flex; flex-direction: column; gap: 32px; }
@@ -65,14 +87,93 @@
   .detail { margin: 2px 0 8px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
   .detail .dh { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
   .detail pre { margin: 0; padding: 8px 10px; font-family: var(--font-mono); font-size: 12.5px; line-height: 19px; overflow-x: auto; white-space: pre; }
-  .detail .ln { display: block; } .detail .ln.a { color: var(--success-text); } .detail .ln.d { color: var(--destructive-text); }
   .detail .plain { padding: 8px 10px; font-size: 13px; color: var(--muted-foreground); }
+  .step-diff { margin: 2px 0 8px; }
+
+  /* ── The diff card: CodeBlock's Diff view. One number gutter (old number on
+     a removed line, new number otherwise), a tinted row and a 3px bar — solid
+     for an added line, hatched for a removed one, so the two differ without
+     colour — and the changed words inside a changed line marked again. */
+  .dc { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); overflow: clip; }
+  .dc-h { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 6px 0 10px; font-size: 12.5px; background: var(--card); }
+  .dc[data-open="true"] .dc-h { border-bottom: 1px solid var(--border); }
+  .dc-h .fold { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; align-self: stretch; }
+  .dc-h .fold .chev { color: var(--muted-foreground); transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1); transform: rotate(-90deg); }
+  .dc[data-open="true"] .dc-h .fold .chev { transform: none; }
+  .dc-h .path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); direction: rtl; text-align: left; }
+  .dc-h .path bdi { direction: ltr; }
+  .dc-h .dir { color: var(--muted-foreground); }
+  .dc-h .kind { flex: none; font-size: 12px; color: var(--muted-foreground); }
+  .dc-h .stat { flex: none; margin-left: auto; font-family: var(--font-mono); font-size: 12px; display: inline-flex; gap: 8px; padding-right: 4px; }
+  .dc-b { padding: 6px 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; tab-size: 4; background: color-mix(in oklch, var(--background) 60%, transparent); }
+  .dr { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); }
+  .dr .g { user-select: none; text-align: right; padding-right: 10px; font-size: 11px; color: var(--muted-foreground); border-right: 1px solid var(--border); }
+  .dr code { font: inherit; padding: 0 12px 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--foreground); }
+  .dr.a { background: color-mix(in oklch, var(--success) 12%, transparent); }
+  .dr.d { background: color-mix(in oklch, var(--destructive) 12%, transparent); }
+  .dr.a .g { color: var(--success-text); } .dr.d .g { color: var(--destructive-text); }
+  .dr.a::before, .dr.d::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; }
+  .dr.a::before { background: var(--success); }
+  .dr.d::before { background: repeating-linear-gradient(45deg, var(--destructive) 0 1.5px, transparent 1.5px 3px); }
+  .wa, .wd { border-radius: 3px; padding: 0 1px; margin: 0 -1px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .wa { background: color-mix(in oklch, var(--success) 32%, transparent); }
+  .wd { background: color-mix(in oklch, var(--destructive) 32%, transparent); }
+  .gap { display: grid; grid-template-columns: 44px minmax(0, 1fr); color: var(--muted-foreground); font-family: var(--font-sans); font-size: 12px; }
+  .gap .g { border-right: 1px solid var(--border); }
+  .gap span:last-child { padding: 2px 10px; }
+  .dc-more { display: block; width: 100%; padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); text-align: left; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .dc-more:hover { background: var(--accent); color: var(--foreground); }
+  .tok-kw { color: var(--code-keyword); } .tok-str { color: var(--code-string); } .tok-num { color: var(--code-number); }
+  .tok-com { color: var(--code-comment); font-style: italic; } .tok-fn { color: var(--code-function); } .tok-type { color: var(--code-type); }
+
+  /* What a finished turn changed: under the answer, above the usage line. */
+  .changes { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .changes-h { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); }
+  .changes-h .stat { font-family: var(--font-mono); font-size: 12px; display: inline-flex; gap: 6px; }
+  .changes-h .open { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: var(--r-md); font-size: 12.5px; color: var(--muted-foreground); }
+  .changes-h .open:hover { background: var(--accent); color: var(--foreground); }
+
+  /* ── The Changes pane. */
+  .pane { flex: 0 0 54%; max-width: 920px; min-width: 460px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--background); }
+  .app[data-max="true"] .pane { flex-basis: 100%; max-width: none; border-left: 0; }
+  .ph { flex: none; height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--border); }
+  .ph .t { font-weight: 500; }
+  .ph .scope { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 13px; }
+  .ph .stat { flex: none; font-family: var(--font-mono); font-size: 12px; display: inline-flex; gap: 6px; }
+  .ph .sp { flex: 1; }
+  .pb { flex: 1; display: flex; min-height: 0; position: relative; }
+  .files { flex: none; width: 260px; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--background); }
+  .tree { flex: 1; overflow-y: auto; padding: 8px; }
+  .dirrow { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 12px; color: var(--muted-foreground); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 2px 6px 2px 18px; border-radius: var(--r-md); font-size: 13px; transition: background-color 150ms ease-out; }
+  .frow:hover { background: var(--accent); }
+  .frow[aria-current="true"] { background: var(--muted); }
+  .frow .ic { color: var(--muted-foreground); }
+  .frow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12.5px; }
+  .frow .nm.gone { text-decoration: line-through; color: var(--muted-foreground); }
+  .frow .stat { margin-left: auto; flex: none; font-family: var(--font-mono); font-size: 11.5px; display: inline-flex; gap: 6px; }
+  .scopes { flex: none; max-height: 45%; overflow-y: auto; border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .srow { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px; border-radius: var(--r-md); transition: background-color 150ms ease-out; }
+  .srow:hover { background: var(--accent); }
+  .srow[aria-current="true"] { background: var(--muted); }
+  .srow .body { min-width: 0; flex: 1; }
+  .srow .a { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .srow .b { font-size: 12px; line-height: 16px; color: var(--muted-foreground); display: flex; gap: 6px; align-items: center; }
+  .srow .b .stat { font-family: var(--font-mono); display: inline-flex; gap: 6px; margin-left: auto; }
+  .srow .ic { margin-top: 2px; color: var(--muted-foreground); }
+  .diffs { flex: 1; min-width: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .diffs .dc-h { position: sticky; top: -12px; z-index: 1; }
+  .pstate { margin: auto; text-align: center; max-width: 26rem; padding: 32px 16px; }
+  .pstate .ic { color: var(--muted-foreground); }
+  .pstate .t { font-weight: 500; margin-top: 10px; } .pstate .d { color: var(--muted-foreground); margin-top: 4px; font-size: 13px; }
+  .pstate .btn { margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--r-md); }
+  .pstate .btn:hover { background: var(--accent); }
 
   /* Status: colour, icon and word together (design system, Status). */
   .status { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
   .status[data-tone="warning"] .ic { color: var(--warning); } .status[data-tone="warning"] .w { color: var(--warning-text); }
-  .status[data-tone="danger"] .ic { color: var(--destructive); }
-  .status .w.quiet { color: var(--foreground); }
+  .status[data-tone="danger"] .ic { color: var(--destructive); } .status[data-tone="danger"] .w { color: var(--destructive-text); }
+  .status[data-tone="progress"] .ic { color: var(--info); }
 
   /* The working line while a turn runs: the WorkingIndicator, unchanged. */
   .working { display: flex; align-items: center; gap: 10px; }
@@ -90,19 +191,27 @@
   .notice { margin-top: 12px; display: flex; gap: 10px; border: 1px solid color-mix(in oklch, var(--destructive) 40%, transparent); background: color-mix(in oklch, var(--destructive) 8%, transparent); border-radius: var(--r-lg); padding: 10px 12px; font-size: 13px; }
   .notice .t { font-weight: 500; color: var(--destructive-text); }
   .sk { background: var(--muted); border-radius: 6px; }
-  .empty { text-align: center; padding: 96px 0; }
-  .empty .t { font-weight: 500; font-size: 14px; } .empty .d { color: var(--muted-foreground); max-width: 24rem; margin: 4px auto 0; }
+
+  /* Narrow: the pane covers the conversation instead of sharing the width,
+     and its file list becomes something you open. */
+  @media (max-width: 960px) {
+    .pane { position: fixed; inset: 40px 0 0 0; min-width: 0; max-width: none; z-index: 4; border-left: 0; }
+    .files { position: absolute; inset: 0 auto 0 0; z-index: 2; box-shadow: 0 0 0 100vmax color-mix(in oklch, var(--background) 60%, transparent); }
+    .hbtn .lbl { display: none; }
+    .ch .toggle2 { display: none; }
+  }
+  @media (max-width: 480px) { .files { width: 100%; box-shadow: none; } .hbtn .cnt { display: none; } }
 
   @media (prefers-reduced-motion: reduce) {
     .pixel-cell { animation: none !important; } .working-shimmer { animation: none; background-image: none; color: var(--muted-foreground); }
-    .act-body, .act-toggle .chev, .step.new { transition: none; animation: none; }
+    .act-body, .act-toggle .chev, .step.new, .dc-h .fold .chev { transition: none; animation: none; }
     .spin { animation: none; }
   }
 </style>
 </head>
 <body>
 <div class="proto-bar" id="bar"></div>
-<main class="col" id="col" aria-label="Transcript"></main>
+<div class="app" id="app"></div>
 
 <script src="../icons.js"></script>
 <script>
@@ -117,21 +226,52 @@
     return '<svg class="ic ' + (cls || "") + '" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes + "</svg>";
   }
   function M(p, s) { return '<svg class="ic" width="' + (s || 16) + '" height="' + (s || 16) + '" viewBox="0 0 24 24" fill="var(--provider-' + p + ')" aria-hidden="true"><path d="' + MARKS[p] + '"/></svg>'; }
+  var narrow = matchMedia("(max-width: 960px)").matches;
 
   var S = {
     ui: pick(Q.get("state"), ["populated", "running", "empty", "loading", "error"], "populated"),
     theme: pick(Q.get("theme"), ["light", "dark"], "dark"),
-    open: {},      // which turns' activity is unfolded
-    detail: {},    // which step's detail is open, per turn
-    live: 0,       // how many steps of the running turn have arrived
-    elapsed: 0,
+    pane: pick(Q.get("pane"), ["closed", "open"], "closed"),
+    paneData: pick(Q.get("changes"), ["recorded", "loading", "error", "not-recorded"], "recorded"),
+    scope: "all",     // "all" or a turn id
+    max: false,       // the pane covers the conversation
+    files: !narrow,   // the pane's file list is shown
+    focus: null,      // a path to scroll the pane to
+    open: {},         // which turns' activity is unfolded
+    detail: {},       // which step's detail is open, per turn
+    fold: {},         // diff cards folded by hand, per place
+    full: {},         // diff cards showing every line, per place
+    live: 0, elapsed: 0, runDone: false,
   };
 
-  /* ── Data, shaped only from what the three CLIs were seen to report on
-     2026-09-24 (docs/Capabilities.md, "Agent activity"). Thinking arrives with
-     no text, so it is only ever "Thought for 4s". Searches carry a query and no
-     sources. Edits carry the old and new text, so their line counts are real. */
-  var CLAUDE = { provider: "claude", model: "Sonnet 5", time: "9:04 PM", worked: 37, usage: "31.4k tokens · $0.09",
+  /* ── Changed files. Shaped like a unified diff's hunks, because that is what
+     the daemon can produce for any agent: it snapshots the conversation's folder
+     before and after each step (docs/Capabilities.md, "What a turn changed"). */
+  var DAEMON_GO = { path: "server/cmd/daemon/daemon.go", lang: "go", kind: "M", hunks: [
+    { o: 86, n: 86, rows: [[" ", "type Daemon struct {"], [" ", "\tmu      sync.Mutex"], [" ", "\tonline  bool"],
+      ["+", "\t// connected is closed and replaced each time the socket comes up, so a"], ["+", "\t// test can wait for the next connection instead of sleeping."], ["+", "\tconnected chan struct{}"], [" ", "}"]] },
+    { o: 139, n: 142, rows: [[" ", "\td.mu.Lock()"], [" ", "\td.online = true"], ["+", "\tclose(d.connected)"], ["+", "\td.connected = make(chan struct{})"], [" ", "\td.mu.Unlock()"]] },
+    { o: 158, n: 163, rows: [[" ", "}"], [" ", ""], ["+", "// Connected returns a channel that is closed on the next successful connection."], ["+", "func (d *Daemon) Connected() <-chan struct{} {"], ["+", "\td.mu.Lock()"], ["+", "\tdefer d.mu.Unlock()"], ["+", "\treturn d.connected"], ["+", "}"]] },
+  ] };
+  var TEST_GO = { path: "server/cmd/daemon/reconnect_test.go", lang: "go", kind: "M", hunks: [
+    { o: 56, n: 56, rows: [[" ", "\tsrv.Restart()"], [" ", ""], ["-", "\ttime.Sleep(200 * time.Millisecond)"], ["-", "\tif !d.online() {"], ["-", "\t\tt.Fatal(\"still offline after 200ms\")"],
+      ["+", "\tselect {"], ["+", "\tcase <-d.Connected():"], ["+", "\tcase <-time.After(2 * time.Second):"], ["+", "\t\tt.Fatal(\"still offline after 2s\")"], [" ", "\t}"], [" ", "}"]] },
+  ] };
+  var BUGS_MD = { path: "docs/Bugs.md", lang: "md", kind: "M", hunks: [
+    { o: 612, n: 612, rows: [[" ", "**Release note:** The agent menu lists every agent again."], [" ", ""], ["+", "## B-56 — The reconnect test failed on slow CI runners"], ["+", ""], ["+", "**Wrong:** it slept 200 ms and then asserted the daemon was online."], ["+", "**Fixed:** it waits for `Connected()`, for up to two seconds."], ["+", "**Release note:** Fixed a test that failed at random on slow machines."]] },
+  ] };
+  var COMPOSER = { path: "apps/web/components/chat/composer.tsx", lang: "ts", kind: "M", hunks: [
+    { o: 211, n: 211, rows: [[" ", "      </div>"], ["-", "      {pending && ("], ["+", "      {pending && pending.messagesToReplay > 0 && ("], [" ", "        <div className=\"flex items-center gap-2 border-b px-3 py-2 text-xs\">"]] },
+  ] };
+  var NOTICE = { path: "apps/web/components/chat/replay-notice.tsx", lang: "ts", kind: "A", hunks: [
+    { o: 0, n: 1, rows: [["+", "// Shown above the message box only when switching agents re-sends"], ["+", "// earlier messages, because that is the only time a switch costs anything."], ["+", "export function replayCost(count: number): string {"], ["+", "  return count === 1 ? \"1 message\" : `${count} messages`;"], ["+", "}"]] },
+  ] };
+
+  /* ── Turns, shaped only from what the three CLIs were seen to report on
+     2026-09-24 (docs/Capabilities.md, "Agent activity"). */
+  var CLAUDE = { id: "a", provider: "claude", model: "Sonnet 5", time: "9:04 PM", worked: 37, usage: "31.4k tokens · $0.09",
+    prompt: "The reconnect test is flaky on CI. Find out why and fix it.",
+    files: [DAEMON_GO, TEST_GO, BUGS_MD],
     steps: [
       { k: "thought", secs: 4 },
       { k: "note", text: "I'll look at the reconnect test first, then at how the daemon waits for the socket." },
@@ -139,54 +279,144 @@
       { k: "grep", pattern: "time.Sleep", where: "server/cmd/daemon", hits: 3 },
       { k: "run", cmd: "go test ./cmd/daemon -run Reconnect -count=20", out: "--- FAIL: TestReconnectAfterServerRestart (0.21s)\n    reconnect_test.go:64: still offline after 200ms\nFAIL\nFAIL\tgithub.com/sparstrow/sparstrowgen/server/cmd/daemon\t4.812s", failed: true },
       { k: "thought", secs: 2 },
-      { k: "edit", path: "server/cmd/daemon/reconnect_test.go", add: 4, del: 2,
-        diff: [["d", "\ttime.Sleep(200 * time.Millisecond)"], ["d", "\tif !d.online() {"], ["a", "\tselect {"], ["a", "\tcase <-d.Connected():"], ["a", "\tcase <-time.After(2 * time.Second):"], ["a", "\t\tt.Fatal(\"still offline after 2s\")"]] },
+      { k: "edit", file: 0 },
+      { k: "edit", file: 1 },
       { k: "run", cmd: "go test ./cmd/daemon -run Reconnect -count=20", out: "ok  \tgithub.com/sparstrow/sparstrowgen/server/cmd/daemon\t3.207s" },
+      { k: "edit", file: 2 },
       { k: "web", query: "go test flaky websocket reconnect sleep" },
     ],
-    answer: '<p>The test slept a fixed 200 ms and then asserted the daemon was back online. On a slow CI runner the reconnect lands later than that, so the assertion ran first.</p><p>It now waits for the <code>Connected</code> event instead, with a two-second ceiling so a real outage still fails fast. Twenty runs in a row pass locally.</p>' };
+    answer: '<p>The test slept a fixed 200 ms and then asserted the daemon was back online. On a slow CI runner the reconnect lands later than that, so the assertion ran first.</p><p>It now waits for the daemon\'s new <code>Connected</code> event instead, with a two-second ceiling so a real outage still fails fast. Twenty runs in a row pass locally, and the bug is logged as B-56.</p>' };
 
-  var CODEX = { provider: "codex", model: "GPT-5.6 Sol", time: "9:07 PM", worked: 21, usage: "69.9k tokens",
+  var CODEX = { id: "b", provider: "codex", model: "GPT-5.6 Sol", time: "9:07 PM", worked: 21, usage: "69.9k tokens",
+    prompt: "And what is the latest Go release? Is it the one installed here?", files: [],
     steps: [
       { k: "web", query: "site:go.dev latest Go release September 2026" },
       { k: "refused", what: "Run a command", why: "Codex is not allowed to run commands on this computer." },
     ],
     answer: "<p>Go 1.27.1 is the latest release. I could not check which version this computer has installed: running <code>go version</code> was not allowed.</p>" };
 
-  var RUN = { provider: "claude", model: "Sonnet 5", time: "9:09 PM",
+  var RUN = { id: "r", provider: "claude", model: "Sonnet 5", time: "9:09 PM", usage: "18.6k tokens · $0.05",
+    prompt: "Only show the switch notice when it costs something.", files: [COMPOSER, NOTICE],
     steps: [
       { k: "thought", secs: 3 },
       { k: "read", path: "apps/web/components/chat/composer.tsx", lines: 276 },
-      { k: "grep", pattern: "disabledReason", where: "apps/web", hits: 4 },
-      { k: "edit", path: "apps/web/components/chat/composer.tsx", add: 6, del: 1, diff: [["d", '  {pending && ('], ["a", '  {pending && pending.messagesToReplay > 0 && (']] },
+      { k: "grep", pattern: "messagesToReplay", where: "apps/web", hits: 4 },
+      { k: "edit", file: 0 },
+      { k: "edit", file: 1 },
       { k: "run", cmd: "pnpm --filter web exec tsc --noEmit", out: "" },
     ],
-    answer: "<p>The notice now only appears when switching replays something. The typecheck passes.</p>" };
+    answer: "<p>The notice now only appears when switching re-sends something, and it says how many messages. The typecheck passes.</p>" };
+
+  /* ── Diffs */
+  function stat(files) { var a = 0, d = 0; files.forEach(function (f) { f.hunks.forEach(function (h) { h.rows.forEach(function (r) { if (r[0] === "+") a++; if (r[0] === "-") d++; }); }); }); return { a: a, d: d }; }
+  function statHtml(st) { return '<span class="add">+' + st.a + '</span><span class="del">−' + st.d + "</span>"; }
+
+  // Syntax colour through the six code tokens. Markdown is left plain.
+  var KW = /^(func|return|if|else|for|range|defer|go|select|case|default|type|struct|chan|var|const|package|import|make|close|nil|true|false|export|function|let|new|await|async|from|interface)$/;
+  var TOK = /(\/\/.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`[^`]*`|\b\d+(?:\.\d+)?\b|[A-Za-z_$][\w$]*)/g;
+  function hl(text, lang) {
+    if (lang === "md") return esc(text);
+    var out = "", last = 0, m;
+    TOK.lastIndex = 0;
+    while ((m = TOK.exec(text))) {
+      var t = m[0], cls = "";
+      if (t.indexOf("//") === 0) cls = "tok-com";
+      else if (/^["'`]/.test(t)) cls = "tok-str";
+      else if (/^\d/.test(t)) cls = "tok-num";
+      else if (KW.test(t)) cls = "tok-kw";
+      else if (/^(string|int|bool|error|number|struct)$/.test(t) || /^[A-Z]\w*$/.test(t) && text.charAt(m.index - 1) !== ".") cls = "tok-type";
+      else if (text.charAt(m.index + t.length) === "(") cls = "tok-fn";
+      out += esc(text.slice(last, m.index)) + (cls ? '<span class="' + cls + '">' + esc(t) + "</span>" : esc(t));
+      last = m.index + t.length;
+    }
+    return out + esc(text.slice(last));
+  }
+
+  // Changed words: a removed line is paired with the added line most like it,
+  // and only the part between their common start and end is marked. A pair
+  // with little in common is not marked at all — it is a rewrite, not an edit.
+  function pairs(rows) {
+    var out = {}, i = 0;
+    while (i < rows.length) {
+      if (rows[i][0] !== "-") { i++; continue; }
+      var ds = [], as = [];
+      while (i < rows.length && rows[i][0] === "-") ds.push(i++);
+      while (i < rows.length && rows[i][0] === "+") as.push(i++);
+      var from = 0;
+      ds.forEach(function (di) {
+        for (var k = from; k < as.length; k++) {
+          var x = rows[di][1], y = rows[as[k]][1], p = 0, s = 0;
+          while (p < x.length && p < y.length && x[p] === y[p]) p++;
+          while (s < x.length - p && s < y.length - p && x[x.length - 1 - s] === y[y.length - 1 - s]) s++;
+          if ((p + s) / Math.max(x.length, y.length) >= 0.5) { out[di] = [p, s]; out[as[k]] = [p, s]; from = k + 1; break; }
+        }
+      });
+    }
+    return out;
+  }
+  function line(text, lang, cut, type) {
+    if (!cut) return hl(text, lang);
+    var a = text.slice(0, cut[0]), b = text.slice(cut[0], text.length - cut[1]), c = text.slice(text.length - cut[1]);
+    return hl(a, lang) + (b ? '<span class="' + (type === "+" ? "wa" : "wd") + '">' + hl(b, lang) + "</span>" : "") + hl(c, lang);
+  }
+
+  var CAP = 12;
+  function diffCard(f, place, opts) {
+    opts = opts || {};
+    var key = place + "|" + f.path, open = !S.fold[key], full = opts.full || S.full[key];
+    var slash = f.path.lastIndexOf("/"), dir = f.path.slice(0, slash + 1), name = f.path.slice(slash + 1);
+    var kind = f.kind === "A" ? "new file" : f.kind === "D" ? "deleted" : "";
+    var head = '<div class="dc-h"><button class="fold" data-act="fold" data-key="' + esc(key) + '" aria-expanded="' + open + '">' + I("chevron-down", 14, "chev") + I(f.kind === "A" ? "file-plus" : f.kind === "D" ? "file-x" : "file-code", 15) +
+      '<span class="path" title="' + esc(f.path) + '"><bdi><span class="dir">' + esc(dir) + "</span>" + esc(name) + "</bdi></span>" + (kind ? '<span class="kind">' + kind + "</span>" : "") + "</button>" +
+      '<span class="stat">' + statHtml(stat([f])) + "</span>" +
+      (opts.openInPane ? '<button class="ibtn" data-act="show" data-turn="' + opts.openInPane + '" data-path="' + esc(f.path) + '" title="Show in Changes" aria-label="Show ' + esc(name) + ' in Changes">' + I("panel-right", 14) + "</button>" : "") + "</div>";
+    if (!open) return '<section class="dc" data-open="false" id="' + (opts.anchor ? "f-" + esc(f.path) : "") + '">' + head + "</section>";
+    var body = "", shown = 0, total = 0, prevEnd = null;
+    f.hunks.forEach(function (h) { total += h.rows.length; });
+    f.hunks.forEach(function (h) {
+      if (!full && shown >= CAP) return;
+      if (prevEnd !== null && h.o > prevEnd) body += '<div class="gap"><span class="g"></span><span>' + I("chevrons-up-down", 12) + " " + (h.o - prevEnd) + " unchanged lines</span></div>";
+      var o = h.o, n = h.n, cut = pairs(h.rows);
+      h.rows.forEach(function (r, i) {
+        var t = r[0], num;
+        if (t === "-") num = o++; else if (t === "+") num = n++; else { num = n++; o++; }
+        if (!full && shown >= CAP) return;
+        shown++;
+        body += '<div class="dr' + (t === "+" ? " a" : t === "-" ? " d" : "") + '"><span class="g">' + num + "</span><code>" +
+          (t === "+" ? '<span class="sr">added: </span>' : t === "-" ? '<span class="sr">removed: </span>' : "") + line(r[1], f.lang, cut[i], t) + "</code></div>";
+      });
+      prevEnd = o;
+    });
+    var more = !full && total > shown ? '<button class="dc-more" data-act="full" data-key="' + esc(key) + '">Show ' + (total - shown) + " more lines</button>" : "";
+    return '<section class="dc" data-open="true"' + (opts.anchor ? ' id="f-' + esc(f.path) + '"' : "") + ">" + head + '<div class="dc-b">' + body + "</div>" + more + "</section>";
+  }
 
   /* ── One step, as a row. Verb first in the muted colour, the object after it
      in the foreground: the object is what a person scans for. */
-  function stepRow(turnId, s, i, opts) {
+  function stepRow(t, s, i, opts) {
     opts = opts || {};
-    var id = turnId + ":" + i, isOpen = S.detail[turnId] === i, cls = "step" + (opts.fresh ? " new" : "");
+    var isOpen = S.detail[t.id] === i, cls = "step" + (opts.fresh ? " new" : "");
     var lead = opts.active ? I("loader-circle", 14, "spin") : null;
-    if (s.k === "note") return '<div class="note' + (opts.fresh ? " step new" : "") + '" style="' + (opts.fresh ? "min-height:0;padding:2px 0 4px;margin:0" : "") + '">' + esc(s.text) + "</div>";
+    if (s.k === "note") return '<div class="note">' + esc(s.text) + "</div>";
     if (s.k === "refused") return '<div class="' + cls + '"><span class="status" data-tone="warning">' + I("triangle-alert", 14) + '<span class="w">Not allowed</span></span><span class="what">' + esc(s.why) + "</span></div>";
-    var icon, verb, what, end = "", mono = false, openable = true;
+    var icon, verb, what, end = "", mono = false, openable = true, f = s.k === "edit" ? t.files[s.file] : null;
     if (s.k === "thought") { icon = "brain"; verb = opts.active ? "Thinking" : "Thought"; what = opts.active ? "" : "for " + s.secs + "s"; openable = false; }
     if (s.k === "read") { icon = "file-text"; verb = "Read"; what = s.path; mono = true; end = s.lines + " lines"; }
     if (s.k === "grep") { icon = "search"; verb = "Searched"; what = s.pattern + "  in " + s.where; mono = true; end = s.hits + " matches"; }
-    if (s.k === "edit") { icon = "file-pen"; verb = "Edited"; what = s.path; mono = true; end = '<span class="add">+' + s.add + '</span> <span class="del">−' + s.del + "</span>"; }
+    if (s.k === "edit") { icon = f.kind === "A" ? "file-plus" : "file-pen"; verb = f.kind === "A" ? "Created" : "Edited"; what = f.path; mono = true;
+      // Without a recording there is no diff to open, only the path the agent named.
+      if (S.paneData === "not-recorded") openable = false; else end = statHtml(stat([f])).replace("</span><span", "</span> <span"); }
     if (s.k === "run") { icon = "square-terminal"; verb = "Ran"; what = s.cmd; mono = true; end = s.failed ? '<span class="del">exit 1</span>' : ""; }
     if (s.k === "web") { icon = "search"; verb = "Searched the web"; what = "“" + s.query + "”"; openable = false; }
     var inner = (lead || I(icon, 14)) + '<span class="verb">' + verb + '</span><span class="what' + (mono ? " mono" : "") + '" title="' + esc(what) + '">' + esc(what) + "</span>" + (end ? '<span class="end">' + end + "</span>" : "");
     var row = openable && !opts.active
-      ? '<button class="' + cls + '" data-act="detail" data-turn="' + turnId + '" data-i="' + i + '" aria-expanded="' + isOpen + '">' + inner + "</button>"
+      ? '<button class="' + cls + '" data-act="detail" data-turn="' + t.id + '" data-i="' + i + '" aria-expanded="' + isOpen + '">' + inner + "</button>"
       : '<div class="' + cls + '">' + inner + "</div>";
-    return row + (isOpen ? detail(s) : "");
+    return row + (isOpen ? detail(t, s) : "");
   }
 
-  function detail(s) {
-    if (s.k === "edit") return '<div class="detail"><div class="dh">' + I("file-pen", 12) + esc(s.path) + "</div><pre>" + s.diff.map(function (l) { return '<span class="ln ' + l[0] + '">' + (l[0] === "a" ? "+ " : "- ") + esc(l[1]) + "</span>"; }).join("") + "</pre></div>";
+  function detail(t, s) {
+    if (s.k === "edit") return '<div class="step-diff">' + diffCard(t.files[s.file], "step:" + t.id, { full: true }) + "</div>";
     if (s.k === "run") return '<div class="detail"><div class="dh">' + I("square-terminal", 12) + esc(s.cmd) + "</div>" + (s.out ? "<pre>" + esc(s.out) + "</pre>" : '<div class="plain">No output.</div>') + "</div>";
     if (s.k === "read") return '<div class="detail"><div class="dh">' + I("file-text", 12) + esc(s.path) + '</div><div class="plain">Read all ' + s.lines + " lines. The contents are not kept here; the file is on your computer.</div></div>";
     if (s.k === "grep") return '<div class="detail"><div class="dh">' + I("search", 12) + esc(s.pattern) + '</div><div class="plain">' + s.hits + " matches in " + esc(s.where) + ".</div></div>";
@@ -197,26 +427,37 @@
     return '<div class="turn-head">' + M(t.provider) + '<span class="pname" style="color:var(--provider-' + t.provider + ')">' + t.provider + '</span><span class="meta">' + esc(t.model) + " · " + t.time + "</span></div>";
   }
 
-  /* ── A finished turn: one folded line, then the answer. */
-  function doneTurn(id, t, extra) {
-    var open = !!S.open[id];
+  /* ── What a finished turn changed, under its answer: the diffs themselves,
+     each capped so a long one does not bury the next turn. */
+  function changesBlock(t) {
+    if (!t.files.length || S.paneData === "not-recorded") return "";
+    var n = t.files.length;
+    return '<div class="changes"><div class="changes-h">' + I("file-diff", 14) + "<span>Changed " + n + " file" + (n === 1 ? "" : "s") + '</span><span class="stat">' + statHtml(stat(t.files)) + "</span>" +
+      '<button class="open" data-act="show" data-turn="' + t.id + '">' + I("panel-right", 14) + "Open in Changes</button></div>" +
+      t.files.map(function (f) { return diffCard(f, "turn:" + t.id, { openInPane: t.id }); }).join("") + "</div>";
+  }
+
+  /* ── A finished turn: one folded line, the answer, then what it changed. */
+  function doneTurn(t, extra) {
+    var open = !!S.open[t.id];
     var count = t.steps.filter(function (s) { return s.k !== "note" && s.k !== "thought"; }).length;
     var act = t.steps.length === 0 ? "" :
-      '<div class="act"><button class="act-toggle" data-act="toggle" data-turn="' + id + '" aria-expanded="' + open + '" aria-controls="act-' + id + '">' +
+      '<div class="act"><button class="act-toggle" data-act="toggle" data-turn="' + t.id + '" aria-expanded="' + open + '" aria-controls="act-' + t.id + '">' +
         '<span>Worked for ' + fmt(t.worked) + '</span>' + I("chevron-down", 14, "chev") + "</button>" +
-        '<div class="act-body" id="act-' + id + '" data-open="' + open + '"><div><div class="trail" aria-label="' + count + ' steps">' +
-          t.steps.map(function (s, i) { return stepRow(id, s, i); }).join("") +
+        '<div class="act-body" id="act-' + t.id + '" data-open="' + open + '"><div><div class="trail" aria-label="' + count + ' steps">' +
+          t.steps.map(function (s, i) { return stepRow(t, s, i); }).join("") +
         "</div></div></div></div>";
-    return "<article>" + header(t) + act + '<div class="prose">' + t.answer + "</div>" + (extra || "") + '<div class="usage">' + t.usage + "</div></article>";
+    return "<article>" + header(t) + act + '<div class="prose">' + t.answer + "</div>" + (extra || "") + changesBlock(t) + '<div class="usage">' + t.usage + "</div></article>";
   }
 
   /* ── The running turn: the working line is the header of the activity, and
-     the trail is open while it grows — this is the part worth watching. */
+     the trail is open while it grows. Its changes appear in the pane as each
+     edit lands, and under the answer once it finishes. */
   function runningTurn() {
     var t = RUN, shown = t.steps.slice(0, S.live);
-    var rows = shown.map(function (s, i) { return stepRow("run", s, i, { active: i === shown.length - 1 && S.live <= t.steps.length, fresh: i === shown.length - 1 }); }).join("");
+    var rows = shown.map(function (s, i) { return stepRow(t, s, i, { active: i === shown.length - 1, fresh: i === shown.length - 1 }); }).join("");
     return "<article>" + header(t) +
-      '<div class="act"><div class="working" role="status" aria-live="polite">' + grid() + '<span class="working-shimmer">working</span><span class="mono meta" aria-hidden="true">' + S.elapsed.toFixed(1) + "s</span></div>" +
+      '<div class="act"><div class="working" role="status" aria-live="polite">' + grid() + '<span class="working-shimmer">working</span><span class="mono meta" id="elapsed" aria-hidden="true">' + S.elapsed.toFixed(1) + "s</span></div>" +
       (rows ? '<div class="trail">' + rows + "</div>" : "") + "</div></article>";
   }
   function grid() {
@@ -224,61 +465,138 @@
     return '<span class="pixel-grid" aria-hidden="true">' + d.map(function (x) { return '<span class="pixel-cell" style="animation:pixel-on 650ms ease-in-out ' + x + 'ms infinite"></span>'; }).join("") + "</span>";
   }
   function fmt(s) { return s < 60 ? s + "s" : Math.floor(s / 60) + "m " + (s % 60) + "s"; }
-
   function mine(text, time) { return '<div class="mine"><div class="b">' + esc(text) + '</div><div class="meta">' + time + "</div></div>"; }
+
+  /* ── Which turns changed something, and what, as the pane sees it. A running
+     turn contributes the files its finished edit steps touched. */
+  function turnsWithChanges() {
+    if (S.ui === "empty" || S.ui === "loading" || S.ui === "error") return [];
+    var list = [CLAUDE];
+    if (S.ui === "running") {
+      var files = S.runDone ? RUN.files : RUN.steps.slice(0, S.live).filter(function (s, i) { return s.k === "edit" && (i < S.live - 1); }).map(function (s) { return RUN.files[s.file]; });
+      if (files.length) list.push({ id: "r", provider: "claude", time: RUN.time, prompt: RUN.prompt, files: files, working: !S.runDone });
+    }
+    return list;
+  }
+  function allFiles(turns) {
+    var seen = {}, out = [];
+    turns.forEach(function (t) { t.files.forEach(function (f) { if (!seen[f.path]) { seen[f.path] = 1; out.push(f); } }); });
+    return out;
+  }
+
+  /* ── The pane */
+  function pane() {
+    var turns = turnsWithChanges(), scoped = S.scope === "all" ? null : turns.filter(function (t) { return t.id === S.scope; })[0];
+    if (S.scope !== "all" && !scoped) S.scope = "all";
+    var files = scoped ? scoped.files : allFiles(turns), st = stat(files);
+    var dataState = S.ui === "loading" ? "loading" : S.paneData === "recorded" && !turns.length ? "empty" : S.paneData;
+    var head = '<div class="ph">' +
+      (dataState === "recorded" ? '<button class="ibtn" data-act="files" aria-pressed="' + S.files + '" title="Files" aria-label="Show the list of files">' + I("list-tree", 16) + "</button>" : "") +
+      '<span class="t">Changes</span>' +
+      (dataState === "recorded" ? '<span class="scope">· ' + (scoped ? "“" + esc(scoped.prompt) + "”" : "All changes in this conversation") + '</span><span class="stat">' + statHtml(st) + "</span>" : "") +
+      '<span class="sp"></span>' +
+      '<button class="ibtn" data-act="max" title="' + (S.max ? "Show the conversation" : "Cover the conversation") + '" aria-label="' + (S.max ? "Show the conversation" : "Cover the conversation") + '">' + I(S.max ? "minimize-2" : "maximize-2", 15) + "</button>" +
+      '<button class="ibtn" data-act="close" title="Close" aria-label="Close Changes">' + I("x", 16) + "</button></div>";
+
+    var body;
+    if (dataState === "loading") {
+      body = '<div class="files"><div class="tree">' + [70, 55, 80].map(function (w) { return '<div class="sk" style="height:14px;width:' + w + '%;margin:8px 6px 12px"></div>'; }).join("") + '</div></div><div class="diffs">' +
+        [0, 1].map(function () { return '<div class="dc"><div class="dc-h"><div class="sk" style="height:12px;width:45%"></div></div><div class="dc-b">' + [90, 70, 80, 60, 75].map(function (w) { return '<div class="sk" style="height:12px;width:' + w + '%;margin:6px 12px 6px 54px"></div>'; }).join("") + "</div></div>"; }).join("") + "</div>";
+    } else if (dataState === "error") {
+      body = '<div class="pstate"><span class="status" data-tone="danger">' + I("octagon-x", 16) + '<span class="w">Could not load the changes</span></span><div class="d">The server did not answer. The conversation itself is unaffected.</div><button class="btn" data-act="retry">' + I("refresh-cw", 14) + "Try again</button></div>";
+    } else if (dataState === "not-recorded") {
+      body = '<div class="pstate">' + I("circle-minus", 20) + '<div class="t">Changes are not recorded for this conversation</div><div class="d">Recording needs git on the computer, and sriharipc does not have it. Agents still work in <span class="mono">D:\\sparstrowgen</span>; what they changed just cannot be shown here. Installing Git for Windows turns this on.</div></div>';
+    } else if (dataState === "empty") {
+      body = '<div class="pstate">' + I("file-diff", 20) + '<div class="t">No changes yet</div><div class="d">When an agent creates, edits or deletes a file in <span class="mono">D:\\sparstrowgen</span>, it shows here, turn by turn.</div></div>';
+    } else {
+      // File list, grouped by folder, then the turns that changed something.
+      var byDir = {};
+      files.forEach(function (f) { var i = f.path.lastIndexOf("/"), d = f.path.slice(0, i); (byDir[d] = byDir[d] || []).push(f); });
+      var tree = Object.keys(byDir).sort().map(function (d) {
+        return '<div class="dirrow" title="' + esc(d) + '">' + I("folder-open", 13) + esc(d) + "</div>" + byDir[d].map(function (f) {
+          var nm = f.path.slice(f.path.lastIndexOf("/") + 1);
+          return '<button class="frow" data-act="goto" data-path="' + esc(f.path) + '" aria-current="' + (S.focus === f.path) + '">' + I(f.kind === "A" ? "file-plus" : f.kind === "D" ? "file-x" : "file-code", 14) +
+            '<span class="nm' + (f.kind === "D" ? " gone" : "") + '" title="' + esc(f.path) + '">' + esc(nm) + '</span><span class="stat">' + statHtml(stat([f])) + "</span></button>";
+        }).join("");
+      }).join("");
+      var every = allFiles(turns);
+      var scopes = '<button class="srow" data-act="scope" data-v="all" aria-current="' + (S.scope === "all") + '">' + I("file-diff", 14) + '<span class="body"><span class="a" style="display:block">All changes</span><span class="b">' + every.length + " files<span class=\"stat\">" + statHtml(stat(every)) + "</span></span></span></button>" +
+        turns.map(function (t) {
+          return '<button class="srow" data-act="scope" data-v="' + t.id + '" aria-current="' + (S.scope === t.id) + '">' + M(t.provider, 14) + '<span class="body"><span class="a" style="display:block" title="' + esc(t.prompt) + '">' + esc(t.prompt) + '</span><span class="b">' +
+            (t.working ? '<span class="status" data-tone="progress">' + I("loader-circle", 12, "spin") + "<span>working</span></span>" : t.provider + " · " + t.time) + '<span class="stat">' + statHtml(stat(t.files)) + "</span></span></span></button>";
+        }).join("");
+      body = (S.files ? '<nav class="files" aria-label="Changed files"><div class="tree">' + tree + '</div><div class="scopes" aria-label="Which changes">' + scopes + "</div></nav>" : "") +
+        '<div class="diffs" id="diffs">' + files.map(function (f) { return diffCard(f, "pane:" + S.scope, { full: true, anchor: true }); }).join("") + "</div>";
+    }
+    return '<aside class="pane" aria-label="Changes">' + head + '<div class="pb">' + body + "</div></aside>";
+  }
+
+  /* ── The conversation header: title, folder, the view switch, and the way
+     into Changes, which carries the conversation's running total. */
+  function chatHeader() {
+    var every = allFiles(turnsWithChanges()), st = stat(every), any = every.length > 0 && S.ui !== "loading" && S.paneData === "recorded";
+    return '<header class="ch"><div class="ttl"><div class="n">Flaky reconnect test</div><div class="f">' + I("folder-open", 13) + '<span class="mono">D:\\sparstrowgen</span></div></div>' +
+      '<span class="toggle2" title="Not part of this design"><span class="on">Rendered</span><span>Raw</span></span>' +
+      '<button class="hbtn" data-act="pane" aria-pressed="' + (S.pane === "open") + '" title="Changes">' + I("file-diff", 15) + '<span class="lbl">Changes</span>' + (any ? '<span class="cnt">' + statHtml(st).replace("</span><span", "</span> <span") + "</span>" : "") + "</button></header>";
+  }
+
+  function transcript() {
+    if (S.ui === "loading") {
+      return '<div class="mine" style="width:40%"><div class="sk" style="height:44px;border-radius:16px"></div></div>' +
+        '<div><div class="sk" style="height:14px;width:140px;margin-bottom:10px"></div><div class="sk" style="height:14px;width:110px;margin-bottom:14px"></div><div class="sk" style="height:16px;width:100%;margin-bottom:8px"></div><div class="sk" style="height:16px;width:80%"></div></div>';
+    }
+    if (S.ui === "empty") {
+      // A turn that did nothing but answer has no activity line and no
+      // changes block — not "Worked for 0s", not "Changed 0 files".
+      return mine("What does D-051 say about computers in a workspace?", "9:12 PM") +
+        doneTurn({ id: "e", provider: "claude", model: "Haiku 4.5", time: "9:12 PM", worked: 0, usage: "2.1k tokens · $0.01", steps: [], files: [],
+          answer: "<p>A computer is offered to workspaces, and that assignment is what routes the work: a workspace runs only on the computers it was given.</p>" });
+    }
+    if (S.ui === "error") {
+      var t = { id: "x", provider: "claude", model: "Sonnet 5", time: "9:15 PM", worked: 12, usage: "8.2k tokens · $0.03", files: [],
+        steps: CLAUDE.steps.slice(0, 5), answer: "<p>The reconnect test waits a fixed 200 ms, and on CI that is not long enough. I was about to</p>" };
+      return mine("The reconnect test is flaky on CI. Find out why and fix it.", "9:15 PM") +
+        doneTurn(t, '<div class="notice">' + I("octagon-x", 16) + '<div><div class="t">Turn did not finish</div><div>claude closed the connection before finishing (exit code 1). What it did and wrote before that is kept above.</div></div></div>');
+    }
+    var h = mine(CLAUDE.prompt, "9:04 PM") + doneTurn(CLAUDE) + mine(CODEX.prompt, "9:07 PM") + doneTurn(CODEX);
+    if (S.ui === "running") h += mine(RUN.prompt, "9:09 PM") + (S.runDone ? doneTurn(RUN) : runningTurn());
+    return h;
+  }
 
   function render() {
     document.documentElement.classList.toggle("dark", S.theme === "dark");
-    var col = document.getElementById("col"), h = "";
-    if (S.ui === "loading") {
-      h = '<div class="mine" style="width:40%"><div class="sk" style="height:44px;border-radius:16px"></div></div>' +
-          '<div><div class="sk" style="height:14px;width:140px;margin-bottom:10px"></div><div class="sk" style="height:14px;width:110px;margin-bottom:14px"></div><div class="sk" style="height:16px;width:100%;margin-bottom:8px"></div><div class="sk" style="height:16px;width:80%"></div></div>';
-    } else if (S.ui === "empty") {
-      // A turn that did nothing but answer has no activity line at all — not
-      // "Worked for 0s", which would say something happened.
-      h = mine("What does D-051 say about computers in a workspace?", "9:12 PM") +
-          doneTurn("e", { provider: "claude", model: "Haiku 4.5", time: "9:12 PM", worked: 0, usage: "2.1k tokens · $0.01", steps: [],
-            answer: "<p>A computer is offered to workspaces, and that assignment is what routes the work: a workspace runs only on the computers it was given.</p>" });
-    } else if (S.ui === "error") {
-      var t = { provider: "claude", model: "Sonnet 5", time: "9:15 PM", worked: 12, usage: "8.2k tokens · $0.03",
-        steps: CLAUDE.steps.slice(0, 5), answer: "<p>The reconnect test waits a fixed 200 ms, and on CI that is not long enough. I was about to</p>" };
-      h = mine("The reconnect test is flaky on CI. Find out why and fix it.", "9:15 PM") +
-          doneTurn("x", t, '<div class="notice">' + I("octagon-x", 16) + '<div><div class="t">Turn did not finish</div><div>claude closed the connection before finishing (exit code 1). What it did and wrote before that is kept above.</div></div></div>');
-    } else {
-      h = mine("The reconnect test is flaky on CI. Find out why and fix it.", "9:04 PM") + doneTurn("a", CLAUDE) +
-          mine("And what is the latest Go release? Is it the one installed here?", "9:07 PM") + doneTurn("b", CODEX);
-      if (S.ui === "running") h += mine("Only show the switch notice when it costs something.", "9:09 PM") + runningTurn();
-    }
-    col.innerHTML = h;
+    var app = document.getElementById("app");
+    var sc = app.querySelector(".scroll"), df = document.getElementById("diffs");
+    var keep = [sc ? sc.scrollTop : 0, df ? df.scrollTop : 0];
+    app.dataset.max = S.pane === "open" && S.max;
+    app.innerHTML = '<div class="chat">' + chatHeader() + '<div class="scroll"><main class="col" aria-label="Transcript">' + transcript() + "</main></div></div>" + (S.pane === "open" ? pane() : "");
+    sc = app.querySelector(".scroll"); df = document.getElementById("diffs");
+    if (sc) sc.scrollTop = keep[0];
+    if (df) df.scrollTop = keep[1];
+    if (S.focus && df) { var el = document.getElementById("f-" + S.focus); if (el) df.scrollTop = el.offsetTop - df.offsetTop - 12; }
     bar();
   }
 
   function bar() {
     function grp(label, key, opts) { return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) { return '<button data-act="set" data-k="' + key + '" data-v="' + o + '" aria-pressed="' + (S[key] === o) + '">' + o + "</button>"; }).join("") + "</span>"; }
-    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "running", "empty", "loading", "error"]) + grp("Theme", "theme", ["dark", "light"]) +
+    document.getElementById("bar").innerHTML = '<b style="font-weight:600">Prototype</b>' + grp("State", "ui", ["populated", "running", "empty", "loading", "error"]) +
+      grp("Pane", "pane", ["closed", "open"]) + grp("Changes", "paneData", ["recorded", "loading", "error", "not-recorded"]) + grp("Theme", "theme", ["dark", "light"]) +
       (S.ui === "running" ? '<span class="grp"><button data-act="replay">Replay the running turn</button></span>' : "");
   }
 
   /* The running turn, simulated: a step arrives every ~1.4s, then the turn
-     ends — the trail folds away and the answer takes its place. */
+     ends — the trail folds away, the answer takes its place, and its diffs
+     appear under it. */
   var timer = null, clock = null;
   function play() {
     clearInterval(timer); clearInterval(clock);
-    S.live = 0; S.elapsed = 0; delete S.open.r;
-    clock = setInterval(function () { S.elapsed += 0.1; var el = document.querySelector(".working .mono"); if (el) el.textContent = S.elapsed.toFixed(1) + "s"; }, 100);
+    S.live = 0; S.elapsed = 0; S.runDone = false; delete S.open.r; delete S.detail.r;
+    clock = setInterval(function () { S.elapsed += 0.1; var el = document.getElementById("elapsed"); if (el) el.textContent = S.elapsed.toFixed(1) + "s"; }, 100);
     timer = setInterval(function () {
       S.live++;
       if (S.live > RUN.steps.length) {
         clearInterval(timer); clearInterval(clock);
-        // Settled: exactly what a finished turn looks like, so nothing jumps
-        // when you scroll back to it later.
-        RUN.worked = Math.round(S.elapsed); RUN.usage = "18.6k tokens · $0.05";
-        S.ui = "populated-with-run";
-        document.getElementById("col").insertAdjacentHTML("beforeend", "");
-        var col = document.getElementById("col");
-        col.lastElementChild.outerHTML = doneTurn("r", RUN);
-        S.ui = "running";
-        return;
+        RUN.worked = Math.round(S.elapsed); S.runDone = true;
       }
       render();
     }, 1400);
@@ -288,19 +606,27 @@
   document.addEventListener("click", function (e) {
     var b = e.target.closest("[data-act]"); if (!b) return;
     var a = b.dataset.act;
-    if (a === "set") { S[b.dataset.k] = b.dataset.v; if (b.dataset.k === "ui") { if (S.ui === "running") return play(); clearInterval(timer); clearInterval(clock); } render(); }
-    if (a === "replay") play();
-    if (a === "toggle") { var id = b.dataset.turn; S.open[id] = !S.open[id]; rerenderTurn(id); }
-    if (a === "detail") { var t = b.dataset.turn, i = +b.dataset.i; S.detail[t] = S.detail[t] === i ? undefined : i; rerenderTurn(t); }
+    S.focus = null;
+    if (a === "set") {
+      S[b.dataset.k] = b.dataset.v;
+      if (b.dataset.k === "ui") { S.scope = "all"; if (S.ui === "running") return play(); clearInterval(timer); clearInterval(clock); }
+    }
+    if (a === "replay") return play();
+    if (a === "toggle") { var id = b.dataset.turn; S.open[id] = !S.open[id]; }
+    if (a === "detail") { var t = b.dataset.turn, i = +b.dataset.i; S.detail[t] = S.detail[t] === i ? undefined : i; }
+    if (a === "fold") S.fold[b.dataset.key] = !S.fold[b.dataset.key];
+    if (a === "full") S.full[b.dataset.key] = true;
+    if (a === "pane") S.pane = S.pane === "open" ? "closed" : "open";
+    if (a === "close") { S.pane = "closed"; S.max = false; }
+    if (a === "max") S.max = !S.max;
+    if (a === "files") S.files = !S.files;
+    if (a === "scope") { S.scope = b.dataset.v; if (narrow) S.files = false; }
+    if (a === "goto") { S.focus = b.dataset.path; if (narrow) S.files = false; }
+    if (a === "show") { S.pane = "open"; S.scope = b.dataset.turn; S.focus = b.dataset.path || null; if (narrow) S.files = false; }
+    if (a === "retry") S.paneData = "recorded";
+    render();
   });
-  function rerenderTurn(id) {
-    var btn = document.querySelector('[data-act="toggle"][data-turn="' + id + '"]');
-    var art = btn ? btn.closest("article") : document.querySelector('[data-turn="' + id + '"]').closest("article");
-    var t = { a: CLAUDE, b: CODEX, r: RUN, x: null }[id];
-    if (!t) return render();
-    var tmp = document.createElement("div"); tmp.innerHTML = doneTurn(id, t);
-    art.replaceWith(tmp.firstElementChild);
-  }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.pane === "open") { S.pane = "closed"; S.max = false; render(); } });
 
   if (S.ui === "running") play(); else render();
 })();

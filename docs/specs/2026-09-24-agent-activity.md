@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | **Draft** — for the owner to correct and approve |
 | **Created** | 2026-09-24 |
-| **Trigger** | "When prompt is sent in the chat, I want all different process agent go through should be visible to me, like the thinking, searching, file edited, terminal commands ran etc." and "After the work is done by an agent, I want to see all these agents works to be collapsed … then I should only see the final response from the agent. If I want to I'll open what it worked." |
+| **Trigger** | "When prompt is sent in the chat, I want all different process agent go through should be visible to me, like the thinking, searching, file edited, terminal commands ran etc." and "After the work is done by an agent, I want to see all these agents works to be collapsed … then I should only see the final response from the agent. If I want to I'll open what it worked." Then, 2026-09-24: "I would like to see the code diff … when a turn of work is done editing any file. And also I need side pane for a full view of changes that has made on the current session." |
 | **Design** | [`docs/design/prototypes/Chat/agent-activity.dc.html`](../design/prototypes/Chat/agent-activity.dc.html), from the owner's reference component and screenshot |
 | **Open questions** | [`docs/Later.md`](../Later.md) L-33: what the agents may do on the computer |
 
@@ -41,6 +41,14 @@ kept and can be opened.
 **6. Coming back later.** A conversation opened tomorrow, or on another device, shows the same
 folded line and the same steps for every turn.
 
+**7. Seeing what a turn changed.** When a turn has created, edited or deleted files, the finished
+turn shows the changes themselves, line by line, without opening anything: which lines were removed,
+which were added, and where in the file.
+
+**8. Reviewing everything a conversation changed.** Next to the conversation, you can look at every
+change its turns made, file by file, and narrow it to one turn. You can keep it open while you read
+and while the next turn runs.
+
 ## What is true afterwards
 
 - Nothing an agent reports about its work is hidden from you, and nothing it did not report is
@@ -49,3 +57,5 @@ folded line and the same steps for every turn.
   in what an agent *can* report (for example, codex reports a web search without its sources) is
   shown as absent, not invented.
 - A turn that only answered shows no activity line at all.
+- A change counts whoever made it, the agent's edit or a command it ran. A change you made yourself
+  between turns is not shown as the agent's.
