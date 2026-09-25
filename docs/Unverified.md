@@ -647,3 +647,14 @@ version or model", and "does not record its tool definitions". In the browser: L
 agy's tools first; groups and pieces opened. Two fixes came out of it, shipped in the follow-up:
 plugin skill names cut before the part that differs, and file paths cut before the file's name. A
 turn sent seconds before the deploy was lost to it: B-57.
+
+## U-37 — A long folder list scrolls inside the Working directory box
+
+**Raised:** 2026-09-24, B-58
+**Who can run it:** owner, or the agent with the testing account and a test daemon
+
+**The step:** after the change deploys, open Working directory and go to a drive root with more
+folders than fit. The list scrolls inside its bordered box; nothing shows over the git warning or
+the Cancel and Run here buttons. Scroll the conversation list and a long chat too, which share the
+scroll area, and confirm they still scroll to the end.
+**Status:** open
