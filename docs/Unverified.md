@@ -684,7 +684,14 @@ agy; the answer uses both values, and both show above the message and under This
 codex and ask about the picture; it answers from it. Ask codex for a small picture; it appears under
 the answer and under Outputs. Open Working folder, go into a folder, open a file. With the test
 computer disconnected, the pane says the computer is unreachable and This chat still lists the files.
-**Status:** open
+**Status:** verified 2026-09-24 on production, with a test computer (daemon built from #77 + #78) and
+the testing account: a PNG and a CSV added with + reached agy, which answered "HERON-5183, 17"; both
+showed above the message and in the pane, and the CSV previewed as a table. Switched to codex, it read
+the earlier picture ("HERON-5183") and generated a red circle, which appeared under its answer and
+under Outputs. Working folder listed two levels down and previewed a file; with the test computer
+stopped it said the computer is unreachable while This chat still listed all three files. Not run on
+production: agy generating a picture (the collection from its brain folder is unit-tested and the
+folder was verified by hand, Capabilities), and claude (U-38).
 
 ## U-40 — The owner's computer handles files once candidate 0.3.6 is promoted
 
