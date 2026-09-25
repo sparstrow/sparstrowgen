@@ -18,6 +18,7 @@ import {
 } from "./api";
 import type { Appearance } from "./api";
 import type {
+  AgentMessage,
   Conversation,
   Entry,
   Exchange,
@@ -52,6 +53,11 @@ export const keys = {
   // turn is opened in Raw; the second is a few numbers per turn.
   exchange: (entryId: string) => ["exchange", entryId] as const,
   exchanges: (conversationId: string) => ["exchanges", conversationId] as const,
+  // A conversation's uploads and outputs, and one directory of its working
+  // folder. The folder is read from the computer each time, so it has a key of
+  // its own per directory and is never kept as if it were stored.
+  files: (conversationId: string) => ["files", conversationId] as const,
+  folder: (conversationId: string, path: string) => ["folder", conversationId, path] as const,
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
 };
 
@@ -485,6 +491,30 @@ export function useConversation(id: string | null) {
   });
 }
 
+/** A conversation's files, newest first, and where they are on its computer.
+ *  Patched by "files" events; fetched when the pane or the composer needs it. */
+export function useConversationFiles(conversationId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.files(conversationId ?? ""),
+    queryFn: () => api.files(conversationId!),
+    enabled: enabled && conversationId !== null,
+  });
+}
+
+/** One directory of a conversation's working folder, as its computer has it
+ *  now. Not retried: an offline computer or a too-old one is an answer to
+ *  show, not a glitch to paper over. Re-read whenever it is looked at again,
+ *  because the agent may have changed the folder since. */
+export function useFolder(conversationId: string | null, path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.folder(conversationId ?? "", path),
+    queryFn: () => api.folder(conversationId!, path),
+    enabled: enabled && conversationId !== null,
+    retry: false,
+    staleTime: 0,
+  });
+}
+
 /** One turn's record: what was sent, every line printed, and what the CLI said
  *  about itself. Fetched only once the turn is opened in Raw.
  *
@@ -680,12 +710,14 @@ export function useSendMessage() {
       text,
       provider,
       model,
+      fileIds,
     }: {
       id: string;
       text: string;
       provider: ProviderId;
       model: Model;
-    }) => api.send(id, { text, provider, model }),
+      fileIds?: string[];
+    }) => api.send(id, { text, provider, model, fileIds }),
   });
 }
 
@@ -973,7 +1005,13 @@ export function useRealtime() {
 
         case "entry_done":
           patchEntries(ev.conversationId, (entries) =>
-            entries.map((e) => (e.id === ev.entry.id ? ev.entry : e)),
+            entries.map((e) =>
+              e.id === ev.entry.id
+                ? // A server older than files sends the ending without them;
+                  // keep what the "files" events already brought.
+                  { ...ev.entry, files: ev.entry.files ?? (e as AgentMessage).files }
+                : e,
+            ),
           );
           qc.setQueryData<Conversation>(
             keys.conversation(ev.conversationId),
@@ -996,6 +1034,21 @@ export function useRealtime() {
           // with the stored version and the server's final reading of it.
           void qc.invalidateQueries({ queryKey: keys.exchange(ev.entry.id) });
           void qc.invalidateQueries({ queryKey: keys.exchanges(ev.conversationId) });
+          break;
+
+        case "files":
+          // What an agent made arrives while its turn runs, with all of that
+          // turn's files; an upload or removal carries none and only moves the
+          // list.
+          if (ev.entryId && ev.files) {
+            const files = ev.files;
+            patchEntries(ev.conversationId, (entries) =>
+              entries.map((e) =>
+                e.id === ev.entryId && e.role !== "replay" ? ({ ...e, files } as Entry) : e,
+              ),
+            );
+          }
+          void qc.invalidateQueries({ queryKey: keys.files(ev.conversationId) });
           break;
 
         case "exchange":

@@ -14,6 +14,9 @@ import type {
   Workspace,
   AssignedMachine,
   AssignedWorkspace,
+  ConversationFile,
+  ConversationFiles,
+  FolderListing,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -510,7 +513,7 @@ export const api = {
 
   async send(
     id: string,
-    input: { text: string; provider: ProviderId; model: Model },
+    input: { text: string; provider: ProviderId; model: Model; fileIds?: string[] },
   ): Promise<{ turnId: string; entry: Entry }> {
     return json(
       await request(`${BASE}/api/conversations/${id}/messages`, {
@@ -519,6 +522,97 @@ export const api = {
         body: JSON.stringify(input),
       }),
     );
+  },
+
+  /** A conversation's files, newest first, and where they are on its computer. */
+  async files(conversationId: string): Promise<ConversationFiles> {
+    return json(
+      await request(`${BASE}/api/conversations/${conversationId}/files`, { cache: "no-store" }),
+    );
+  },
+
+  /** Uploads one file for the message being written.
+   *
+   *  XMLHttpRequest rather than fetch, because fetch cannot report how much of
+   *  an upload has gone, and a 20 MB file with no progress looks stuck. The body
+   *  is the file itself; its name goes in the query. */
+  uploadFile(
+    conversationId: string,
+    file: File,
+    onProgress: (fraction: number) => void,
+    signal?: AbortSignal,
+  ): Promise<ConversationFile> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(
+        "POST",
+        `${BASE}/api/conversations/${conversationId}/files?name=${encodeURIComponent(file.name)}`,
+      );
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status === 401) return reject(new NotSignedIn());
+        let body: unknown = null;
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {
+          // An empty or broken answer is reported by status below.
+        }
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(body as ConversationFile);
+        const failed = body as { error?: string } | null;
+        reject(new Error(failed?.error ?? `${xhr.status} ${xhr.statusText}`));
+      };
+      xhr.onerror = () => reject(new Error("The server could not be reached."));
+      xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
+      signal?.addEventListener("abort", () => xhr.abort());
+      xhr.send(file);
+    });
+  },
+
+  /** Takes an upload back out of the message box before it is sent. */
+  async removeFile(fileId: string): Promise<void> {
+    const res = await request(`${BASE}/api/files/${fileId}`, { method: "DELETE" });
+    if (res.status === 401) throw new NotSignedIn();
+    // Already gone is what was wanted.
+    if (!res.ok && res.status !== 404) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+    }
+  },
+
+  /** Where a picture's <img> points, or a download link. The bytes are served
+   *  as whatever the server decided the file is, never as a page. */
+  fileUrl(fileId: string, download = false): string {
+    return `${BASE}/api/files/${fileId}/content${download ? "?download=1" : ""}`;
+  },
+
+  /** One directory of a conversation's working folder, read from its computer
+   *  now. `path` is relative to the folder; empty is the folder itself. */
+  async folder(conversationId: string, path: string): Promise<FolderListing> {
+    return json(
+      await request(
+        `${BASE}/api/conversations/${conversationId}/folder?path=${encodeURIComponent(path)}`,
+        { cache: "no-store" },
+      ),
+    );
+  },
+
+  folderFileUrl(conversationId: string, path: string, download = false): string {
+    return `${BASE}/api/conversations/${conversationId}/folder/file?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
+  },
+
+  /** A file's bytes, for a preview that needs them in the page: text to show,
+   *  a PDF for the browser's own viewer. The server's own wording on failure. */
+  async blob(url: string, signal?: AbortSignal): Promise<Blob> {
+    const res = await request(url, { signal });
+    if (res.status === 401) throw new NotSignedIn();
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
+    }
+    return res.blob();
   },
 };
 
@@ -544,7 +638,10 @@ export type ServerEvent =
   | { type: "entry_done"; conversationId: string; entry: AgentMessage }
   // What is new in a running turn's record: the sent record once, then lines by
   // seq, and the report whenever it changed.
-  | { type: "exchange"; conversationId: string; entryId: string; exchange: Exchange };
+  | { type: "exchange"; conversationId: string; entryId: string; exchange: Exchange }
+  // A conversation's files changed. With an entryId, `files` is all of that
+  // entry's files: what an agent made so far in its turn.
+  | { type: "files"; conversationId: string; entryId?: string; files?: ConversationFile[] };
 
 /** Opens the live feed and keeps it open.
  *

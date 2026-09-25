@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderOpen, Pencil, PlugZap, Plus, RefreshCw } from "lucide-react";
+import { Folder, FolderOpen, Pencil, PlugZap, Plus, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { Model, ProviderId } from "@/lib/chat-types";
 import { api } from "@/lib/api";
 import {
   useArchiveConversation,
   useConversation,
+  useConversationFiles,
   useConversations,
   useCreateConversation,
   useDaemon,
@@ -21,6 +22,7 @@ import {
   useWorkspaceReach,
 } from "@/lib/queries";
 import { useChatView, type TranscriptView } from "@/lib/store";
+import { MAX_FILE_BYTES, formatBytes, useAttachments, useFilesPane } from "@/lib/files";
 import { ConversationList } from "./conversation-list";
 import { ConversationName } from "./conversation-name";
 import { ProviderStrip } from "./provider-strip";
@@ -30,6 +32,7 @@ import { RawTranscript } from "./raw-transcript";
 import { ChoiceToggle } from "./choice-toggle";
 import { FolderPicker } from "./folder-picker";
 import { Composer } from "./composer";
+import { FilesPane } from "./files-pane";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -67,6 +70,14 @@ export function ChatSurface() {
   const clearDraft = useChatView((s) => s.clearDraft);
 
   const [pickingFolder, setPickingFolder] = useState(false);
+  // Whether files are being dragged over the conversation right now. Counted,
+  // because every child the drag crosses fires its own enter and leave.
+  const [dragDepth, setDragDepth] = useState(0);
+
+  const paneOpen = useFilesPane((s) => s.open);
+  const togglePane = useFilesPane((s) => s.toggle);
+  const addFiles = useAttachments((s) => s.add);
+  const clearAttachments = useAttachments((s) => s.clear);
 
   // Whether the computer can be reached, and whether it is too old to be sent
   // work (spec US3). Both are the server's to report, so they come from the
@@ -108,6 +119,10 @@ export function ChatSurface() {
 
   const selected = conversation.data ?? null;
   const draft = selectedId ? (drafts[selectedId] ?? "") : "";
+  // For the count on the files button. Uploads still in some message box are
+  // not the chat's until sent.
+  const chatFiles = useConversationFiles(selectedId);
+  const sentFiles = chatFiles.data?.files.filter((f) => f.entryId).length ?? 0;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = useCallback(() => {
@@ -230,16 +245,24 @@ export function ChatSurface() {
   }
 
   async function handleSend() {
-    if (!selected || !draft.trim() || inFlight) return;
+    if (!selected || inFlight) return;
+    const conversationId = selected.id;
+    // Read at the moment of sending rather than subscribed to: only this
+    // decision needs them, and the composer already shows them.
+    const attached = useAttachments.getState().byConversation[conversationId] ?? [];
+    if (attached.some((a) => a.status !== "ready")) return;
+    const fileIds = attached.flatMap((a) => (a.file ? [a.file.id] : []));
+    if (!draft.trim() && fileIds.length === 0) return;
     const text = draft.trim();
     const provider = pending?.to ?? selected.provider;
     const model = pending?.toModel ?? selected.model;
-    const conversationId = selected.id;
     clearDraft(conversationId);
     setPending(null);
 
     try {
-      const { entry } = await send.mutateAsync({ id: conversationId, text, provider, model });
+      const { entry } = await send.mutateAsync({ id: conversationId, text, provider, model, fileIds });
+      // Only once it went: a refused send keeps its files in the box.
+      clearAttachments(conversationId);
       // Against the conversation it was sent from, which may no longer be the
       // open one by the time the server answers.
       setInFlight(conversationId, { entryId: entry.id, provider, model, startedAt: Date.now() });
@@ -355,7 +378,26 @@ export function ChatSurface() {
         detail={selectedId !== null}
         trayInDetail={false}
       >
-        <main className="flex min-h-0 flex-1 flex-col">
+        <main className="relative flex min-h-0 flex-1">
+         <div
+          className="relative flex min-w-0 flex-1 flex-col"
+          // Files dropped anywhere on the conversation go into its message box.
+          onDragEnter={(e) => {
+            if (!selected || !e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setDragDepth((d) => d + 1);
+          }}
+          onDragOver={(e) => {
+            if (selected && e.dataTransfer.types.includes("Files")) e.preventDefault();
+          }}
+          onDragLeave={() => setDragDepth((d) => Math.max(0, d - 1))}
+          onDrop={(e) => {
+            if (!selected || !e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setDragDepth(0);
+            if (canReach && !daemonTooOld) addFiles(selected.id, Array.from(e.dataTransfer.files));
+          }}
+        >
           {selected ? (
             <>
               <AppHeader
@@ -395,6 +437,24 @@ export function ChatSurface() {
                   {selected.spendUsd > 0 && <div>{formatUsd(selected.spendUsd)}</div>}
                   <div>{formatTokens(selected.tokens)} tokens</div>
                 </div>
+                {/* The files pane: this chat's uploads and outputs, and its
+                    working folder (the owner's call, 2026-09-24). */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative size-8 shrink-0 text-muted-foreground aria-pressed:bg-accent aria-pressed:text-foreground"
+                  onClick={togglePane}
+                  aria-pressed={paneOpen}
+                  aria-label="Files"
+                  title="Files: this chat’s uploads and outputs, and its working folder"
+                >
+                  <Folder className="size-[18px]" />
+                  {!paneOpen && sentFiles > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">
+                      {sentFiles}
+                    </span>
+                  )}
+                </Button>
               </AppHeader>
 
               <ProviderStrip providers={usableProviders} />
@@ -456,6 +516,7 @@ export function ChatSurface() {
               />
 
               <Composer
+                conversationId={selected.id}
                 providers={usableProviders}
                 activeProvider={activeProvider}
                 activeModel={activeModel}
@@ -497,6 +558,27 @@ export function ChatSurface() {
                 New conversation
               </Button>
             </div>
+          )}
+          {dragDepth > 0 && selected && (
+            <div className="pointer-events-none absolute inset-2 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-ring bg-background/85">
+              <div className="flex flex-col items-center gap-1 text-center">
+                <Upload className="size-7 text-muted-foreground" aria-hidden />
+                <p className="mt-1 text-base font-medium">
+                  {canReach && !daemonTooOld ? "Drop to add to your message" : "Your computer can’t take files right now"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Pictures and files, up to {formatBytes(MAX_FILE_BYTES)} each
+                </p>
+              </div>
+            </div>
+          )}
+         </div>
+          {paneOpen && selected && (
+            <FilesPane
+              conversationId={selected.id}
+              folderName={selected.folder.split(/[\\/]/).filter(Boolean).pop() ?? selected.folder}
+              reachable={canReach && !daemonTooOld}
+            />
           )}
         </main>
       </AppShell>

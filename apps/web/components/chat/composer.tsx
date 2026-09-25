@@ -1,10 +1,19 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { ArrowUp, Check, ChevronDown, Square, Undo2 } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Info, Paperclip, Plus, Square, TriangleAlert, Undo2 } from "lucide-react";
 import { cn } from "cn";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
+import {
+  formatBytes,
+  MAX_FILE_BYTES,
+  unreadableBy,
+  useAttachments,
+  useConversationAttachments,
+  useRefusedFiles,
+} from "@/lib/files";
 import { providerStyle, formatTokens } from "./provider-meta";
+import { AttachmentChip } from "./file-bits";
 import { ProviderIcon } from "./provider-icon";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -16,6 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 type Props = {
+  /** Whose message box this is: the files waiting in it belong to the
+   *  conversation, like the draft text. */
+  conversationId: string | null;
   providers: Provider[];
   activeProvider: ProviderId;
   activeModel: Model;
@@ -38,6 +50,7 @@ type Props = {
 };
 
 export function Composer({
+  conversationId,
   providers,
   activeProvider,
   activeModel,
@@ -54,6 +67,19 @@ export function Composer({
   onStop,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const attachments = useConversationAttachments(conversationId);
+  const refused = useRefusedFiles(conversationId);
+  const addFiles = useAttachments((s) => s.add);
+  const removeFile = useAttachments((s) => s.remove);
+  const retryFile = useAttachments((s) => s.retry);
+  const uploading = attachments.some((a) => a.status === "uploading");
+  const failed = attachments.some((a) => a.status === "failed");
+  const canSend = !disabled && !uploading && !failed && (value.trim() !== "" || attachments.length > 0);
+  const unreadable = unreadableBy(pending?.to ?? activeProvider, attachments);
+  const add = (files: File[]) => {
+    if (conversationId && files.length > 0) addFiles(conversationId, files);
+  };
 
   // Fit the box to its text on every change, not only on typing, so it also
   // shrinks back when a send clears it or another conversation's draft loads.
@@ -149,6 +175,18 @@ export function Composer({
             under it (D-055). Beside the text, the pickers left a long message
             wrapping in two thirds of the box over an empty column. */}
         <div className="rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring">
+          {attachments.length > 0 && conversationId && (
+            <div className="flex flex-wrap gap-1.5 px-0.5 pt-0.5 pb-1.5">
+              {attachments.map((a) => (
+                <AttachmentChip
+                  key={a.key}
+                  attachment={a}
+                  onRemove={() => removeFile(conversationId, a.key)}
+                  onRetry={() => retryFile(conversationId, a.key)}
+                />
+              ))}
+            </div>
+          )}
           <textarea
             ref={taRef}
             rows={1}
@@ -158,7 +196,15 @@ export function Composer({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (value.trim() && !disabled) onSend();
+                if (canSend) onSend();
+              }
+            }}
+            // A pasted screenshot arrives as a file. Pasted text is left alone.
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.length > 0 && !disabled) {
+                e.preventDefault();
+                add(files);
               }
             }}
             placeholder={
@@ -173,6 +219,47 @@ export function Composer({
           />
 
           <div className="flex items-center gap-2">
+            {/* A menu rather than a straight file dialog, because this is where
+                more ways of bringing something into a message will go (the
+                owner's reference had sources and commands; later). */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={disabled || !conversationId}
+                    aria-label="Add photos and files"
+                    title="Add photos and files"
+                    className="size-9 shrink-0 rounded-xl text-muted-foreground"
+                  />
+                }
+              >
+                <Plus className="size-[18px]" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-80">
+                <DropdownMenuItem onClick={() => fileInput.current?.click()}>
+                  <Paperclip className="size-4" />
+                  <span className="font-medium">Add photos &amp; files</span>
+                  <span className="text-muted-foreground">Upload from your computer</span>
+                </DropdownMenuItem>
+                <p className="mt-1 border-t px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
+                  Or drop them on the conversation, or paste a screenshot. Up to{" "}
+                  {formatBytes(MAX_FILE_BYTES)} each.
+                </p>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                add(Array.from(e.target.files ?? []));
+                // So choosing the same file again still counts as a change.
+                e.target.value = "";
+              }}
+            />
             {/* Provider first, then that provider's models. One merged menu was
                 tolerable at two models each; agy alone offers fourteen. */}
             {/* Allowed to shrink, and the model name truncates first, so a narrow
@@ -280,7 +367,7 @@ export function Composer({
               <Button
                 size="icon"
                 className="ml-auto size-9 shrink-0 rounded-xl"
-                disabled={disabled || !value.trim()}
+                disabled={!canSend}
                 onClick={onSend}
                 aria-label="Send message"
               >
@@ -289,6 +376,30 @@ export function Composer({
             )}
           </div>
         </div>
+        {(refused.length > 0 || unreadable.length > 0 || failed) && (
+          <div className="mt-2 space-y-1 px-1 text-xs leading-4">
+            {refused.map((r) => (
+              <p key={r.name} className="flex items-start gap-1.5 text-destructive-text">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                {r.name} is {formatBytes(r.size)}, over the {formatBytes(MAX_FILE_BYTES)} limit, so
+                it was not added.
+              </p>
+            ))}
+            {unreadable.length > 0 && (
+              <p className="flex items-start gap-1.5 text-warning-text">
+                <Info className="mt-px size-3.5 shrink-0" aria-hidden />
+                {shown.provider} sees pictures and small text files. It can’t open{" "}
+                {unreadable.join(", ")} with what it’s allowed to do today; agy or claude can.
+              </p>
+            )}
+            {failed && (
+              <p className="flex items-start gap-1.5 text-destructive-text">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                A file didn’t upload. Try again or remove it to send.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

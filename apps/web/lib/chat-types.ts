@@ -141,6 +141,8 @@ export type UserMessage = {
   role: "user";
   at: string;
   text: string;
+  /** Files sent with it, in the order added. */
+  files?: ConversationFile[];
 };
 
 export type AgentMessage = {
@@ -162,6 +164,9 @@ export type AgentMessage = {
    *  its way out — the surface leads with the stop, since the complaint is a
    *  consequence of it. */
   stopped?: boolean;
+  /** What the agent made in this turn: pictures it generated, files it saved
+   *  to the chat's outputs folder. */
+  files?: ConversationFile[];
 };
 
 /** A provider switch that has actually been paid for, recorded in the transcript
@@ -178,6 +183,45 @@ export type ReplayMarker = {
 };
 
 export type Entry = UserMessage | AgentMessage | ReplayMarker;
+
+/** One file of a conversation (docs/Decisions.md D-056): an upload sent with a
+ *  message, or something an agent made in a turn. The bytes are fetched
+ *  separately; this is what lists and the transcript show. */
+export type ConversationFile = {
+  id: string;
+  conversationId: string;
+  /** The message it came with or the turn that made it. Absent while an upload
+   *  waits in the message box. */
+  entryId?: string;
+  origin: "upload" | "output";
+  name: string;
+  /** Decided by the server from the bytes, never by the browser. */
+  mediaType: string;
+  size: number;
+  createdAt: string;
+};
+
+/** A conversation's files, and where they sit on its computer. `folder` is
+ *  empty when that computer is offline or too old to say. */
+export type ConversationFiles = {
+  files: ConversationFile[];
+  folder: string;
+};
+
+/** One directory of a conversation's working folder, read from the computer
+ *  just now. `path` is relative to the folder, with forward slashes. */
+export type FolderListing = {
+  path: string;
+  entries: FolderEntry[];
+  error?: string;
+};
+
+export type FolderEntry = {
+  name: string;
+  kind: "dir" | "file";
+  size: number;
+  modified: string;
+};
 
 /** A separate area of work inside one account (docs/Decisions.md D-050). One
  *  for personal things, one for work; conversations live in one and never

@@ -905,6 +905,11 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		a.log.Error("finish entry", "err", err)
 		return
 	}
+	// The browser replaces its copy of the entry with this one, so it carries
+	// what the agent made, or the pictures would vanish until a refresh.
+	a.mu.Lock()
+	entry.Files = append([]protocol.ConversationFile(nil), t.Files...)
+	a.mu.Unlock()
 	a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 		Type: protocol.EventEntryDone, ConversationID: t.ConversationID, Entry: &entry,
 	})

@@ -613,3 +613,38 @@ such as a record split differently, would show a wrong grouping without an error
   wrong for that agent.
 - **Clears when:** never fully. `SPARSTROWGEN_REAL_STORES` (the `sessionstore` real-store test) is
   the check to run after an agent update, against a fresh turn's session.
+
+## G-50 — A file cannot be removed once it is sent
+
+**Raised:** 2026-09-24, D-056
+
+The spec's US3 wants removal to be something the owner can do and understand. An upload can be taken
+out of the message box before sending; after that it is part of the record, and so is every output.
+Deleting a conversation deletes its files from the server, but its folder on the computer
+(`<data folder>\chats\<id>`) stays, because the server cannot reach a computer that is off.
+
+- **If wrong:** the chats folder only grows; the pane shows its path so it can be emptied by hand.
+- **Clears when:** removal is designed (a file, and a conversation's folder when the conversation
+  goes), which needs the owner's call on what removing a sent file means for the transcript.
+
+## G-51 — The browser's file helpers have no unit tests
+
+**Raised:** 2026-09-24, D-056
+
+`apps/web/lib/files.ts` (what kind a file is, what codex cannot open) and `parseCsv` in
+`files-pane.tsx` have no tests, because the web app has no test runner yet (like G-47). The server
+and daemon sides are tested.
+
+- **If wrong:** a file previews as the wrong kind, a CSV splits wrongly, or codex's warning names a
+  file it could in fact read.
+- **Clears when:** the web app gets vitest and these get a `.test.ts` beside them.
+
+## G-52 — Every file is kept in Postgres, with no total
+
+**Raised:** 2026-09-24, D-056
+
+Up to 25 MB a file and no limit per account. Right for one owner's screenshots and generated
+pictures; a busy account would grow the database, and its backups, quickly.
+
+- **If wrong:** the database grows by the size of every file sent or made.
+- **Clears when:** a quota, or object storage, once there is more than one heavy user.

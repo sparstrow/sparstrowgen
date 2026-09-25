@@ -212,6 +212,12 @@ project** (`conv\uploads`), because uploads get their own folder:
 | Any other file outside the project | not checked (U-38) | **no**: reading needs a shell command, and that is `rejected by policy` under its default sandbox (L-33) | **yes**: read the CSV's value, "17" |
 | Generating a picture | not offered | **yes, and the stream never says so.** `--json` carried two `agent_message` items and nothing else; the PNG was written to `~/.codex/generated_images/<thread id>/exec-<uuid>.png` | **yes.** A `generate_image` step with `ImageName` and `Prompt` but **no path**; the JPEG was written to `~/.gemini/antigravity-cli/brain/<conversation id>/<ImageName>_<ms>.jpg`. Its attempt to copy it into the folder it was asked to use was a `run_command`, denied (L-33) |
 
+**Built 2026-09-24 (D-056)** on these facts: files go into `<data folder>\chats\<id>\uploads`
+and `outputs`, claude and agy get the folder with `--add-dir`, codex gets pictures with
+`--image=<path>` (verified on a resumed thread too: `resume --image=<png> <thread> -` kept the thread
+and read the picture) and small text files in its prompt, and the daemon collects generated pictures
+after the turn.
+
 **So:** the uploads folder is readable by agy and, by documentation, claude, when it is added with
 `--add-dir`. codex sees pictures only through `-i`, and other files not at all until L-33 changes its
 sandbox; a small text file can be put into its prompt instead. A picture an agent generates never

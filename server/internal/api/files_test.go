@@ -217,6 +217,12 @@ func TestAComputerFetchesWhatATurnNeedsAndSendsBackWhatTheAgentMade(t *testing.T
 	}
 
 	d.send(protocol.DaemonMessage{Type: protocol.DaemonDone, TurnID: turn.TurnID, Full: "Here it is."})
+	done := b.await("the turn ending", func(ev protocol.ClientEvent) bool {
+		return ev.Type == protocol.EventEntryDone && ev.Entry != nil && ev.Entry.ID == turn.EntryID
+	})
+	if len(done.Entry.Files) != 1 {
+		t.Errorf("the ending replaced the entry without its files: %+v", done.Entry.Files)
+	}
 	r.awaitEntry(c.ID, turn.EntryID, func(e protocol.Entry) bool { return e.Text == "Here it is." })
 	res = r.get("/api/conversations/" + c.ID)
 	var conv protocol.Conversation
