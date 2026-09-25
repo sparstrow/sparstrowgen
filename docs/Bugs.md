@@ -1354,3 +1354,23 @@ entries finished before `finished_at` existed still have tokens, so they are not
 
 **Release note:** Fixed: a message whose answer was cut off by an update to sparstrowgen now says
 so, instead of sitting empty.
+
+## B-58 — The folder list ran out of the bottom of the Working directory box
+
+**Found:** 2026-09-24, owner's screenshot of the picker opened at `D:\` **Status:** fixed 2026-09-24
+**Repro:** Open Working directory on a folder with more subfolders than fit (a drive root).
+**Expected / Actual:** the list scrolls inside its box / the box stopped where it should, but the
+folders kept going past it, over the warning and the buttons, and the list did not scroll.
+
+The scroll area's inner viewport is `height: 100%`. The dialog only has a maximum height, not a
+height, so that 100% had nothing to resolve against and the viewport grew to its whole content. The
+bordered box around it shrank correctly, and the rows spilled out of it. The chat and the sidebar
+never showed it because their containers have a real height.
+
+**Fix:** the scroll area (`components/ui/scroll-area.tsx`) lays out as a column and its viewport may
+shrink (`min-h-0`), so it fills whatever height its box ends up with, fixed or not. Checked in a
+browser against the same structure and classes: before, the viewport was 727px in a 478px box and
+did not scroll; after, 476px and scrolls. A short list and a fixed-height container are unchanged.
+
+**Release note:** Fixed: a long folder list in Working directory now scrolls inside its box instead
+of running off the bottom.
