@@ -6,6 +6,7 @@ import { cn } from "cn";
 import { useRealtime } from "@/lib/queries";
 import { Rail, SectionTray, type Section } from "./rail";
 import { LiveStatus } from "./live-status";
+import { ResizeHandle } from "./resize-handle";
 
 /* The frame around every screen (docs/Decisions.md D-042, D-043, D-044).
 
@@ -44,11 +45,13 @@ export function AppShell({
         <Rail current={section} />
         <div
           className={cn(
-            "min-h-0 w-full shrink-0 flex-col border-r bg-muted/40 md:flex md:w-[212px]",
+            // The width is the person's own, dragged on its edge (lib/pane-width.ts).
+            "relative min-h-0 w-full shrink-0 flex-col border-r bg-muted/40 md:flex md:w-[var(--pane-list,212px)]",
             detail ? "hidden" : "flex",
           )}
         >
           {pane}
+          <ResizeHandle pane="list" edge="right" label="Resize the list" className="hidden md:block" />
         </div>
         <div
           className={cn(

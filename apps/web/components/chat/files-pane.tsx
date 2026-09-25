@@ -23,6 +23,7 @@ import type { ConversationFile } from "@/lib/chat-types";
 import { useConversationFiles, useFolder } from "@/lib/queries";
 import { fileKind, formatBytes, useFilesPane, type PaneTab, type PreviewTarget } from "@/lib/files";
 import { Button } from "@/components/ui/button";
+import { ResizeHandle } from "@/components/shell/resize-handle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChoiceToggle } from "./choice-toggle";
 import { FileKindIcon } from "./file-bits";
@@ -54,6 +55,7 @@ export function FilesPane({
   const close = useFilesPane((s) => s.close);
   const preview = useFilesPane((s) => s.preview);
   const wide = useFilesPane((s) => s.wide);
+  const toggleWide = useFilesPane((s) => s.toggleWide);
 
   return (
     <aside
@@ -61,10 +63,21 @@ export function FilesPane({
       className={cn(
         // Beside the conversation where there is room; over it where there is
         // not, since a 400px column would leave a phone's conversation unreadable.
-        "absolute inset-y-0 right-0 z-20 flex w-full flex-col border-l bg-background shadow-xl sm:w-[400px] lg:static lg:z-auto lg:shadow-none",
-        wide && preview && "sm:w-[min(56vw,760px)] lg:w-[min(56vw,760px)]",
+        // Dragged wider, it leaves a strip of the conversation showing when over
+        // it — so its edge never lands on the list's — and 360px when beside it.
+        "absolute inset-y-0 right-0 z-20 flex w-full flex-col border-l bg-background shadow-xl sm:max-w-[calc(100%-2rem)] lg:relative lg:z-auto lg:max-w-[calc(100%-360px)] lg:shadow-none",
+        wide && preview ? "sm:w-[min(56vw,760px)]" : "sm:w-[var(--pane-files,400px)]",
       )}
     >
+      <ResizeHandle
+        pane="files"
+        edge="left"
+        label="Resize files"
+        // Dragging a widened preview takes over from the Wider button, starting
+        // from the width it had.
+        onResizeStart={() => wide && preview && toggleWide()}
+        className="hidden sm:block"
+      />
       {preview ? (
         <Preview conversationId={conversationId} target={preview} />
       ) : (
@@ -181,6 +194,7 @@ function Section({
           // conversations apart, so that is the end kept when it is cut.
           <span
             title={path}
+            data-autofit="skip"
             className="ml-auto min-w-0 truncate font-mono text-[11px] font-normal [direction:rtl]"
           >
             {path}

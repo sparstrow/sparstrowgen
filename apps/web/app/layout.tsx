@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import { AppearanceProvider } from "@/components/appearance-provider";
 import { FIRST_PAINT_SCRIPT } from "@/lib/appearance";
+import { PANE_WIDTH_SCRIPT } from "@/lib/pane-width";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,6 +41,8 @@ export default function RootLayout({
         {/* Runs before the first paint, so a person's own theme is what they
             see rather than a flash of somebody else's. */}
         <script dangerouslySetInnerHTML={{ __html: FIRST_PAINT_SCRIPT }} />
+        {/* The same for the widths the panes were dragged to. */}
+        <script dangerouslySetInnerHTML={{ __html: PANE_WIDTH_SCRIPT }} />
       </head>
       <body className="h-full overflow-hidden">
         <Providers>

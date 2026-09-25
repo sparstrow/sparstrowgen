@@ -717,5 +717,21 @@ file tiles and cards in the transcript, and the files pane with its previews
 header.
 
 **The step:** once the owner has looked at the feature, add them under Chat in the artifact, or
-record why not.
+record why not. Since 2026-09-25 (D-057) the files pane and the list pane also have a resize handle on
+their edge (`apps/web/components/shell/resize-handle.tsx`), which belongs in the same pass.
+**Status:** open
+
+## U-42 — The list and files pane resize and fit on production, with real conversations
+
+**Raised:** 2026-09-25, D-057
+**Who can run it:** agent, with the testing account signed in; the owner whenever he is in the app
+
+Verified before merging on a local page rendering the real shell, conversation list and files pane with
+sample data (no local account could be made): drag, limits, double-click fit in both directions, keys,
+reload keeping the width, the floating and side-by-side files pane, Wider then drag, and the phone
+layout. Not yet seen with real data.
+
+**The step:** on app.sparstrow.com, drag the list's right edge and the files pane's left edge; each moves
+and stops at its limit. Double-click each: every conversation title and file name shows in full (or the
+pane is at its limit), and double-clicking again changes nothing. Reload; both keep their width.
 **Status:** open

@@ -1471,3 +1471,32 @@ files still goes to it.
 **Files are served so they can be shown but never run**: the type the server sniffed (HTML, SVG and
 script recorded as plain text), `nosniff`, and a sandbox policy. PDFs are shown by fetching the bytes
 into the page first.
+
+## D-057 — The list and the files pane are resized from their edge, and double-click fits them
+
+**2026-09-25, owner, with a screenshot marking the two edges:** he wanted the conversation list and the
+right-hand pane to be resizable horizontally, and a double-click on the line to size the pane "accordingly".
+
+**Double-click fits the pane to its longest name**, the way a spreadsheet column fits its contents — it
+grows until no conversation title or file name is cut off, or shrinks to the narrowest width where none
+is. A full folder path is left out of the fit (it would always win) and keeps shortening from its start.
+With nothing to fit, a double-click puts the pane back to its starting width. Keys work too: arrows move
+16px, Home and End go to the limits, Enter fits.
+
+**Limits.** The list goes from 200 to 440px (212 to start). The files pane goes from 300 to 860px (400 to
+start), but beside the conversation it always leaves the conversation 360px, and floating over it on a
+narrower window it leaves a strip showing so its edge never lands on the list's. A width the window
+cannot give is not kept, so dragging back moves the edge at once. The Wider button in a preview still
+works, and dragging a widened preview carries on from the width it had.
+
+**Remembered per browser**, like the rail pin (D-043): a choice about one window, not the account. The
+width is a CSS variable on the page, set by a script in the head before the first paint, so a reload
+opens at the saved width instead of jumping to it, and a drag re-renders nothing. The phone layout is
+untouched — the list is still the whole screen there, with no handle.
+
+**Hand-built, not shadcn's Resizable.** That one (react-resizable-panels, which Multica uses for its chat)
+owns the layout as a panel group. Both panes here change shape by CSS breakpoint alone — the list is the
+first screen on a phone, the files pane floats over the conversation below 1024px — which a panel group
+could only follow through JavaScript breakpoints and a second layout. The handle follows Multica's table
+column resizer instead: drag, double-click auto-fit, and keys (`components/shell/resize-handle.tsx`,
+`lib/pane-width.ts`).
