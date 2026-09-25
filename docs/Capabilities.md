@@ -202,6 +202,28 @@ agent to fetch the bytes itself (`multica attachment download <id>`); its prompt
 carries the id and filename rather than a URL, because a signed URL can expire before the agent
 gets to it (`server/internal/daemon/prompt.go`). Materialising first has no such failure mode.
 
+**Re-checked 2026-09-24, for the approved spec**, one short turn each with the daemon's exact
+arguments, from a scratch project folder. The files sat in a **separate folder outside the
+project** (`conv\uploads`), because uploads get their own folder:
+
+| | `claude` 2.1.280 | `codex` 0.154.0 | `agy` 1.2.10 |
+|---|---|---|---|
+| A picture outside the project | **not checked** — its sign-in on this computer reported "OAuth session expired and could not be refreshed", and it was not retried (U-38). Its Read tool is documented to read images, and `--add-dir` adds a folder to what it may read | **yes, with `-i <file>`**: it read "HERON-5183" off the PNG | **yes, when the folder is added with a second `--add-dir`**: "HERON-5183" |
+| Any other file outside the project | not checked (U-38) | **no**: reading needs a shell command, and that is `rejected by policy` under its default sandbox (L-33) | **yes**: read the CSV's value, "17" |
+| Generating a picture | not offered | **yes, and the stream never says so.** `--json` carried two `agent_message` items and nothing else; the PNG was written to `~/.codex/generated_images/<thread id>/exec-<uuid>.png` | **yes.** A `generate_image` step with `ImageName` and `Prompt` but **no path**; the JPEG was written to `~/.gemini/antigravity-cli/brain/<conversation id>/<ImageName>_<ms>.jpg`. Its attempt to copy it into the folder it was asked to use was a `run_command`, denied (L-33) |
+
+**Built 2026-09-24 (D-056)** on these facts: files go into `<data folder>\chats\<id>\uploads`
+and `outputs`, claude and agy get the folder with `--add-dir`, codex gets pictures with
+`--image=<path>` (verified on a resumed thread too: `resume --image=<png> <thread> -` kept the thread
+and read the picture) and small text files in its prompt, and the daemon collects generated pictures
+after the turn.
+
+**So:** the uploads folder is readable by agy and, by documentation, claude, when it is added with
+`--add-dir`. codex sees pictures only through `-i`, and other files not at all until L-33 changes its
+sandbox; a small text file can be put into its prompt instead. A picture an agent generates never
+arrives in the stream and is not moved by the agent: the daemon has to **collect it after the turn**
+from the agent's own folder, by the session id it already records.
+
 ### Agent activity — what each CLI says about the work it does (2026-09-24)
 
 **Verified** from one real turn per provider, with the daemon's exact arguments and a clean

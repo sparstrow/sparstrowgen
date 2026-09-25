@@ -99,6 +99,8 @@ type turn struct {
 	// Reads the turn's record as it arrives, so a Raw view open on a running
 	// turn learns what the CLI loaded without waiting for the turn to end.
 	Report *agent.Reporter
+	// What the agent made in this turn so far, as the computer sends it.
+	Files []protocol.ConversationFile
 }
 
 func New(s *store.Store, h *hub.Hub, log *slog.Logger, cfg Config) *API {
@@ -169,6 +171,10 @@ func (a *API) Routes() http.Handler {
 	// cookie, so it is not behind requireSession.
 	r.Get("/daemon", a.daemonSocket)
 	r.Post("/daemon/pair", a.daemonPair)
+	// A computer fetching the files a turn needs, and sending back what an
+	// agent made. Its own credential, like the websocket.
+	r.Get("/daemon/files/{fileId}", a.daemonFile)
+	r.Post("/daemon/turns/{turnId}/files", a.daemonOutput)
 
 	// --- everything else needs an account -----------------------------------
 	r.Group(func(r chi.Router) {
@@ -201,6 +207,12 @@ func (a *API) Routes() http.Handler {
 		r.Delete("/api/conversations/{id}", a.deleteConversation)
 		r.Get("/api/conversations/{id}/switch-cost", a.switchCost)
 		r.Get("/api/conversations/{id}/exchanges", a.exchangeSummaries)
+		r.Get("/api/conversations/{id}/files", a.listFiles)
+		r.Post("/api/conversations/{id}/files", a.uploadFile)
+		r.Get("/api/conversations/{id}/folder", a.listFolder)
+		r.Get("/api/conversations/{id}/folder/file", a.folderFile)
+		r.Get("/api/files/{fileId}/content", a.fileContent)
+		r.Delete("/api/files/{fileId}", a.deleteFile)
 		r.Get("/api/directories", a.listDirectories)
 		r.Get("/api/folders/recent", a.recentFolders)
 		r.Post("/api/conversations/{id}/messages", a.postMessage)
@@ -457,6 +469,8 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		Text     string         `json:"text"`
 		Provider string         `json:"provider"`
 		Model    protocol.Model `json:"model"`
+		// Uploads waiting in the message box, sent with this message.
+		FileIDs []string `json:"fileIds"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		a.fail(w, err, http.StatusBadRequest)
@@ -492,6 +506,14 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, errMachineTooOld, http.StatusConflict)
 		return
 	}
+	// A computer that does not know about files would run the turn without
+	// them, and the agent would answer about files it never saw.
+	if len(body.FileIDs) > 0 {
+		if target, _ := a.hub.Target(user.ID, allowed); !a.hub.SupportsFiles(user.ID, target.MachineID) {
+			a.fail(w, errFilesNeedUpdate, http.StatusConflict)
+			return
+		}
+	}
 
 	// The replay marker is written HERE â€” at the moment the catch-up is paid
 	// for â€” never when the provider was selected. Selecting is free, and the
@@ -519,7 +541,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 		})
 		for _, e := range unseen {
 			replay = append(replay, protocol.ReplayEntry{
-				Role: e.Role, Provider: e.Provider, Text: e.Text,
+				Role: e.Role, Provider: e.Provider, Text: e.Text, Files: replayFiles(e),
 			})
 		}
 	}
@@ -550,6 +572,17 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 	})
 
 	userEntry, err := a.store.AppendUser(ctx, id, body.Text)
+	if err != nil {
+		a.fail(w, err, http.StatusInternalServerError)
+		return
+	}
+	attached, err := a.store.AttachFiles(ctx, id, userEntry.ID, body.FileIDs)
+	if err != nil {
+		a.fail(w, err, http.StatusInternalServerError)
+		return
+	}
+	userEntry.Files = store.Public(attached)
+	allFiles, err := a.store.Files(ctx, id)
 	if err != nil {
 		a.fail(w, err, http.StatusInternalServerError)
 		return
@@ -593,6 +626,7 @@ func (a *API) postMessage(w http.ResponseWriter, r *http.Request) {
 			Prompt:          body.Text,
 			ResumeSessionID: a.store.ResumeID(ctx, id, body.Provider),
 			Replay:          replay,
+			Files:           turnFiles(allFiles, attached),
 		},
 	})
 	if !sent {
@@ -652,6 +686,7 @@ func (a *API) handleDaemonMessage(userID string, msg protocol.DaemonMessage) {
 	switch msg.Type {
 	case protocol.DaemonHello:
 		a.hub.SetProviders(userID, msg.Providers)
+		a.hub.SetChatsDir(userID, "", msg.ChatsDir)
 		return
 	case protocol.DaemonLimit:
 		// Not tied to a turn's lifecycle: the window belongs to the provider,
@@ -870,6 +905,11 @@ func (a *API) finishTurn(ctx context.Context, turnID, text string, tokens, spend
 		a.log.Error("finish entry", "err", err)
 		return
 	}
+	// The browser replaces its copy of the entry with this one, so it carries
+	// what the agent made, or the pictures would vanish until a refresh.
+	a.mu.Lock()
+	entry.Files = append([]protocol.ConversationFile(nil), t.Files...)
+	a.mu.Unlock()
 	a.hub.BroadcastTo(t.UserID, protocol.ClientEvent{
 		Type: protocol.EventEntryDone, ConversationID: t.ConversationID, Entry: &entry,
 	})

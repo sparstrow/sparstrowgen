@@ -2,15 +2,16 @@
 
 | | |
 |---|---|
-| **Status** | **Draft — needs your correction and approval** |
+| **Status** | **Approved 2026-09-24** |
 | **Created** | 2026-09-11 |
-| **Trigger** | "The task: file upload in the chat, drag and drop file" |
-| **Design** | not designed yet |
-| **Open questions** | B-11 (`agy` can use no tools, so it cannot read anything dropped) |
+| **Trigger** | "The task: file upload in the chat, drag and drop file" (2026-09-11); "I need to upload photos & file. I need a plus button in the prompt bar." (2026-09-24) |
+| **Design** | `docs/design/prototypes/Chat/files.dc.html`. **Your own design calls, 2026-09-24:** a plus button in the message box; a right-hand side pane opened by a new folder icon, showing the conversation's uploads and outputs, a preview of the selected file, and a browser of the working folder. **Your reference:** a plus button in the message box that opens a menu whose first entry is "Add photos & files" ([screenshot](../design/references/2026-09-24-prompt-bar-plus.png)). The rest of that reference (@ sources, / commands, dictation) is not part of this spec |
+| **Open questions** | L-33, what the agents may do on your computer, decides which agents can open a file today |
 
 > Drafted from one line, so the scenarios below are my guesses at what you meant. Correct them —
 > especially US2 and US4, which I invented from how the app is used rather than from anything you
-> said.
+> said. **2026-09-24:** you have since said photos and files, from your computer, which answers most
+> of question 2 below.
 
 ## What's wrong today
 
@@ -98,12 +99,69 @@ believe an agent has seen something it has not.
   agent can call, which we do not have. Worth wanting; a separate piece of work.
 - **A file library.** Files belong to the conversation that received them. Somewhere to browse
   everything ever sent is a different feature.
-- **Anything on `agy`** until B-11 is decided, since it can use no tools at all.
+- ~~Anything on `agy` until B-11 is decided.~~ Struck 2026-09-24: agy now reads files (Capabilities,
+  "Agent activity"). Which agents can open a file under today's settings is a feasibility question,
+  answered in Capabilities before design, not here.
 
-## What I need from you
+## Your answers (2026-09-24)
+
+> "Spec approved.
+> 1. Yes, whole conversation. The file that I upload needs to be in upload folder, and the incase if
+> the agent generate a file like photo, where codex and agy can generate. I would like to see them in
+> the chat and also needs to see the side pane. New folder icon for the right side pane where uploads
+> and outputs will be stored. The outputs. Not all the outputs are stored in that directory. For
+> example when I ask to edit or create a file, or give a coding task, the files needs to be saved in
+> the appropriate location as usual by agent. I expect that to be an behaviour.
+> 2. Mostly all file types, I expect a right side pane to also able to view their preview of the file.
+> Also file browser of the current working directory should also be there.
+> 3. Those we can add later."
+
+So US2 stands, and three stories follow from the answers.
+
+### US5 — See what an agent made (P1)
+
+**As** the owner **I want** a file an agent generates for me, such as a picture, to appear in the
+conversation and alongside my uploads, **so that** I do not have to go looking for it on disk.
+
+**Acceptance**
+
+- **Given** I ask codex or agy for a picture, **when** the turn ends, **then** the picture is in the
+  conversation, with the answer that produced it, and it is among the conversation's files.
+- **Given** I ask an agent to create or change a file that belongs to my project, **when** it does,
+  **then** that file is where the agent put it in my project, as it would be without sparstrowgen,
+  and it is not copied into the conversation's files.
+- **Given** the agent made nothing, **when** the turn ends, **then** nothing is added.
+
+### US6 — Look at a file without leaving the conversation (P1)
+
+**As** the owner **I want** to see what is in any file the conversation holds, **so that** I can check
+it while I talk about it.
+
+**Acceptance**
+
+- **Given** a picture, a PDF, a text or code file, a spreadsheet export or a log, **when** I open it,
+  **then** I see its contents.
+- **Given** a file that cannot be shown, **when** I open it, **then** I am told so and can still
+  download it.
+
+### US7 — See the folder the conversation works in (P2)
+
+**As** the owner **I want** to browse the conversation's working folder and look inside its files,
+**so that** I can see what the agent is working on, including what it just changed.
+
+**Acceptance**
+
+- **Given** a conversation with a working folder, **when** I browse it, **then** I see its folders and
+  files as they are on my computer now, and can open one to see its contents.
+- **Given** my computer is unreachable, **when** I browse, **then** I am told so, and the
+  conversation's own files are still there to look at.
+- **Given** a very large file, **when** I open it, **then** I am told it is too large to show here.
+
+## What I needed from you (answered above)
 
 1. **Is US2 right** — should a file stay usable for the rest of the conversation, or is one message
    enough?
 2. **What do you actually drop?** Screenshots, logs, spreadsheets, documents, code from elsewhere?
-   It changes what the transcript should show for one.
+   It changes what the transcript should show for one. *(2026-09-24: "photos & file". Still open:
+   which kinds of file — PDFs, spreadsheets, logs?)*
 3. **Anything here that is not what you meant**, including the whole framing.

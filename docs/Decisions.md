@@ -1422,3 +1422,52 @@ starts.
 eight lines, which is where his screenshot scrolled). My choice, shown in the prototype and not
 objected to. It is also sized on every change of its text now, not only on typing, so it shrinks back
 when a send clears it or another conversation's draft loads.
+
+## D-056 — A conversation's files live in its own folder on the computer, and on the server too
+
+**2026-09-24**, for the approved spec
+[`2026-09-11-files-into-a-conversation.md`](specs/2026-09-11-files-into-a-conversation.md). The
+owner decided the surface himself: a plus button in the message box, and a right-hand pane behind a
+folder icon holding the chat's uploads and outputs, a preview, and a browser of the working folder.
+What follows is how it is built, decided on his behalf.
+
+**Each conversation gets a folder of its own on the computer**, `<data folder>\chats\<id>`, with
+`uploads` and `outputs`. Not inside the project folder: a screenshot pasted into a chat is not part of
+the codebase, and writing it there would show up in git. claude and agy are given the folder with a
+second `--add-dir`, which agy was verified to read (Capabilities, re-checked 2026-09-24). Rejected:
+the project folder (pollutes it), and the agent's own attachment mechanisms (only codex has one, for
+pictures only).
+
+**The server keeps every file too**, in Postgres, the bytes in a table of their own
+(`conversation_file_contents`, migration 00021), up to 25 MB each. The database is the transcript of
+record: a picture in the chat still shows while the computer is off, and a conversation that moves to
+another computer has its folder filled again on the next turn, because every turn lists every file
+and the daemon fetches what it lacks. Rejected: files only on the computer (the chat goes blank when
+it sleeps), and object storage (none exists here, D-048; one user's files do not justify it yet —
+G-52).
+
+**Bytes between the server and the computer go over HTTP with the computer's own credential**
+(`GET /daemon/files/{id}`, `POST /daemon/turns/{turn}/files`), never inside the websocket, so a 25 MB
+file cannot stall a turn streaming on it. The working folder's previews do go over the websocket,
+capped at 5 MB, because they are asked for and answered like a directory listing.
+
+**What each agent is told matches what it can do.** claude and agy get the files' paths and a line
+saying where to save a file made for the owner. codex, whose sandbox cannot read files (L-33), gets
+pictures with `--image=<path>` (the value attached, so the flag's several values cannot swallow the
+thread id — verified on a resumed thread), small text files pasted into its prompt, and a plain
+sentence about anything else. The message box says the same before sending.
+
+**What an agent made is collected by the daemon after the turn**, because neither agent that
+generates pictures says where it put them: codex writes `generated_images/<thread>/` and mentions
+nothing in its stream; agy names the tool but not the file. The daemon copies new pictures from those
+folders, and any new file in `outputs`, and uploads them before the turn's ending, so the answer
+arrives with its pictures. A file the agent writes into the project is left where it is, as the owner
+asked, and is seen in the working folder.
+
+**Protocol 2.** A computer older than it would run the turn without the files, so the server refuses
+a message with files to it, and a folder browse, with a sentence saying to update. A message without
+files still goes to it.
+
+**Files are served so they can be shown but never run**: the type the server sniffed (HTML, SVG and
+script recorded as plain text), `nosniff`, and a sandbox policy. PDFs are shown by fetching the bytes
+into the page first.

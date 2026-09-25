@@ -454,3 +454,26 @@ func TestScrubbedEnvKeepsTheOAuthTokenAndDropsTheRest(t *testing.T) {
 		t.Error("CODEX_HOME must survive: it is how codex authenticates")
 	}
 }
+
+// Pictures reach codex as --image=<path>, the value attached, so the flag's
+// several values cannot swallow the thread id or the "-" that reads stdin.
+func TestCodexGetsPicturesWithoutLosingItsThread(t *testing.T) {
+	fresh := strings.Join(codexArgs(ExecOptions{Images: []string{`C:\a.png`, `C:\b b.jpg`}}), " ")
+	if !strings.HasSuffix(fresh, `--image=C:\a.png --image=C:\b b.jpg -`) {
+		t.Errorf("new session: %s", fresh)
+	}
+	resumed := strings.Join(codexArgs(ExecOptions{ResumeSessionID: "thread-1", Images: []string{`C:\a.png`}}), " ")
+	if !strings.HasSuffix(resumed, `resume --image=C:\a.png thread-1 -`) {
+		t.Errorf("resumed: %s", resumed)
+	}
+}
+
+func TestClaudeAndAgyAreGivenTheFilesFolder(t *testing.T) {
+	opts := ExecOptions{Cwd: `D:\proj`, AddDirs: []string{`C:\chats\c1`}}
+	if got := strings.Join(claudeArgs(opts), " "); !strings.Contains(got, `--add-dir C:\chats\c1`) {
+		t.Errorf("claude: %s", got)
+	}
+	if got := strings.Join(agyArgs(opts, ""), " "); !strings.Contains(got, `--add-dir D:\proj --add-dir C:\chats\c1`) {
+		t.Errorf("agy: %s", got)
+	}
+}

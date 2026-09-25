@@ -25,10 +25,14 @@ var modelRefreshInterval = envDuration("MODEL_REFRESH_INTERVAL", 30*time.Minute)
 // on connecting, and again whenever the installed agents change; the server
 // replaces the provider list each time.
 func (d *daemon) hello(providers []protocol.Provider) error {
-	return d.send(protocol.DaemonMessage{
+	msg := protocol.DaemonMessage{
 		Type: protocol.DaemonHello, Machine: hostname(), Providers: providers,
 		Version: version, Protocol: protocol.DaemonProtocol, SelfUpdates: d.updates != nil,
-	})
+	}
+	if d.files != nil {
+		msg.ChatsDir = d.files.chats
+	}
+	return d.send(msg)
 }
 
 // providerWatch decides when the installed agents need reporting again.

@@ -159,6 +159,11 @@ func serve(ctx context.Context, log *slog.Logger) bool {
 	ctx, handOver := context.WithCancel(ctx)
 	defer handOver()
 	d := &daemon{log: log, backends: agent.Backends(), turns: newRunningTurns()}
+	if files, err := newChatFiles(log, d.currentToken); err != nil {
+		log.Warn("files in conversations are off: no data folder", "err", err)
+	} else {
+		d.files = files
+	}
 	d.updates = newUpdater(log, d.turns, d.send, handOver)
 	if d.updates != nil {
 		go d.updates.loop(ctx, d.isConnected)
@@ -305,6 +310,13 @@ type daemon struct {
 
 	mu   sync.Mutex
 	conn *websocket.Conn
+	// token is the credential the current connection was made with, which the
+	// file transfers present too.
+	token string
+
+	// files moves conversations' files between the server and this computer.
+	// Nil when there is nowhere to keep them, and in tests that do not need it.
+	files *chatFiles
 
 	// connectedOnce records that this attempt got as far as a working socket,
 	// which is what makes resetting the retry counter meaningful.
@@ -362,6 +374,7 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 
 	d.mu.Lock()
 	d.conn = conn
+	d.token = token
 	d.mu.Unlock()
 	d.connectedOnce = true
 	d.log.Info("connected", "server", url)
@@ -431,6 +444,10 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 				// flight; stop() has remembered the request either way.
 				d.log.Info("stop for a turn that is not running", "turn", msg.TurnID)
 			}
+		case msg.Type == protocol.ServerListFolder || msg.Type == protocol.ServerReadFile:
+			// Off the read loop, like a directory listing: a file of a few
+			// megabytes must not hold up a turn streaming on this socket.
+			go d.answerFolder(msg)
 		case msg.Type == protocol.ServerListDir:
 			// Off the read loop too: a directory on a cold or network drive can
 			// take a moment, and a turn already streaming must not stall behind
@@ -445,6 +462,13 @@ func (d *daemon) run(ctx context.Context, url, token string) error {
 			}
 		}
 	}
+}
+
+// currentToken is the credential of the connection in use.
+func (d *daemon) currentToken() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.token
 }
 
 func (d *daemon) send(msg protocol.DaemonMessage) error {
@@ -479,8 +503,22 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 
 	// Built first, so that a turn refused below still records what it would
 	// have sent (docs/specs/2026-09-23-raw-exchange.md, US1).
-	prompt := buildPrompt(t)
+	var files preparedFiles
+	prompt, images := buildPrompt(t, files)
 	rec := newExchangeRecord(t.TurnID, d.send)
+
+	// The conversation's files, into its folder on this computer, before the
+	// agent is started: it has no way to ask for them later (D-056).
+	if d.files != nil {
+		var err error
+		if files, err = d.files.prepare(ctx, t); err != nil {
+			log.Warn("turn refused: its files could not be prepared", "err", err)
+			rec.sent(notLaunched(t, prompt))
+			_ = d.send(protocol.DaemonMessage{Type: protocol.DaemonFailed, TurnID: t.TurnID, Error: err.Error()})
+			return
+		}
+		prompt, images = buildPrompt(t, files)
+	}
 
 	backend, ok := d.backends[t.Provider]
 	if !ok {
@@ -527,11 +565,17 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 
 	log.Info("running turn", "replay", len(t.Replay), "resume", t.ResumeSessionID != "")
 
-	session, err := backend.Execute(ctx, prompt, agent.ExecOptions{
+	opts := agent.ExecOptions{
 		Cwd:             t.Cwd,
 		Model:           t.Model.ID,
 		ResumeSessionID: t.ResumeSessionID,
-	})
+		Images:          images,
+	}
+	if files.Folder != "" && t.Provider != "codex" {
+		opts.AddDirs = []string{files.Folder}
+	}
+	started := time.Now()
+	session, err := backend.Execute(ctx, prompt, opts)
 	if err != nil {
 		rec.sent(notLaunched(t, prompt))
 		if d.turns.end(t.TurnID) {
@@ -605,6 +649,15 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 	// What the CLI fed its model, from its own session store: only readable
 	// now, once the CLI has finished writing it for this turn.
 	rec.context(readContext(t.Provider, result.SessionID))
+	// What the agent made, before the turn's ending, so the answer arrives with
+	// its pictures rather than before them.
+	if d.files != nil && files.Folder != "" {
+		for _, f := range d.files.collect(files, t.Provider, result.SessionID, started) {
+			if err := d.files.send(context.WithoutCancel(ctx), t.TurnID, f); err != nil {
+				log.Warn("an output was not sent", "file", f, "err", err)
+			}
+		}
+	}
 
 	// One place decides how the turn ended, and it reads the stop flag exactly
 	// once. A killed CLI usually also reports an error on its way out, so this
@@ -659,9 +712,10 @@ func (d *daemon) runTurn(ctx context.Context, t protocol.RunTurn) {
 // the prompt. The framing is explicit rather than disguised as dialogue —
 // pretending the other agent's words were its own would make it answer as if it
 // had already committed to them.
-func buildPrompt(t protocol.RunTurn) string {
+func buildPrompt(t protocol.RunTurn, files preparedFiles) (string, []string) {
+	note, images := filesPrompt(t.Provider, files)
 	if len(t.Replay) == 0 {
-		return t.Prompt
+		return t.Prompt + note, images
 	}
 	var b strings.Builder
 	b.WriteString("You are joining a conversation already in progress. ")
@@ -678,12 +732,14 @@ func buildPrompt(t protocol.RunTurn) string {
 			continue
 		}
 		b.WriteString(strings.TrimSpace(e.Text))
+		b.WriteString(replayFiles(e, files))
 		b.WriteString("\n")
 	}
 	b.WriteString("--- end of conversation so far ---\n\n")
 	b.WriteString("[user]\n")
 	b.WriteString(t.Prompt)
-	return b.String()
+	b.WriteString(note)
+	return b.String(), images
 }
 
 func hostname() string {

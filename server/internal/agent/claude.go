@@ -49,6 +49,11 @@ func claudeArgs(opts ExecOptions) []string {
 	if opts.ResumeSessionID != "" {
 		args = append(args, "--resume", opts.ResumeSessionID)
 	}
+	// The conversation's files folder, readable alongside the project. Not
+	// yet verified on a signed-in claude (docs/Unverified.md U-38).
+	for _, dir := range opts.AddDirs {
+		args = append(args, "--add-dir", dir)
+	}
 	return args
 }
 

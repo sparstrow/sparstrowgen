@@ -296,6 +296,11 @@ func (s *Store) Get(ctx context.Context, userID, id string) (protocol.Conversati
 	for _, e := range entries {
 		c.Entries = append(c.Entries, toEntry(e))
 	}
+	files, err := s.Files(ctx, id)
+	if err != nil {
+		return protocol.Conversation{}, err
+	}
+	withFiles(c.Entries, files)
 	if c.SeenBy, err = s.seenBy(ctx, uid); err != nil {
 		return protocol.Conversation{}, err
 	}
@@ -511,6 +516,13 @@ func (s *Store) Delete(ctx context.Context, userID, id string) error {
 	q := s.q.WithTx(tx)
 	if _, err := q.LockConversation(ctx, db.LockConversationParams{ID: uid, UserID: owner}); err != nil {
 		return missing(err)
+	}
+	// Its files, bytes first, then the rows, which point at its entries.
+	if err := q.DeleteConversationFileContents(ctx, uid); err != nil {
+		return err
+	}
+	if err := q.DeleteConversationFiles(ctx, uid); err != nil {
+		return err
 	}
 	// Each turn's record goes with it: what its CLI was fed, its lines, then
 	// the record, then the entries they belong to.
@@ -741,6 +753,12 @@ func (s *Store) Unseen(ctx context.Context, conversationID, provider string) ([]
 		}
 		out = append(out, toEntry(r))
 	}
+	// A provider catching up is told which files each message carried.
+	files, err := s.Files(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	withFiles(out, files)
 	return out, nil
 }
 

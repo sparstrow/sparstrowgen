@@ -598,7 +598,7 @@ show "Not recorded" in Raw. Nothing else changes for him.
 supersedes 0.3.3 and holds all of it, plus what each agent was fed (D-054). It is about 6 MB larger
 than 0.3.2, for the SQLite reader agy's store needs. Once his computer updates, send any message and
 open Raw: the new turn has a record, and "Fed to the model" lists what the agent was fed.
-**Status:** open
+**Status:** done 2026-09-24 — the owner promoted it; `daemon-v0.3.4` is the latest release.
 
 ## U-34 — The design system has no entry for the raw exchange or the two-button switch
 
@@ -657,4 +657,58 @@ turn sent seconds before the deploy was lost to it: B-57.
 folders than fit. The list scrolls inside its bordered box; nothing shows over the git warning or
 the Cancel and Run here buttons. Scroll the conversation list and a long chat too, which share the
 scroll area, and confirm they still scroll to the end.
+**Status:** open
+
+## U-38 — claude reads a file and a picture from the conversation's files folder
+
+**Raised:** 2026-09-24, checking the approved files spec (Capabilities, "Files the owner drops")
+**Who can run it:** owner; or the agent, once claude's sign-in on the computer used for the test works
+
+claude could not be checked: on the owner's computer, run from a stripped environment, it answered
+"Failed to authenticate: OAuth session expired and could not be refreshed". Its credentials file was
+not changed by that run (still dated 2026-09-23 12:02). It was not retried.
+
+**The step:** in a conversation on claude, attach a PNG with legible text and a small CSV, and ask
+for both values. Both come back in the answer. If the answer says it cannot read files outside the
+project, the uploads folder is not reaching claude's `--add-dir`.
+**Status:** open
+
+## U-39 — Files work end to end with each agent, on production
+
+**Raised:** 2026-09-24, D-056
+**Who can run it:** agent, with the testing account and a test computer on protocol 2; then the owner
+on his own computer once 0.3.5 is promoted (U-40)
+
+**The step:** in a conversation, add a PNG with legible text and a small CSV with + and send them to
+agy; the answer uses both values, and both show above the message and under This chat. Switch to
+codex and ask about the picture; it answers from it. Ask codex for a small picture; it appears under
+the answer and under Outputs. Open Working folder, go into a folder, open a file. With the test
+computer disconnected, the pane says the computer is unreachable and This chat still lists the files.
+**Status:** open
+
+## U-40 — The owner's computer handles files once candidate 0.3.5 is promoted
+
+**Raised:** 2026-09-24, D-056
+**Who can run it:** the owner — promoting a candidate is his step
+
+Files need protocol 2 on the computer. Until his computer runs 0.3.5, a message with files is refused
+with "your computer's sparstrowgen is too old for files", and Working folder says the same; messages
+without files are unaffected.
+
+**The step:** promote candidate **0.3.5** with **Promote a daemon candidate** (Actions tab). Once his
+computer updates, attach a screenshot to a message and send it.
+**Status:** open
+
+## U-41 — The design system has no entry for files
+
+**Raised:** 2026-09-24, D-056
+**Who can run it:** agent
+
+The files work added components the artifact does not describe: the plus menu, the attachment chip,
+file tiles and cards in the transcript, and the files pane with its previews
+(`apps/web/components/chat/file-bits.tsx`, `files-pane.tsx`), plus the folder button in the chat
+header.
+
+**The step:** once the owner has looked at the feature, add them under Chat in the artifact, or
+record why not.
 **Status:** open

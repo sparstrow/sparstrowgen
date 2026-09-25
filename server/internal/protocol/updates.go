@@ -5,7 +5,7 @@ package protocol
 // DaemonProtocol is the version of this protocol the daemon in this module
 // speaks. It rises only when a change would break an older daemon; a daemon
 // that reports none is from before it existed and counts as 0.
-const DaemonProtocol = 1
+const DaemonProtocol = FilesProtocol
 
 // MinDaemonProtocol is the oldest daemon protocol the server still works with.
 // A computer below it is told it is too old instead of being sent work. A

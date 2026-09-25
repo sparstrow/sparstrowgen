@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en" data-surface="mono" data-accent="neutral" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files in a conversation (prototype)</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  :root { --r-md: calc(var(--radius) - 2px); --r-lg: var(--radius); --r-xl: calc(var(--radius) + 4px); --r-2xl: calc(var(--radius) + 8px);
+          --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+          --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 14px; line-height: 20px; display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+  button:disabled { cursor: default; opacity: .5; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 4px; }
+  .ic { flex: none; }
+  .p-claude { color: var(--provider-claude); } .p-codex { color: var(--provider-codex); } .p-agy { color: var(--provider-agy); }
+  .muted { color: var(--muted-foreground); }
+  .mono { font-family: var(--font-mono); }
+  .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Prototype controls: not part of the design. */
+  .proto-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 12px; border-bottom: 1px dashed var(--border); background: var(--muted); font-size: 12px; }
+  .proto-bar .grp { display: flex; align-items: center; gap: 4px; }
+  .proto-bar b { font-weight: 500; color: var(--muted-foreground); margin-right: 4px; }
+  .proto-bar button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); }
+  .proto-bar button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+  .app { flex: 1; min-height: 0; display: flex; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+
+  /* Header, as in the app, with the new files button at its right end. */
+  .head { flex: none; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--border); }
+  .head .ti { flex: 1; min-width: 0; }
+  .head .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head .f { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+  .toggle { display: inline-flex; padding: 2px; border-radius: var(--r-lg); background: var(--muted); font-size: 12px; }
+  .toggle span { padding: 2px 10px; border-radius: var(--r-md); color: var(--muted-foreground); }
+  .toggle span.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent); }
+  .tok { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); text-align: right; line-height: 16px; }
+  .iconbtn { position: relative; width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--muted-foreground); }
+  .iconbtn:hover { background: var(--accent); color: var(--foreground); }
+  .iconbtn[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
+  .iconbtn .count { position: absolute; top: 2px; right: 1px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px; background: var(--primary); color: var(--primary-foreground); font-size: 10px; line-height: 15px; text-align: center; font-weight: 600; }
+
+  .strip { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .chip { display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
+  .chip .n { font-weight: 500; } .chip .h { font-size: 12px; color: var(--muted-foreground); }
+
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+  .msgs { max-width: 48rem; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 32px; }
+  .you { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .you .b { max-width: 80%; padding: 10px 16px; border-radius: 16px 16px 6px 16px; background: var(--mine, var(--muted)); color: var(--mine-foreground, var(--foreground)); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+  .you .m { font-size: 12px; color: var(--muted-foreground); padding-right: 4px; }
+  .ag .m { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); margin-bottom: 6px; }
+  .ag .m .who { font-size: 14px; font-weight: 500; }
+  .ag p { margin: 0 0 10px; font-size: 15px; line-height: 1.65; }
+  .ag .u { margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
+  code { font-family: var(--font-mono); font-size: .9em; padding: 1px 5px; border-radius: 5px; background: var(--muted); }
+
+  /* Attachments in the transcript. */
+  .atts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 80%; }
+  .ag .atts { justify-content: flex-start; max-width: none; margin-top: 12px; }
+  .thumb { display: block; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--border); background: var(--muted); cursor: zoom-in; }
+  .thumb img { display: block; height: 120px; width: auto; max-width: 260px; object-fit: cover; }
+  .ag .thumb img { height: auto; max-height: 340px; max-width: 100%; }
+  .ag .thumb { max-width: 520px; }
+  .thumb .cap { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; color: var(--muted-foreground); border-top: 1px solid var(--border); background: var(--card); }
+  .file { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 280px; padding: 8px 12px 8px 10px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--card); text-align: left; }
+  .file:hover, .thumb:hover { border-color: var(--ring); }
+  .file .fi { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-md); background: var(--muted); color: var(--muted-foreground); }
+  .file .nm { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file .sz { font-size: 12px; color: var(--muted-foreground); }
+  .file > span:last-child { min-width: 0; }
+
+  /* ── Composer (layout A, D-055) with the plus button ───────────────── */
+  .composer { flex: none; border-top: 1px solid var(--border); background: color-mix(in oklch, var(--card) 40%, transparent); position: relative; }
+  .cwrap { max-width: 48rem; margin: 0 auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .box { border: 1px solid var(--border); background: var(--background); border-radius: var(--r-2xl); padding: 8px; }
+  .box:focus-within { box-shadow: 0 0 0 2px var(--ring); }
+  .pend { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 6px; }
+  .pchip { position: relative; display: flex; align-items: center; gap: 8px; height: 44px; max-width: 240px; padding: 4px 30px 4px 4px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--card); font-size: 12px; }
+  .pchip .pv { width: 34px; height: 34px; flex: none; border-radius: var(--r-md); background: var(--muted) center/cover; display: grid; place-items: center; color: var(--muted-foreground); }
+  .pchip .tx { min-width: 0; line-height: 16px; }
+  .pchip .tx b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pchip .tx span { color: var(--muted-foreground); }
+  .pchip .rm { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted-foreground); }
+  .pchip .rm:hover { background: var(--accent); color: var(--foreground); }
+  .pchip[data-state="failed"] { border-color: color-mix(in oklch, var(--destructive) 50%, transparent); }
+  .pchip[data-state="failed"] .tx span { color: var(--destructive-text); }
+  .pchip .bar { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 2px; border-radius: 2px; background: var(--muted); overflow: hidden; }
+  .pchip .bar i { display: block; height: 100%; background: var(--foreground); }
+  .ta { display: block; width: 100%; resize: none; border: 0; outline: none; background: transparent; color: inherit; font: inherit; font-size: 15px; line-height: 22px; padding: 7px 6px; min-height: 36px; max-height: 40vh; }
+  .ta::placeholder { color: var(--muted-foreground); }
+  .row { display: flex; align-items: center; gap: 2px; }
+  .spacer { flex: 1; }
+  .pick { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border-radius: var(--r-xl); font-size: 14px; }
+  .pick:hover { background: var(--accent); }
+  .pick.model { color: var(--muted-foreground); font-size: 12px; }
+  .plus { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: var(--r-xl); color: var(--muted-foreground); }
+  .plus:hover, .plus[aria-expanded="true"] { background: var(--accent); color: var(--foreground); }
+  .send { width: 36px; height: 36px; border-radius: var(--r-xl); display: inline-grid; place-items: center; background: var(--primary); color: var(--primary-foreground); margin-left: 6px; }
+  .note { display: flex; align-items: flex-start; gap: 8px; padding: 0 4px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .note[data-tone="warning"] { color: var(--warning-text); }
+  .note[data-tone="danger"] { color: var(--destructive-text); }
+
+  .menu { position: absolute; z-index: 20; width: 22rem; padding: 4px; border-radius: var(--r-lg); border: 1px solid var(--border); background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px color-mix(in oklch, var(--foreground) 12%, transparent); }
+  .menu button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-md); }
+  .menu button:hover { background: var(--accent); }
+  .menu .nm { font-weight: 500; } .menu .ds { color: var(--muted-foreground); font-size: 13px; }
+  .menu .ft { margin-top: 4px; padding: 6px 8px 4px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+
+  .drop { position: absolute; inset: 8px; z-index: 30; display: none; place-items: center; border: 2px dashed var(--ring); border-radius: var(--r-2xl); background: color-mix(in oklch, var(--background) 85%, transparent); }
+  .drop.on { display: grid; }
+  .drop div { text-align: center; } .drop b { display: block; font-size: 16px; margin: 8px 0 2px; }
+
+  /* ── Side pane ───────────────────────────────────────────────────── */
+  .pane { flex: none; width: 400px; display: none; flex-direction: column; border-left: 1px solid var(--border); background: var(--background); min-height: 0; }
+  .pane.open { display: flex; }
+  .pane.wide { width: min(56vw, 760px); }
+  .ph { flex: none; height: 56px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border); }
+  .tabs { display: inline-flex; padding: 2px; border-radius: var(--r-lg); background: var(--muted); font-size: 13px; }
+  .tabs button { padding: 3px 10px; border-radius: var(--r-md); color: var(--muted-foreground); }
+  .tabs button[aria-selected="true"] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent); }
+  .pb { flex: 1; min-height: 0; overflow-y: auto; }
+  .sec { padding: 12px 12px 4px; }
+  .sec h3 { margin: 0 4px 6px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); display: flex; align-items: center; gap: 6px; }
+  .sec h3 .path { margin-left: auto; font-family: var(--font-mono); font-size: 11px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; direction: rtl; text-align: left; }
+  .fr { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 6px; border-radius: var(--r-md); text-align: left; }
+  .fr:hover { background: var(--accent); }
+  .fr[aria-current="true"] { background: var(--muted); }
+  .fr .pv { width: 36px; height: 36px; flex: none; border-radius: var(--r-md); background: var(--muted) center/cover; display: grid; place-items: center; color: var(--muted-foreground); }
+  .fr .tx { flex: 1; min-width: 0; line-height: 17px; }
+  .fr .tx b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fr .tx span { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .tree .fr { padding: 4px 6px; gap: 6px; font-size: 13px; }
+  .tree .fr .tx { line-height: 20px; }
+  .tree .fr .sz { font-size: 12px; color: var(--muted-foreground); font-family: var(--font-mono); }
+  .crumbs { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; padding: 10px 12px 4px; font-size: 12px; color: var(--muted-foreground); }
+  .crumbs button { padding: 1px 4px; border-radius: 4px; } .crumbs button:hover { background: var(--accent); color: var(--foreground); }
+  .crumbs .cur { color: var(--foreground); padding: 1px 4px; }
+  .empty { padding: 48px 28px; text-align: center; color: var(--muted-foreground); }
+  .empty b { display: block; color: var(--foreground); font-weight: 500; margin: 10px 0 4px; }
+  .empty .act { margin-top: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border); font-size: 13px; background: var(--background); }
+  .btn:hover { background: var(--accent); }
+  .sk { display: block; border-radius: 6px; background: var(--muted); }
+  .alert { margin: 12px; padding: 10px 12px; border-radius: var(--r-lg); border: 1px solid color-mix(in oklch, var(--warning) 30%, transparent); background: color-mix(in oklch, var(--warning-fill) 50%, transparent); color: var(--warning-text); font-size: 13px; display: flex; gap: 8px; }
+
+  /* Preview */
+  .pvh { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 8px; border-bottom: 1px solid var(--border); }
+  .pvh .tx { flex: 1; min-width: 0; line-height: 16px; }
+  .pvh .tx b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pvh .tx span { font-size: 12px; color: var(--muted-foreground); }
+  .pvb { flex: 1; min-height: 0; overflow: auto; }
+  .pvb.img { display: grid; place-items: center; padding: 16px; background: var(--muted); }
+  .pvb.img img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 15%, transparent); }
+  .code { margin: 0; padding: 12px 0; font-family: var(--font-mono); font-size: 12px; line-height: 19px; counter-reset: ln; }
+  .code div { display: flex; white-space: pre; }
+  .code div::before { counter-increment: ln; content: counter(ln); flex: none; width: 40px; padding-right: 12px; text-align: right; color: var(--muted-foreground); opacity: .6; }
+  table.csv { border-collapse: collapse; font-size: 12px; margin: 12px; }
+  table.csv th, table.csv td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; white-space: nowrap; }
+  table.csv th { background: var(--muted); font-weight: 500; }
+  table.csv td.n { text-align: right; font-family: var(--font-mono); }
+  .pdf { padding: 20px; display: flex; flex-direction: column; gap: 16px; background: var(--muted); min-height: 100%; }
+  .page { background: oklch(0.99 0 0); color: oklch(0.2 0 0); padding: 28px 30px; border-radius: 2px; box-shadow: 0 1px 4px color-mix(in oklch, var(--foreground) 20%, transparent); font-family: Georgia, serif; font-size: 12px; line-height: 1.55; }
+  .page h4 { margin: 0 0 10px; font-size: 15px; }
+  .pgnote { font-size: 11px; color: var(--muted-foreground); text-align: center; }
+  .md { padding: 16px 20px; font-size: 14px; line-height: 1.6; } .md h1 { font-size: 18px; margin: 0 0 8px; } .md h2 { font-size: 15px; margin: 16px 0 6px; } .md ul { padding-left: 18px; margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="proto-bar" id="bar"></div>
+<div class="app">
+  <div class="main" id="main"></div>
+  <aside class="pane" id="pane" aria-label="Files"></aside>
+</div>
+<div id="menus"></div>
+
+<script src="../icons.js"></script>
+<script>
+(function () {
+  var ICONS = window.SPG_ICONS, MARKS = window.SPG_MARKS;
+  var Q = new URLSearchParams(location.search);
+  function pick(v, ok, d) { return ok.indexOf(v) > -1 ? v : d; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // Lucide glyphs the shared set lacks.
+  var FILEP = [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }]];
+  var EXTRA = {
+    paperclip: [["path", { d: "m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" }]],
+    image: [["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }], ["circle", { cx: "9", cy: "9", r: "2" }], ["path", { d: "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" }]],
+    folder: [["path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" }]],
+    file: FILEP,
+    "file-sheet": FILEP.concat([["path", { d: "M8 13h2" }], ["path", { d: "M14 13h2" }], ["path", { d: "M8 17h2" }], ["path", { d: "M14 17h2" }]]),
+    "file-code": FILEP.concat([["path", { d: "M10 12.5 8 15l2 2.5" }], ["path", { d: "m14 12.5 2 2.5-2 2.5" }]]),
+    "arrow-left": [["path", { d: "m12 19-7-7 7-7" }], ["path", { d: "M19 12H5" }]],
+    upload: [["path", { d: "M12 3v12" }], ["path", { d: "m17 8-5-5-5 5" }], ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }]],
+    expand: [["path", { d: "m15 15 6 6" }], ["path", { d: "m15 9 6-6" }], ["path", { d: "M21 16v5h-5" }], ["path", { d: "M21 8V3h-5" }], ["path", { d: "M3 16v5h5" }], ["path", { d: "m3 21 6-6" }], ["path", { d: "M3 8V3h5" }], ["path", { d: "M9 9 3 3" }]],
+    trash: [["path", { d: "M3 6h18" }], ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" }], ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" }]],
+  };
+  function I(n, s, cls) {
+    s = s || 16;
+    var nodes = (ICONS[n] || EXTRA[n] || []).map(function (x) { return "<" + x[0] + " " + Object.keys(x[1]).map(function (k) { return k + '="' + x[1][k] + '"'; }).join(" ") + "/>"; }).join("");
+    return '<svg class="ic ' + (cls || "") + '" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes + "</svg>";
+  }
+  function M(p, s) { return '<svg class="ic p-' + p + '" width="' + (s || 16) + '" height="' + (s || 16) + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="' + MARKS[p] + '"/></svg>'; }
+  function kb(n) { return n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB"; }
+  function kindIcon(f) { return f.kind === "image" ? "image" : f.kind === "csv" ? "file-sheet" : f.kind === "code" || f.kind === "text" ? "file-code" : f.kind === "pdf" ? "file-text" : "file"; }
+
+  var A = "files-assets/";
+  /* The conversation's files. Uploads came with a message; outputs were made by
+     an agent in a turn. One list, grouped, newest first. */
+  var FILES = [
+    { id: "f5", group: "outputs", name: "po-flow-diagram.png", kind: "image", src: A + "po-flow-diagram.png", size: 17413, by: "codex", when: "10:52 PM", w: 1024, h: 640 },
+    { id: "f4", group: "uploads", name: "vendor-850-guide.pdf", kind: "pdf", size: 1843200, by: "you", when: "10:47 PM" },
+    { id: "f3", group: "uploads", name: "nav-export-error.png", kind: "image", src: A + "nav-export-error.png", size: 32871, by: "you", when: "10:41 PM", w: 960, h: 540 },
+    { id: "f2", group: "uploads", name: "orders-sept.csv", kind: "csv", size: 2140, by: "you", when: "10:41 PM" },
+    { id: "f1", group: "uploads", name: "Fabrikam price list.xlsx", kind: "other", size: 48300, by: "you", when: "10:30 PM" },
+  ];
+  var CSV = [["order", "vendor", "qty", "unit", "ship_to"], ["PO-88412", "FABRIKAM", "17", "EA", "N1*SH"], ["PO-88413", "FABRIKAM", "4", "CA", "N1*SH"], ["PO-88419", "CONTOSO", "120", "EA", "N1*ST"], ["PO-88420", "FABRIKAM", "9", "EA", "N1*SH"], ["PO-88431", "NORTHWIND", "36", "EA", "N1*ST"], ["PO-88432", "FABRIKAM", "2", "CA", "N1*SH"]];
+  var MAP = ["# Fabrikam 850 outbound map", "segment,element,source,notes", "BEG,03,Purchase Header.No.,", "DTM,02,Purchase Header.Requested Receipt Date,qualifier 002", "N1,01,const,SH", "N1,04,Ship-to Address.GLN,qualifier 9", "PO1,02,Purchase Line.Quantity,", "PO1,03,Purchase Line.Unit of Measure Code,EA|CA", "PO1,07,Purchase Line.Vendor Item No.,VN", "CTT,01,count(PO1),"];
+
+  /* The working folder, as the computer reports it now. */
+  var TREE = {
+    "": [["d", "edi-mappings"], ["d", "nav-export"], ["d", "docs"], ["f", "README.md", 1320, "md"], ["f", ".gitignore", 88, "text"]],
+    "edi-mappings": [["d", "fabrikam"], ["d", "contoso"], ["f", "common.map", 2210, "code"]],
+    "edi-mappings/fabrikam": [["f", "850.map", 4820, "code"], ["f", "855.map", 2310, "code"], ["f", "856.map", 3990, "code"], ["f", "partner.json", 640, "code"]],
+    "edi-mappings/contoso": [["f", "850.map", 4415, "code"]],
+    "nav-export": [["f", "Codeunit 50120 EDI Export.al", 18400, "code"], ["f", "Report 50121 PO Export.al", 9120, "code"]],
+    "docs": [["f", "fabrikam-onboarding.pdf", 820000, "pdf"], ["f", "mapping-diagram.png", 17413, "image"]],
+  };
+
+  var S = {
+    pane: pick(Q.get("pane"), ["open", "closed"], "open"),
+    tab: pick(Q.get("tab"), ["files", "folder"], "files"),
+    files: pick(Q.get("files"), ["populated", "empty", "loading", "error"], "populated"),
+    folder: pick(Q.get("folder"), ["populated", "loading", "offline", "old", "empty"], "populated"),
+    comp: pick(Q.get("comp"), ["none", "attached", "uploading", "failed", "toolarge"], "attached"),
+    provider: pick(Q.get("provider"), ["agy", "codex", "claude"], "codex"),
+    theme: pick(Q.get("theme"), ["dark", "light"], "dark"),
+    preview: Q.get("preview") || "", path: "", wide: false, menu: false, dragging: false, draft: "Compare this against the vendor guide and tell me which NAV report writes the ship-to qualifier.",
+  };
+
+  function bar() {
+    function grp(label, key, opts) {
+      return '<span class="grp"><b>' + label + "</b>" + opts.map(function (o) {
+        return '<button data-set="' + key + '" data-v="' + o[0] + '" aria-pressed="' + (S[key] === o[0]) + '">' + o[1] + "</button>";
+      }).join("") + "</span>";
+    }
+    document.getElementById("bar").innerHTML =
+      grp("Pane", "pane", [["open", "Open"], ["closed", "Closed"]]) +
+      grp("Files tab", "files", [["populated", "Populated"], ["empty", "Empty"], ["loading", "Loading"], ["error", "Error"]]) +
+      grp("Folder tab", "folder", [["populated", "Populated"], ["empty", "Empty folder"], ["loading", "Loading"], ["offline", "Computer offline"], ["old", "Old sparstrowgen"]]) +
+      grp("Message box", "comp", [["none", "Nothing attached"], ["attached", "Attached"], ["uploading", "Uploading"], ["failed", "Upload failed"], ["toolarge", "Too large"]]) +
+      grp("Agent", "provider", [["codex", "codex"], ["agy", "agy"], ["claude", "claude"]]) +
+      grp("Theme", "theme", [["dark", "Dark"], ["light", "Light"]]) +
+      '<span class="grp"><button data-act="drag">Show drop</button></span>';
+  }
+
+  function byId(id) { return FILES.filter(function (f) { return f.id === id; })[0]; }
+  function thumbHtml(f, big) {
+    return '<button class="thumb" data-open="' + f.id + '" aria-label="Open ' + esc(f.name) + '"><img src="' + f.src + '" alt="' + esc(f.name) + '">' +
+      (big ? '<span class="cap">' + I("sparkles", 12) + esc(f.name) + " · " + kb(f.size) + " · saved to this chat’s outputs</span>" : "") + "</button>";
+  }
+  function fileHtml(f) {
+    return '<button class="file" data-open="' + f.id + '"><span class="fi">' + I(kindIcon(f), 16) + '</span><span><span class="nm" style="display:block">' + esc(f.name) + '</span><span class="sz">' + kb(f.size) + " · " + (f.name.split(".").pop().toUpperCase()) + "</span></span></button>";
+  }
+  function atts(ids, big) {
+    return '<div class="atts">' + ids.map(function (id) { var f = byId(id); return f.kind === "image" ? thumbHtml(f, big) : fileHtml(f); }).join("") + "</div>";
+  }
+
+  function main() {
+    var count = FILES.length;
+    var head = '<div class="head"><div class="ti"><div class="t">Fabrikam 850 ship-to change</div><div class="f">' + I("folder-open", 14) + "D:\\EDI\\fabrikam-onboarding</div></div>" +
+      '<span class="toggle"><span class="on">Rendered</span><span>Raw</span></span>' +
+      '<div class="tok"><div>$0.00</div><div>61.8k tokens</div></div>' +
+      '<button class="iconbtn" data-act="pane" aria-pressed="' + (S.pane === "open") + '" aria-label="Files" title="Files: this chat’s uploads and outputs, and its working folder">' + I("folder", 18) + (S.files === "populated" && S.pane !== "open" ? '<span class="count">' + count + "</span>" : "") + "</button></div>";
+    var strip = '<div class="strip"><span class="chip">' + M("claude") + '<span class="n">claude</span><span class="h">limit unknown yet</span></span><span class="chip">' + M("codex") + '<span class="n">codex</span><span class="h">no limit data</span></span><span class="chip">' + M("agy") + '<span class="n">agy</span><span class="h">no limit data</span></span></div>';
+
+    var msgs =
+      '<div class="you">' + atts(["f3", "f2"]) + '<div class="b">NAV refuses to export PO-88412. Screenshot and this month’s orders attached — which orders will fail the same way?</div><div class="m">10:41 PM</div></div>' +
+      '<div class="ag"><div class="m">' + M("agy") + '<span class="who p-agy">agy</span>Gemini 3.1 Pro (High) · 10:43 PM</div>' +
+      "<p>The dialog says Fabrikam no longer accepts <code>N1*SH</code>. In <code>orders-sept.csv</code>, four orders are Fabrikam with <code>N1*SH</code>: PO-88412, PO-88413, PO-88420 and PO-88432. Each will fail the same way until the qualifier is <code>N1*ST</code>.</p>" +
+      '<div class="u">18.9k tokens</div></div>' +
+      '<div class="you">' + atts(["f4"]) + '<div class="b">Here is their guide. Switching to codex — draw me the flow from NAV to Fabrikam with the change marked.</div><div class="m">10:47 PM</div></div>' +
+      '<div class="ag"><div class="m">' + M("codex") + '<span class="who p-codex">codex</span>GPT-5.6 Sol · 10:52 PM</div>' +
+      "<p>Here is the flow, with the ship-to change marked on the last step.</p>" + atts(["f5"], true) +
+      '<div class="u">52.3k tokens</div></div>';
+
+    document.getElementById("main").innerHTML = head + strip + '<div class="scroll" id="scroll"><div class="msgs">' + msgs + "</div></div>" + composer() +
+      '<div class="drop' + (S.dragging ? " on" : "") + '" id="drop"><div>' + I("upload", 28) + "<b>Drop to add to your message</b><span class=\"muted\">Pictures and files, up to 25 MB each</span></div></div>";
+    var sc = document.getElementById("scroll"); sc.scrollTop = sc.scrollHeight;
+  }
+
+  function pchip(f, st) {
+    var pv = f.kind === "image" ? '<span class="pv" style="background-image:url(' + f.src + ')"></span>' : '<span class="pv">' + I(kindIcon(f), 16) + "</span>";
+    var sub = st === "uploading" ? '<span>Uploading… 64%</span><span class="bar"><i style="width:64%"></i></span>' : st === "failed" ? "<span>Didn’t upload · <u style=\"cursor:pointer\">Try again</u></span>" : "<span>" + kb(f.size) + "</span>";
+    return '<span class="pchip" data-state="' + (st || "ready") + '">' + pv + '<span class="tx"><b>' + esc(f.name) + "</b>" + sub + '</span><button class="rm" aria-label="Remove ' + esc(f.name) + '">' + I("x", 14) + "</button></span>";
+  }
+  function composer() {
+    var pend = "", notes = "";
+    var shot = { name: "po-88412-dialog.png", kind: "image", src: A + "nav-export-error.png", size: 32871 };
+    var guide = { name: "vendor-850-guide.pdf", kind: "pdf", size: 1843200 };
+    var map = { name: "850.map", kind: "code", size: 4820 };
+    if (S.comp === "attached") pend = pchip(shot) + pchip(guide) + pchip(map);
+    if (S.comp === "uploading") pend = pchip(shot) + pchip(guide, "uploading");
+    if (S.comp === "failed") pend = pchip(shot) + pchip(guide, "failed");
+    if (S.comp === "toolarge") { pend = pchip(shot); notes += '<div class="note" data-tone="danger">' + I("triangle-alert", 14) + "<span>scan-2026-09.tiff is 61.3 MB, over the 25 MB limit, so it was not added.</span></div>"; }
+    // What the chosen agent can do with what is attached, said before sending.
+    if ((S.comp === "attached" || S.comp === "uploading" || S.comp === "failed") && S.provider === "codex")
+      notes += '<div class="note" data-tone="warning">' + I("info", 14) + "<span>codex sees pictures and small text files. It can’t open vendor-850-guide.pdf with what it’s allowed to do today; agy or claude can.</span></div>";
+    if (S.comp === "failed") notes += '<div class="note" data-tone="danger">' + I("triangle-alert", 14) + "<span>One file didn’t upload. Try again or remove it to send.</span></div>";
+    var canSend = S.comp !== "uploading" && S.comp !== "failed";
+    var pnames = { codex: "GPT-5.6 Sol", agy: "Gemini 3.1 Pro (High)", claude: "Sonnet 5" };
+    return '<div class="composer"><div class="cwrap"><div class="box">' + (pend ? '<div class="pend">' + pend + "</div>" : "") +
+      '<textarea class="ta" rows="2" aria-label="Message" placeholder="Message ' + S.provider + '…">' + esc(S.draft) + "</textarea>" +
+      '<div class="row"><button class="plus" data-act="plus" aria-expanded="' + S.menu + '" aria-label="Add photos and files" title="Add photos and files">' + I("plus", 18) + "</button>" +
+      '<button class="pick">' + M(S.provider) + "<span>" + S.provider + "</span>" + I("chevron-down", 14, "muted") + '</button><button class="pick model">' + pnames[S.provider] + I("chevron-down", 14) + "</button>" +
+      '<span class="spacer"></span><button class="send" aria-label="Send message"' + (canSend ? "" : " disabled") + ">" + I("arrow-up", 16) + "</button></div></div>" + notes + "</div></div>";
+  }
+
+  /* ── Pane ── */
+  function pane() {
+    var el = document.getElementById("pane");
+    el.className = "pane" + (S.pane === "open" ? " open" : "") + (S.wide && S.preview ? " wide" : "");
+    if (S.pane !== "open") { el.innerHTML = ""; return; }
+    if (S.preview) { el.innerHTML = preview(); return; }
+    var h = '<div class="ph"><div class="tabs" role="tablist"><button role="tab" data-tab="files" aria-selected="' + (S.tab === "files") + '">This chat</button><button role="tab" data-tab="folder" aria-selected="' + (S.tab === "folder") + '">Working folder</button></div><span class="spacer"></span>' +
+      '<button class="iconbtn" data-act="pane" aria-label="Close files">' + I("x", 16) + "</button></div>";
+    el.innerHTML = h + '<div class="pb">' + (S.tab === "files" ? filesTab() : folderTab()) + "</div>";
+  }
+  function row(f) {
+    var pv = f.kind === "image" ? '<span class="pv" style="background-image:url(' + f.src + ')"></span>' : '<span class="pv">' + I(kindIcon(f), 16) + "</span>";
+    var who = f.by === "you" ? "You" : f.by;
+    return '<button class="fr" data-open="' + f.id + '">' + pv + '<span class="tx"><b>' + esc(f.name) + "</b><span>" + kb(f.size) + " · " + who + " · " + f.when + "</span></span></button>";
+  }
+  function filesTab() {
+    if (S.files === "loading") return '<div class="sec">' + [1, 2, 3, 4].map(function () { return '<div class="fr"><span class="sk" style="width:36px;height:36px"></span><span class="tx"><span class="sk" style="width:60%;height:12px;margin-bottom:6px"></span><span class="sk" style="width:40%;height:10px"></span></span></div>'; }).join("") + "</div>";
+    if (S.files === "error") return '<div class="empty">' + I("triangle-alert", 22) + "<b>Couldn’t load this chat’s files</b>The server didn’t answer. Everything is still stored.<div class=\"act\"><button class=\"btn\">" + I("refresh-cw", 14) + "Try again</button></div></div>";
+    if (S.files === "empty") return '<div class="empty">' + I("folder", 22) + "<b>No files in this chat yet</b>Add pictures and files with + in the message box, or drop them on the conversation. Pictures an agent makes for you land here too.</div>";
+    var outs = FILES.filter(function (f) { return f.group === "outputs"; }), ups = FILES.filter(function (f) { return f.group === "uploads"; });
+    return '<div class="sec"><h3>' + I("sparkles", 12) + "Outputs · " + outs.length + '<span class="path" title="%LOCALAPPDATA%\\sparstrowgen\\chats\\7f3c…\\outputs">…\\chats\\7f3c\\outputs</span></h3>' + outs.map(row).join("") + "</div>" +
+      '<div class="sec"><h3>' + I("upload", 12) + "Uploads · " + ups.length + '<span class="path" title="%LOCALAPPDATA%\\sparstrowgen\\chats\\7f3c…\\uploads">…\\chats\\7f3c\\uploads</span></h3>' + ups.map(row).join("") + "</div>" +
+      '<p class="muted" style="font-size:12px;padding:8px 16px 20px;margin:0">Files an agent creates or changes in your project stay where it put them. Find them under Working folder.</p>';
+  }
+  function folderTab() {
+    if (S.folder === "loading") return '<div class="sec tree">' + [70, 55, 62, 40, 48].map(function (w) { return '<div class="fr"><span class="sk" style="width:16px;height:16px"></span><span class="sk" style="width:' + w + '%;height:12px"></span></div>'; }).join("") + "</div>";
+    if (S.folder === "offline") return '<div class="empty">' + I("plug-zap", 22) + "<b>Your computer is unreachable</b>The working folder is read from your computer, so it can’t be shown until it’s back. This chat’s own files are still here.<div class=\"act\"><button class=\"btn\" data-tab=\"files\">Show this chat’s files</button></div></div>";
+    if (S.folder === "old") return '<div class="empty">' + I("download", 22) + "<b>Your computer’s sparstrowgen is too old to show files</b>Update it in Settings → Updates, then open this again.</div>";
+    var items = S.folder === "empty" ? [] : TREE[S.path] || [];
+    var parts = S.path ? S.path.split("/") : [];
+    var crumbs = '<div class="crumbs"><button data-path="">fabrikam-onboarding</button>' + parts.map(function (p, i) {
+      var to = parts.slice(0, i + 1).join("/"); return I("chevron-right", 12) + (i === parts.length - 1 ? '<span class="cur">' + esc(p) + "</span>" : '<button data-path="' + to + '">' + esc(p) + "</button>");
+    }).join("") + '<span class="spacer"></span><button title="Refresh" aria-label="Refresh" data-act="refresh">' + I("refresh-cw", 12) + "</button></div>";
+    if (!items.length) return crumbs + '<div class="empty">' + I("folder-open", 22) + "<b>This folder is empty</b></div>";
+    return crumbs + '<div class="sec tree" style="padding-top:4px">' + items.map(function (it) {
+      var p = (S.path ? S.path + "/" : "") + it[1];
+      if (it[0] === "d") return '<button class="fr" data-path="' + p + '">' + I("folder", 16, "muted") + '<span class="tx">' + esc(it[1]) + "</span>" + I("chevron-right", 14, "muted") + "</button>";
+      return '<button class="fr" data-openpath="' + esc(p) + '" data-kind="' + it[3] + '" data-size="' + it[2] + '">' + I(kindIcon({ kind: it[3] }), 16, "muted") + '<span class="tx">' + esc(it[1]) + '</span><span class="sz">' + kb(it[2]) + "</span></button>";
+    }).join("") + "</div>";
+  }
+
+  function preview() {
+    var f = S.preview.indexOf("path:") === 0 ? pathFile(S.preview.slice(5)) : byId(S.preview);
+    var where = f.group ? (f.group === "outputs" ? "Output · made by " + f.by : "Uploaded by you") + " · " + f.when : "Working folder · " + f.rel;
+    var h = '<div class="pvh"><button class="iconbtn" data-act="back" aria-label="Back to files">' + I("arrow-left", 16) + '</button><span class="tx"><b>' + esc(f.name) + "</b><span>" + kb(f.size) + " · " + where + "</span></span>" +
+      '<button class="iconbtn" data-act="wide" aria-pressed="' + S.wide + '" aria-label="Wider" title="Wider">' + I("expand", 15) + '</button><button class="iconbtn" aria-label="Download" title="Download">' + I("download", 16) + "</button>" +
+      '<button class="iconbtn" data-act="pane" aria-label="Close files">' + I("x", 16) + "</button></div>";
+    var body;
+    if (f.kind === "image") body = '<div class="pvb img"><img src="' + (f.src || A + "po-flow-diagram.png") + '" alt=""></div>';
+    else if (f.kind === "csv") body = '<div class="pvb"><table class="csv"><tr>' + CSV[0].map(function (c) { return "<th>" + c + "</th>"; }).join("") + "</tr>" + CSV.slice(1).map(function (r) { return "<tr>" + r.map(function (c, i) { return '<td class="' + (i === 2 ? "n" : "") + '">' + esc(c) + "</td>"; }).join("") + "</tr>"; }).join("") + '</table><p class="muted" style="font-size:12px;margin:0 12px 16px">6 rows · 5 columns</p></div>';
+    else if (f.kind === "code" || f.kind === "text") body = '<div class="pvb"><div class="code">' + MAP.map(function (l) { return "<div>" + esc(l) + "</div>"; }).join("") + "</div></div>";
+    else if (f.kind === "md") body = '<div class="pvb md"><h1>Fabrikam onboarding</h1><p>Mappings and exports for Fabrikam’s EDI move to the new ship-to rules on 1 October.</p><h2>What’s here</h2><ul><li><code>edi-mappings/</code> — one folder per trading partner</li><li><code>nav-export/</code> — the AL objects that write the files</li><li><code>docs/</code> — partner guides</li></ul></div>';
+    else if (f.kind === "pdf") body = '<div class="pvb pdf"><div class="page"><h4>Fabrikam EDI Implementation Guide — 850 Purchase Order</h4><p>Version 7.2 · effective 1 October 2026</p><p><b>N1 — Name.</b> Ship-to must be sent as <b>N1*ST</b> with the GLN in N104, qualifier 9 in N103. N1*SH will be rejected from 1 October.</p><p><b>DTM — Date/Time.</b> The requested delivery date moves from DTM*002 to DTM*106.</p></div><div class="page"><h4>PO1 — Baseline item data</h4><p>PO106/PO107 carry the buyer’s item number as BP; PO108/PO109 carry the vendor’s as VN. Both must be present.</p></div><div class="pgnote">Page 1–2 of 14 · shown by your browser’s PDF viewer</div></div>';
+    else body = '<div class="empty">' + I("file", 26) + "<b>No preview for ." + esc(f.name.split(".").pop()) + " files</b>Download it to open it in the app it belongs to.<div class=\"act\"><button class=\"btn\">" + I("download", 14) + "Download</button></div></div>";
+    return h + body;
+  }
+  function pathFile(p) {
+    var parts = p.split("/"), name = parts.pop(), dir = parts.join("/");
+    var it = (TREE[dir] || []).filter(function (x) { return x[1] === name; })[0] || ["f", name, 0, "other"];
+    return { name: name, kind: it[3], size: it[2], rel: p, src: it[3] === "image" ? A + "po-flow-diagram.png" : null };
+  }
+
+  /* ── Menus ── */
+  function menu() {
+    var host = document.getElementById("menus");
+    if (!S.menu) { host.innerHTML = ""; return; }
+    var b = document.querySelector('[data-act="plus"]').getBoundingClientRect();
+    host.innerHTML = '<div class="menu" role="menu" style="left:' + b.left + "px;bottom:" + (window.innerHeight - b.top + 8) + 'px"><button data-act="choose">' + I("paperclip", 16) + '<span class="nm">Add photos &amp; files</span><span class="ds">Upload from your computer</span></button>' +
+      '<div class="ft">Or drop them on the conversation, or paste a screenshot. Up to 25 MB each.</div></div>';
+  }
+
+  function render() { document.documentElement.classList.toggle("dark", S.theme === "dark"); bar(); main(); pane(); menu(); }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("button, [data-open]");
+    if (!t) { if (S.menu) { S.menu = false; menu(); } return; }
+    if (t.dataset.set) { S[t.dataset.set] = t.dataset.v; if (t.dataset.set === "folder") S.path = ""; render(); return; }
+    var a = t.dataset.act;
+    if (a === "pane") { S.pane = S.pane === "open" ? "closed" : "open"; S.preview = ""; render(); return; }
+    if (a === "plus") { S.menu = !S.menu; render(); return; }
+    if (a === "choose") { S.menu = false; S.comp = "attached"; render(); return; }
+    if (a === "back") { S.preview = ""; S.wide = false; pane(); return; }
+    if (a === "wide") { S.wide = !S.wide; pane(); return; }
+    if (a === "drag") { S.dragging = true; main(); setTimeout(function () { S.dragging = false; S.comp = "attached"; render(); }, 1600); return; }
+    if (a === "refresh") { pane(); return; }
+    if (t.dataset.tab) { S.tab = t.dataset.tab; S.preview = ""; pane(); bar(); return; }
+    if (t.dataset.path !== undefined) { S.path = t.dataset.path; pane(); return; }
+    if (t.dataset.openpath) { S.preview = "path:" + t.dataset.openpath; pane(); return; }
+    if (t.dataset.open) { S.pane = "open"; S.preview = t.dataset.open; S.menu = false; render(); return; }
+    if (S.menu && !t.closest(".menu")) { S.menu = false; menu(); }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (S.menu) { S.menu = false; menu(); } else if (S.preview) { S.preview = ""; pane(); } } });
+  document.addEventListener("input", function (e) { if (e.target.classList.contains("ta")) S.draft = e.target.value; });
+  render();
+})();
+</script>
+</body>
+</html>

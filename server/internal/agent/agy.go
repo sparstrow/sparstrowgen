@@ -60,6 +60,11 @@ func agyArgs(opts ExecOptions, logPath string) []string {
 		// it look there — verified on agy 1.2.3.
 		args = append(args, "--add-dir", opts.Cwd)
 	}
+	// The conversation's files folder, so it can read what was sent with a
+	// message. Verified 2026-09-24 on 1.2.10: a second --add-dir is read.
+	for _, dir := range opts.AddDirs {
+		args = append(args, "--add-dir", dir)
+	}
 	if opts.Model != "" {
 		args = append(args, "--model", opts.Model)
 	}

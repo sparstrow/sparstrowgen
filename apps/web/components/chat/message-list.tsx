@@ -1,10 +1,11 @@
 "use client";
 
 import { ArrowRightLeft, CircleSlash } from "lucide-react";
-import type { Entry, Model, ProviderId } from "@/lib/chat-types";
+import type { ConversationFile, Entry, Model, ProviderId } from "@/lib/chat-types";
 import { providerStyle, formatTokens, formatUsd, clockTime } from "./provider-meta";
 import { ProviderIcon } from "./provider-icon";
 import { Markdown } from "./markdown";
+import { FileList } from "./file-bits";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusIcon } from "@/components/ui/status";
 
@@ -13,13 +14,26 @@ import { StatusIcon } from "@/components/ui/status";
    contains code, and is the thing actually being read. Giving it a container
    would only narrow it. */
 
-function UserBubble({ text, at }: { text: string; at: string }) {
+function UserBubble({
+  text,
+  at,
+  files,
+}: {
+  text: string;
+  at: string;
+  files?: ConversationFile[];
+}) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%]">
-        <div className="rounded-2xl rounded-br-md bg-mine px-4 py-2.5 text-[15px] leading-relaxed text-mine-foreground">
-          {text}
-        </div>
+      <div className="flex max-w-[80%] flex-col items-end gap-1.5">
+        {/* Above the words, the way they were sent: this is what the words
+            are about. */}
+        {files && files.length > 0 && <FileList files={files} align="end" />}
+        {text && (
+          <div className="rounded-2xl rounded-br-md bg-mine px-4 py-2.5 text-[15px] leading-relaxed text-mine-foreground">
+            {text}
+          </div>
+        )}
         <div className="mt-1 pr-1 text-right text-xs text-muted-foreground">
           {clockTime(at)}
         </div>
@@ -37,6 +51,7 @@ function AgentTurn({
   failure,
   stopped,
   streaming,
+  files,
 }: {
   provider: ProviderId;
   model: Model;
@@ -46,6 +61,7 @@ function AgentTurn({
   failure?: string;
   stopped?: boolean;
   streaming?: boolean;
+  files?: ConversationFile[];
 }) {
   const c = providerStyle(provider);
   return (
@@ -63,6 +79,14 @@ function AgentTurn({
       <Markdown text={text} />
       {streaming && (
         <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 rounded-xs bg-foreground/60" />
+      )}
+
+      {/* What the agent made for this answer. Pictures are the answer as much
+          as the words, so they are shown whole rather than as a link. */}
+      {files && files.length > 0 && (
+        <div className="mt-3">
+          <FileList files={files} align="start" outputs />
+        </div>
       )}
 
       {/* Deliberately not the destructive treatment below. Stopping a turn is
@@ -202,7 +226,7 @@ export function MessageList({
     <div className="space-y-8">
       {entries.map((e, i) => {
         if (e.role === "user")
-          return <UserBubble key={e.id} text={e.text} at={e.at} />;
+          return <UserBubble key={e.id} text={e.text} at={e.at} files={e.files} />;
         if (e.role === "replay")
           return (
             <ReplayDivider
@@ -227,6 +251,7 @@ export function MessageList({
             failure={e.failure}
             stopped={e.stopped}
             streaming={streamingId === e.id}
+            files={e.files}
           />
         );
       })}
