@@ -17,7 +17,10 @@ type Runtime struct {
 	Version     string
 	Protocol    int
 	SelfUpdates bool
-	Update      protocol.UpdateStatus
+	// Where the computer keeps each conversation's files. Empty from a daemon
+	// older than protocol.FilesProtocol.
+	ChatsDir string
+	Update   protocol.UpdateStatus
 	// Reported is false until the computer's hello arrives. Nothing is
 	// concluded about a computer that has not said anything yet.
 	Reported bool

@@ -99,6 +99,13 @@ type ExecOptions struct {
 	Model string
 	// Empty starts a fresh provider session; set resumes one.
 	ResumeSessionID string
+	// Folders outside Cwd the agent may read: the conversation's own files
+	// folder (D-056). claude and agy are given them with --add-dir; codex's
+	// sandbox cannot be widened this way, so it is given pictures instead.
+	AddDirs []string
+	// Pictures sent with this message, as full paths. Only codex uses them,
+	// with --image: it cannot read files under its sandbox, but it sees these.
+	Images []string
 }
 
 type Backend interface {

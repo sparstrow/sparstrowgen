@@ -28,13 +28,23 @@ func codexArgs(opts ExecOptions) []string {
 	if opts.Model != "" {
 		args = append(args, "-m", opts.Model)
 	}
+	// Pictures go as --image=<path>, one flag each, with the value attached:
+	// the flag takes several values, and a separate value would swallow the
+	// thread id and the "-" after it. Verified 2026-09-24 on 0.154.0, new and
+	// resumed ("resume --image=<png> <thread> -" kept the thread and read the
+	// picture).
+	var images []string
+	for _, img := range opts.Images {
+		images = append(images, "--image="+img)
+	}
 	// A prompt of "-" is read from stdin, so its length is never limited by the
 	// Windows command line (docs/Bugs.md B-32). `resume` takes the thread id
 	// before it.
 	if opts.ResumeSessionID != "" {
-		return append(args, "resume", opts.ResumeSessionID, "-")
+		args = append(append(args, "resume"), images...)
+		return append(args, opts.ResumeSessionID, "-")
 	}
-	return append(args, "-")
+	return append(append(args, images...), "-")
 }
 
 func (c Codex) Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error) {

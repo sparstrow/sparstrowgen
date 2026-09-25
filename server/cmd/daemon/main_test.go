@@ -12,7 +12,7 @@ import (
 // session, so a provider that has not seen the history is told it in the
 // prompt. What the prompt says therefore matters as much as any wire format.
 func TestBuildPromptWithoutReplayIsUntouched(t *testing.T) {
-	got := buildPrompt(protocol.RunTurn{Prompt: "what is jitter for?"})
+	got, _ := buildPrompt(protocol.RunTurn{Prompt: "what is jitter for?"}, preparedFiles{})
 	if got != "what is jitter for?" {
 		t.Errorf("a turn with nothing to replay must send the prompt verbatim, got %q", got)
 	}
@@ -26,7 +26,7 @@ func TestBuildPromptFramesTheReplayAsSomeoneElsesWork(t *testing.T) {
 			{Role: "agent", Provider: "codex", Text: "it desynchronises retries"},
 		},
 	}
-	got := buildPrompt(turn)
+	got, _ := buildPrompt(turn, preparedFiles{})
 
 	// The earlier turns must be attributed, not passed off as this agent's own.
 	// Presenting another agent's words as its own would make it answer as if it

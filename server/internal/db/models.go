@@ -38,6 +38,23 @@ type Conversation struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 }
 
+type ConversationFile struct {
+	ID             pgtype.UUID        `json:"id"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
+	EntryID        pgtype.UUID        `json:"entry_id"`
+	Origin         string             `json:"origin"`
+	Name           string             `json:"name"`
+	MediaType      string             `json:"media_type"`
+	Size           int64              `json:"size"`
+	Sha256         string             `json:"sha256"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ConversationFileContent struct {
+	FileID  pgtype.UUID `json:"file_id"`
+	Content []byte      `json:"content"`
+}
+
 type EmailLink struct {
 	TokenHash    []byte             `json:"token_hash"`
 	Kind         string             `json:"kind"`

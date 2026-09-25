@@ -129,6 +129,9 @@ type Entry struct {
 	// complains on its way out.
 	Stopped bool `json:"stopped,omitempty"`
 
+	// user (sent with it) + agent (made in the turn)
+	Files []ConversationFile `json:"files,omitempty"`
+
 	// replay
 	ToModel          *Model `json:"toModel,omitempty"`
 	To               string `json:"to,omitempty"`
@@ -366,7 +369,12 @@ type ServerMessage struct {
 	RequestID string `json:"requestId,omitempty"`
 	// Empty asks for the starting points — drive roots on Windows, $HOME
 	// elsewhere — because a browser has no idea what the machine looks like.
+	// For list_folder and read_file, relative to Root.
 	Path string `json:"path,omitempty"`
+
+	// list_folder, read_file: the conversation's working folder. Nothing
+	// outside it is listed or read.
+	Root string `json:"root,omitempty"`
 
 	// update_preference
 	Automatic *bool `json:"automatic,omitempty"`
@@ -378,6 +386,14 @@ type ReplayEntry struct {
 	Role     string `json:"role"`
 	Provider string `json:"provider,omitempty"`
 	Text     string `json:"text"`
+	// Names of the files sent with a user message, or made in an agent turn,
+	// so a provider catching up knows they exist and where.
+	Files []ReplayFile `json:"files,omitempty"`
+}
+
+type ReplayFile struct {
+	Origin string `json:"origin"`
+	Name   string `json:"name"`
 }
 
 type RunTurn struct {
@@ -394,6 +410,10 @@ type RunTurn struct {
 	ResumeSessionID string `json:"resumeSessionId,omitempty"`
 	// Non-empty only when this turn is also catching a provider up.
 	Replay []ReplayEntry `json:"replay,omitempty"`
+	// Every file of the conversation, the ones sent with this message marked.
+	// A daemon older than FilesProtocol ignores it, which is why the server
+	// refuses to send files to one.
+	Files []TurnFile `json:"files,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -476,6 +496,9 @@ type DaemonMessage struct {
 	Version     string `json:"version,omitempty"`
 	Protocol    int    `json:"protocol,omitempty"`
 	SelfUpdates bool   `json:"selfUpdates,omitempty"`
+	// Where this computer keeps each conversation's files: <ChatsDir>/<id>/
+	// uploads and outputs. Absent from a daemon older than FilesProtocol.
+	ChatsDir string `json:"chatsDir,omitempty"`
 
 	// update_status
 	Update *UpdateStatus `json:"update,omitempty"`
@@ -504,6 +527,10 @@ type DaemonMessage struct {
 	// dir_listing
 	RequestID string      `json:"requestId,omitempty"`
 	Listing   *DirListing `json:"listing,omitempty"`
+
+	// folder_listing, folder_file
+	Folder *FolderListing `json:"folder,omitempty"`
+	File   *FolderFile    `json:"file,omitempty"`
 
 	// exchange
 	Sent    *ExchangeSent    `json:"sent,omitempty"`
@@ -560,6 +587,8 @@ type ClientEvent struct {
 	TooOld bool `json:"tooOld,omitempty"`
 	// With EventExchange.
 	Exchange *Exchange `json:"exchange,omitempty"`
+	// With EventFiles and an EntryID: that entry's files, all of them.
+	Files []ConversationFile `json:"files,omitempty"`
 }
 
 // SpendTicksPerUSD is the fixed-point scale for money. Cost is stored and moved

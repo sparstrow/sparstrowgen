@@ -161,6 +161,7 @@ func (a *API) daemonSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if pairedOK && msg.Type == protocol.DaemonHello {
 			a.hub.SetPairedProviders(owner.ID, paired.ID, msg.Providers)
+			a.hub.SetChatsDir(owner.ID, paired.ID, msg.ChatsDir)
 			a.hub.SetMachineHello(owner.ID, paired.ID, msg.Version, msg.Protocol, msg.SelfUpdates)
 			if msg.Version != "" {
 				if err := a.store.RecordMachineVersion(r.Context(), paired.ID, msg.Version); err != nil {
