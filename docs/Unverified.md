@@ -671,7 +671,10 @@ not changed by that run (still dated 2026-09-23 12:02). It was not retried.
 **The step:** in a conversation on claude, attach a PNG with legible text and a small CSV, and ask
 for both values. Both come back in the answer. If the answer says it cannot read files outside the
 project, the uploads folder is not reaching claude's `--add-dir`.
-**Status:** open
+**Status:** verified 2026-09-27 on the owner's computer (daemon 0.3.6), from his own use: in
+the conversation where he sent "sparstrowgen logo - light version.png" to codex, he switched to claude.
+claude's session shows the prompt naming the file in `chats\<id>\uploads` and the outputs folder, a
+`Read` of that path returning the image with no error, and an answer describing the logo correctly.
 
 ## U-39 — Files work end to end with each agent, on production
 
@@ -704,7 +707,9 @@ without files are unaffected.
 
 **The step:** promote candidate **0.3.6** with **Promote a daemon candidate** (Actions tab). Once his
 computer updates, attach a screenshot to a message and send it.
-**Status:** open
+**Status:** done 2026-09-27. The owner promoted 0.3.6; his daemon log shows "updated from=0.3.4
+to=0.3.6" on 2026-09-25 07:23. Two minutes later he sent a picture to codex: it is in that chat's
+`uploads` folder, and the picture codex generated in reply was collected into `outputs`.
 
 ## U-41 — The design system has no entry for files
 
