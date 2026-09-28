@@ -130,3 +130,8 @@ dark and light, wide and narrow pane. No console messages at any point.
 Found and fixed during the pass: the clear button showed with an empty search; the panel changed
 height between agents (now fixed); the replay cost showed under an agent that isn't installed; the
 highlighted row was invisible in dark (B-59, worked around here).
+
+2026-09-28, after the owner's review: the list's scrollbar was light in dark mode. The prototypes'
+`tokens.css` never declared a colour scheme (in the app, next-themes sets `color-scheme` on `<html>`,
+checked on `localhost:3000`: `color-scheme: dark` inline). Added there, so every prototype gets it;
+the agy list's scrollbar now draws dark, and `color-scheme` computes `dark` / `light` with the theme.

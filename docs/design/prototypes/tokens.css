@@ -1,7 +1,11 @@
 /* Copied from apps/web/app/globals.css (:root and .dark) and apps/web/app/themes.css. Never edit here:
-   refresh it from those two files when either changes (interactive-prototype skill). Last refreshed 2026-09-19. */
+   refresh it from those two files when either changes (interactive-prototype skill), keeping the two
+   color-scheme lines. Last refreshed 2026-09-28. */
 
 :root {
+  /* Not in globals.css: in the app, next-themes sets color-scheme on <html>. The prototypes have no
+     next-themes, so without these two lines their scrollbars and form controls stay light in dark. */
+  color-scheme: light;
   --radius: 0.625rem;
 
   --background: oklch(1 0 0);
@@ -76,6 +80,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.155 0.006 260);
   --foreground: oklch(0.95 0.003 260);
   --card: oklch(0.195 0.007 260);
