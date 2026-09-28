@@ -225,6 +225,8 @@ func (a *API) Routes() http.Handler {
 		r.Post("/api/auth/password", a.changePassword)
 		r.Get("/api/appearance", a.getAppearance)
 		r.Post("/api/appearance", a.setAppearance)
+		r.Get("/api/favourite-models", a.getFavouriteModels)
+		r.Post("/api/favourite-models", a.setFavouriteModel)
 		r.Get("/api/profile", a.getProfile)
 		r.Post("/api/profile", a.setProfile)
 		// The picture is its own resource because it is bytes, not JSON, and

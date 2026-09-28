@@ -104,7 +104,7 @@
   .mp-rail { flex: none; width: 52px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; border-right: 1px solid var(--border); }
   .mp-rail .sep { width: 20px; height: 1px; background: var(--border); margin: 4px 0; }
   .rb { position: relative; width: 38px; height: 38px; border-radius: var(--r-md); display: grid; place-items: center; color: var(--muted-foreground); transition: background-color 150ms ease-out; }
-  .rb:hover { background: color-mix(in oklch, var(--foreground) 7%, var(--popover)); }
+  .rb:hover { background: var(--accent); }
   .rb[aria-selected="true"] { background: var(--muted); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--border); }
   .rb.off svg { opacity: .45; }
   .rb .flag { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--popover); display: grid; place-items: center; color: var(--warning); }
@@ -119,10 +119,7 @@
   .gh:first-child { padding-top: 4px; }
 
   .opt { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 6px 6px 6px 8px; border-radius: var(--r-md); cursor: pointer; }
-  /* Not var(--accent): in every dark surface it equals --popover, so the row under the
-     keyboard would not show (docs/Bugs.md B-59). A step of foreground over the popover until
-     the token is fixed. */
-  .opt[data-active="true"] { background: color-mix(in oklch, var(--foreground) 7%, var(--popover)); }
+  .opt[data-active="true"] { background: var(--accent); }
   .opt[aria-selected="true"] .nm { font-weight: 500; }
   .opt .txt { flex: 1; min-width: 0; }
   .opt .nm { display: flex; align-items: center; gap: 6px; min-width: 0; }

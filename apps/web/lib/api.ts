@@ -17,6 +17,7 @@ import type {
   ConversationFile,
   ConversationFiles,
   FolderListing,
+  FavouriteModel,
 } from "./chat-types";
 
 /* The server owns every shape here. Its Go structs in
@@ -468,6 +469,18 @@ export const api = {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   },
 
+  /** The models this account has starred in the picker, oldest first. */
+  async favouriteModels(): Promise<FavouriteModel[]> {
+    return json(await request(`${BASE}/api/favourite-models`, { cache: "no-store" }));
+  },
+
+  /** Stars or unstars one model. Says which state is wanted rather than
+   *  toggling, so a click sent twice lands where it was meant to, and answers
+   *  with the whole list as the account now has it. */
+  async setFavouriteModel(f: FavouriteModel, starred: boolean): Promise<FavouriteModel[]> {
+    return post(`${BASE}/api/favourite-models`, { ...f, starred });
+  },
+
   /** What moving to a provider would cost. Charges nothing — that is the point:
    *  the number has to be available before the decision, not after it. */
   async switchCost(
@@ -627,6 +640,8 @@ export type ServerEvent =
   // Its name, description or picture changed. The name is in the shell on every
   // page, so a tab open while it changed would keep showing the old one.
   | { type: "profile" }
+  // A model was starred or unstarred, here or on another device.
+  | { type: "favourite_models" }
   // A workspace was created or renamed. The list is not carried: it is three
   // rows long and refetching it is simpler than patching two shapes of change.
   | { type: "workspaces" }

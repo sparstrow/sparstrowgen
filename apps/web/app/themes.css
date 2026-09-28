@@ -21,6 +21,10 @@
      surface, so a card reads as lifted rather than tinted.
    - `soft` uses its own ramp: it lifts the dark backgrounds and lowers the
      light ones. That difference is the whole point of the surface.
+   - In dark, `--accent` sits one step (+0.05) above `--popover`, never equal
+     to it. It is what a menu item fills with under the pointer or the keys,
+     and equal values painted nothing: in every surface, nothing showed which
+     item Enter would pick (docs/Bugs.md B-59).
    - Accents use one lightness in dark (0.78) and a per-hue lightness in light,
      because equal OKLCH lightness is not equal contrast — green dominates
      relative luminance, so a single light value fails some hues.
@@ -49,7 +53,7 @@ html.dark[data-surface="paper"] {
   --popover: oklch(0.245 0.01 85);
   --muted: oklch(0.245 0.01 85);
   --secondary: oklch(0.245 0.01 85);
-  --accent: oklch(0.245 0.01 85);
+  --accent: oklch(0.295 0.012 85);
   --mine: oklch(0.3 0.024 85);
 }
 
@@ -68,7 +72,7 @@ html.dark[data-surface="slate"] {
   --popover: oklch(0.245 0.011 250);
   --muted: oklch(0.245 0.011 250);
   --secondary: oklch(0.245 0.011 250);
-  --accent: oklch(0.245 0.011 250);
+  --accent: oklch(0.295 0.013 250);
   --mine: oklch(0.3 0.026 250);
 }
 
@@ -88,7 +92,7 @@ html.dark[data-surface="soft"] {
   --popover: oklch(0.268 0.007 280);
   --muted: oklch(0.268 0.007 280);
   --secondary: oklch(0.268 0.007 280);
-  --accent: oklch(0.268 0.007 280);
+  --accent: oklch(0.318 0.009 280);
   --mine: oklch(0.33 0.02 280);
 }
 
@@ -107,7 +111,7 @@ html.dark[data-surface="mono"] {
   --popover: oklch(0.245 0 0);
   --muted: oklch(0.245 0 0);
   --secondary: oklch(0.245 0 0);
-  --accent: oklch(0.245 0 0);
+  --accent: oklch(0.295 0 0);
   --mine: oklch(0.3 0 0);
 }
 

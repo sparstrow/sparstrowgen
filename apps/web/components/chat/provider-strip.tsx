@@ -60,6 +60,22 @@ function HeadroomReadout({ head, now }: { head: Headroom; now: number }) {
   );
 }
 
+/** The same limit line as the strip, on its own: the picker shows it under
+ *  each agent's name. Keeps its own clock so the countdown stays true. */
+export function ProviderLimit({ provider }: { provider: Provider }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  if (provider.headroom) return <HeadroomReadout head={provider.headroom} now={now} />;
+  return (
+    <span className="text-xs text-muted-foreground">
+      {provider.reportsLimits ? "Limit unknown yet" : "No limit data"}
+    </span>
+  );
+}
+
 function ProviderChip({ provider, now }: { provider: Provider; now: number }) {
   const c = providerStyle(provider.id);
   const blocked = provider.availability === "blocked";

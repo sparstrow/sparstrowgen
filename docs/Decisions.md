@@ -1500,3 +1500,29 @@ first screen on a phone, the files pane floats over the conversation below 1024p
 could only follow through JavaScript breakpoints and a second layout. The handle follows Multica's table
 column resizer instead: drag, double-click auto-fit, and keys (`components/shell/resize-handle.tsx`,
 `lib/pane-width.ts`).
+
+## D-058 — One button picks the agent and the model
+
+**2026-09-28, owner,** with a screenshot of another app's model picker: "I want the agent and model
+selector to look like this, which have one button to expand and select the provider and model." He
+reviewed the prototype ([`model-picker.dc.html`](design/prototypes/Chat/model-picker.dc.html)) and said
+"I like it, implement it in the app".
+
+**What he chose:** the two pickers under the message box become one button (agent mark, agent,
+model). It opens a panel with the agents down the left, the chosen agent's models on the right, a
+search across every agent's models, and a starred list that holds models from any agent.
+
+**Why it carries over:** choosing *what answers* is one decision, so it is one control; the agent and
+the model are two levels of the same list, and search reaches across the levels so nobody has to know
+which agent runs a model first. agy alone offers fourteen models, which is what made a plain menu
+stop working.
+
+**Left out of his reference, because no agent reports it (Capabilities):** plan upgrades and locked
+models, price tiers, a NEW badge, per-model capability icons. The line under a model is the CLI's own
+description, so only claude's rows have one.
+
+**Decided on his behalf:** favourites are per account (`favourite_models`, like appearance), so they
+follow him to every browser; a starred model the computer stops offering is hidden, not unstarred.
+The panel is a Popover, not a menu, because it holds a search field and a tab rail. The catch-up cost
+of moving to another agent is quoted in the panel before choosing, from the same endpoint the switch
+banner uses.

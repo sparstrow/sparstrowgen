@@ -34,9 +34,15 @@ type AvailabilityValue = Availability
 // `gemini-3.1-pro-high` next to "Gemini 3.1 Pro (High)"; the id is what the CLI
 // is invoked with and the label is the only thing worth showing. Neither is
 // derivable from the other — see docs/Decisions.md D-015.
+//
+// Description is the CLI's own line about the model, where it gives one: only
+// claude's list_models does ("Best for everyday, complex tasks"). Empty for
+// codex and agy, and for a daemon too old to send it, so it is shown only when
+// present and never made up.
 type Model struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
 }
 
 // Headroom is what claude's rate_limit_event actually carries. Only claude
@@ -563,6 +569,9 @@ const (
 	// page, so a tab that was open while it changed would keep showing the old
 	// one until it happened to be reloaded.
 	EventProfile = "profile"
+	// EventFavouriteModels says this account starred or unstarred a model, so
+	// the picker in its other tabs and devices re-reads the list.
+	EventFavouriteModels = "favourite_models"
 	// EventWorkspaces says the list of workspaces this account can reach has
 	// changed — one was created or renamed. The list itself is not sent: the
 	// browser refetches it, because unlike a conversation there is no partial

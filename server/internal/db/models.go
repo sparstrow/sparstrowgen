@@ -119,6 +119,13 @@ type ExchangeLine struct {
 	Body    string      `json:"body"`
 }
 
+type FavouriteModel struct {
+	UserID    pgtype.UUID        `json:"user_id"`
+	Provider  string             `json:"provider"`
+	Model     string             `json:"model"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Machine struct {
 	ID               pgtype.UUID        `json:"id"`
 	UserID           pgtype.UUID        `json:"user_id"`

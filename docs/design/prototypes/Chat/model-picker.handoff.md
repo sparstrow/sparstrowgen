@@ -5,7 +5,7 @@
 | **Prototype** | `model-picker.dc.html` |
 | **Provenance** | The owner, 2026-09-28, with a screenshot of another app's picker: "I want the agent and model selector to look like this, which have one button to expand and select the provider and model." |
 | **Mode** | build — from his reference, with what our backend can't show taken out (see Not included) |
-| **Status** | draft |
+| **Status** | reviewed 2026-09-28: the owner approved it and asked for it in the app (D-058) |
 | **Design system** | the Claude artifact linked from `CLAUDE.md` |
 
 ## What this is
@@ -34,7 +34,7 @@ Existing tokens only: `--popover`, `--border`, `--muted`, `--muted-foreground`, 
 
 | Needed | Exists? | Action |
 |---|---|---|
-| A highlight that shows on `--popover` | **no, in dark** | `--accent` equals `--popover` in all four dark surfaces, so a highlighted row doesn't show, in this panel or in any menu the app has today (docs/Bugs.md B-59). The prototype mixes 7% `--foreground` into `--popover` until the token is fixed |
+| A highlight that shows on `--popover` | yes, since B-59 | `--accent` used to equal `--popover` in all four dark surfaces (docs/Bugs.md B-59). Fixed in `themes.css`; the prototype uses `--accent` again |
 | A shadow for a floating panel | no `shadow-md` token in `tokens.css` | Uses the same `color-mix` shadow as the composer prototype. The real `Popover` brings its own |
 
 ## States
@@ -55,12 +55,12 @@ Existing tokens only: `--popover`, `--border`, `--muted`, `--muted-foreground`, 
 |---|---|---|
 | Agents, availability, reason | `Provider.availability`, `unavailableReason` | yes — today |
 | Model id and label | `Provider.models` | yes — today. claude and agy list their own; codex is our list (G-8) |
-| Model description | claude's `list_models` reply, `description` | **yes for claude, not carried yet.** The daemon reads it (`claudeModelInfo.Description`) and drops it. Needs an optional `description` on `protocol.Model` and in `chat-types.ts`, same commit. codex and agy have none, so their rows are one line |
-| Which descriptions are real | — | Only Opus 5.5's ("Best for everyday, complex tasks") is captured. Sonnet 5, Fable 5.1 and Haiku 4.5's are placeholders in `seed-data.js` |
+| Model description | claude's `list_models` reply, `description` | **yes for claude.** Built: `protocol.Model.description`, filled by the daemon from `list_models`. codex and agy have none, so their rows are one line |
+| Which descriptions are real | — | All four, from the owner's account's `list_models` reply (`server/internal/agent/testdata/claude-list-models-families.jsonl`) |
 | Limit line under the agent | `Provider.headroom` | yes for claude; codex and agy say "No limit data", as the strip does |
 | Catch-up cost of switching | what the switch banner already shows | yes — the same figures, shown before choosing instead of after |
 | agy's maker groups | the label's first word | derived, not reported. A label that starts with anything else lands in "Other" |
-| Favourites | **nothing stores them** | New: a per-account list of `provider:modelId`, kept with the account like appearance so it follows him to any browser. A starred model the computer no longer offers is hidden, not deleted |
+| Favourites | `favourite_models` table, `GET`/`POST /api/favourite-models` | Built: a per-account list of `provider:modelId`, kept with the account like appearance so it follows him to any browser. A starred model the computer no longer offers is hidden, not deleted |
 
 ## Interactions
 

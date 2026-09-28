@@ -740,3 +740,24 @@ layout. Not yet seen with real data.
 and stops at its limit. Double-click each: every conversation title and file name shows in full (or the
 pane is at its limit), and double-clicking again changes nothing. Reload; both keep their width.
 **Status:** open
+
+## U-43 — The agent and model picker on production, with a real computer
+
+**Raised:** 2026-09-28, D-058
+**Who can run it:** agent, with the testing account signed in and a test daemon built from this
+change; the owner whenever he is in the app
+
+Verified before merging on a local page rendering the real composer and picker with sample agents (no
+local account could be made): search across agents, ↑ ↓ Enter, the switch banner after picking another
+agent, Esc clearing then closing, favourites and their empty state, a failed star rolled back with a
+notice, agy grouped by maker with its note, codex's note, a blocked agent, the loading skeleton, a
+narrow pane, light and dark. The server half is covered by `favourite_models_test.go` and
+`detect_test.go`. Not yet seen: real data, the catch-up line (it needs the real switch-cost
+endpoint), and claude's descriptions, which only a daemon built from this change sends.
+
+**The step:** on app.sparstrow.com, in a conversation with messages on claude, open the picker. claude's
+models show a line under each ("Best for everyday, complex tasks" under Opus 5.5) once the computer's
+daemon is a release that includes this change, and none before. Click codex: "Catches up on N
+messages" shows under its name. Star a model, reload, and it is still under Favourites; in a second
+tab the star appears without a reload.
+**Status:** open

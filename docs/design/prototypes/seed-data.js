@@ -57,16 +57,15 @@ window.SPG_SEED = {
     { id: "agy", label: "agy", availability: "blocked", reason: "Not installed" },
   ],
   // What each agent offers, as the daemon reports it (server/internal/agent/detect.go).
-  // agy's fourteen are `agy models` on the owner's computer, 2026-09-28. claude's rows are its
-  // list_models reply; only Opus 5.5's description is a captured one, the other three are
-  // placeholders of the same shape until one is captured. codex cannot list its models (G-8), so
-  // its three are the ones this app knows.
+  // agy's fourteen are `agy models` on the owner's computer, 2026-09-28. claude's rows and their
+  // descriptions are its list_models reply for the owner's account (testdata/claude-list-models-families.jsonl).
+  // codex cannot list its models (G-8), so its three are the ones this app knows.
   catalogue: {
     claude: [
+      { id: "claude-sonnet-5", label: "Sonnet 5", desc: "Efficient for routine tasks" },
+      { id: "claude-fable-5-1[1m]", label: "Fable 5.1", desc: "Most capable for your hardest and longest-running tasks · Requires usage credits" },
       { id: "claude-opus-5-5", label: "Opus 5.5", desc: "Best for everyday, complex tasks" },
-      { id: "claude-sonnet-5", label: "Sonnet 5", desc: "Fast and capable for most work" },
-      { id: "claude-fable-5-1[1m]", label: "Fable 5.1", desc: "Long work, with a million-token context" },
-      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", desc: "Fastest, for quick answers" },
+      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", desc: "Fastest for quick answers" },
     ],
     codex: [
       { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },

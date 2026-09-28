@@ -23,6 +23,18 @@ export type Availability = "available" | "waitable" | "blocked";
 export type Model = {
   id: string;
   label: string;
+  /** The CLI's own line about the model, where it gives one. Only claude's
+   *  list_models does; codex and agy never, so it is shown when present and
+   *  never made up. */
+  description?: string;
+};
+
+/** A model starred in the agent and model picker: which agent runs it, and the
+ *  id that agent reports. Per account, so it follows the person everywhere.
+ *  The label comes from the computer's list, never from here. */
+export type FavouriteModel = {
+  provider: ProviderId | string;
+  model: string;
 };
 
 /** What claude's rate_limit_event actually carries.

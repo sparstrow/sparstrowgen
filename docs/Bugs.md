@@ -1377,11 +1377,15 @@ of running off the bottom.
 
 ## B-59 — In dark mode, the highlighted item in a menu looks the same as the rest
 
-**Found:** 2026-09-28, agent, while verifying the model picker prototype **Status:** open — the fix is its own change (a token value, the design system artifact, and a check in all eight themes)
+**Found:** 2026-09-28, agent, while verifying the model picker prototype **Status:** fixed 2026-09-28
 **Repro:** Dark mode, any surface. Open the agent or model menu under the message box and move
 through it with the arrow keys, or hover an item.
 **Expected / Actual:** the item under the pointer or the keyboard has a visible fill / it has none.
 In every dark surface `themes.css` gives `--accent` the same value as `--popover` (Mono: both
 `oklch(0.245 0 0)`), and menu items highlight with `bg-accent`, so the fill paints the colour already
 under it. With the keyboard, nothing shows which item Enter will pick.
+**Fix:** in `themes.css`, dark `--accent` is one step (+0.05 lightness) above `--popover` in every
+surface, as the base dark theme in `globals.css` always had it (0.3 over 0.215); the rule is written at
+the top of `themes.css`. The design system's `accent` token and `docs/design/prototypes/tokens.css`
+carry the same values. Computed in the browser in all four dark surfaces: accent and popover now differ.
 **Release note:** Fixed: in dark mode, the menu item under your pointer or keyboard is now highlighted.

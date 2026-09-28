@@ -23,6 +23,7 @@ import type {
   Entry,
   Exchange,
   ExchangeSummary,
+  FavouriteModel,
   Model,
   Provider,
   ProviderId,
@@ -38,6 +39,7 @@ export const keys = {
   session: ["session"] as const,
   appearance: ["appearance"] as const,
   profile: ["profile"] as const,
+  favouriteModels: ["favourite-models"] as const,
   providers: ["providers"] as const,
   daemon: ["daemon"] as const,
   machines: ["machines"] as const,
@@ -59,6 +61,9 @@ export const keys = {
   files: (conversationId: string) => ["files", conversationId] as const,
   folder: (conversationId: string, path: string) => ["folder", conversationId, path] as const,
   emailLink: (kind: EmailLinkKind, token: string) => ["email-link", kind, token] as const,
+  // What moving this conversation to that agent would replay, as quoted now.
+  switchCost: (conversationId: string, provider: string) =>
+    ["switch-cost", conversationId, provider] as const,
 };
 
 /** Whether this browser is signed in, and as whom.
@@ -285,6 +290,64 @@ export function useProviders() {
     // The socket says when the daemon's agents change (see "providers" below),
     // so polling would only duplicate a push we already get.
     staleTime: Infinity,
+  });
+}
+
+/** The models starred in the picker. Per account, so the same list in every
+ *  workspace and on every device; another tab starring one says so over the
+ *  socket (see "favourite_models" below). */
+export function useFavouriteModels() {
+  return useQuery<FavouriteModel[]>({
+    queryKey: keys.favouriteModels,
+    queryFn: api.favouriteModels,
+    staleTime: Infinity,
+  });
+}
+
+/** Stars or unstars one model.
+ *
+ *  Optimistic by AGENTS.md §3's test: the outcome is predictable, the person
+ *  stays in the picker, a failure is rare, and undoing it is putting back the
+ *  list we already hold. A failure puts it back and says so. */
+export function useStarModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ favourite, starred }: { favourite: FavouriteModel; starred: boolean }) =>
+      api.setFavouriteModel(favourite, starred),
+    onMutate: async ({ favourite, starred }) => {
+      await qc.cancelQueries({ queryKey: keys.favouriteModels });
+      const previous = qc.getQueryData<FavouriteModel[]>(keys.favouriteModels);
+      const same = (f: FavouriteModel) =>
+        f.provider === favourite.provider && f.model === favourite.model;
+      const rest = (previous ?? []).filter((f) => !same(f));
+      // Starred goes to the end, where the server puts it; one already starred
+      // keeps its place.
+      const next = starred
+        ? (previous ?? []).some(same)
+          ? (previous ?? [])
+          : [...rest, favourite]
+        : rest;
+      qc.setQueryData(keys.favouriteModels, next);
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      if (context?.previous) qc.setQueryData(keys.favouriteModels, context.previous);
+      toast.error("That star was not saved", { description: (error as Error).message });
+    },
+    onSuccess: (saved) => qc.setQueryData(keys.favouriteModels, saved),
+  });
+}
+
+/** What moving a conversation to another agent would replay, quoted in the
+ *  picker before the choice rather than after it. Asked only while that agent
+ *  is on screen, and never cached for long: every message changes it. */
+export function useSwitchCost(conversationId: string | null, provider: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.switchCost(conversationId ?? "", provider),
+    queryFn: () => api.switchCost(conversationId!, provider as ProviderId),
+    enabled: enabled && conversationId !== null,
+    staleTime: 0,
+    retry: false,
   });
 }
 
@@ -951,6 +1014,11 @@ export function useRealtime() {
           // values on the event: the account is the one source of truth.
           void qc.invalidateQueries({ queryKey: keys.appearance });
           void qc.invalidateQueries({ queryKey: keys.session });
+          break;
+
+        case "favourite_models":
+          // Starred or unstarred in another tab or on another device.
+          void qc.invalidateQueries({ queryKey: keys.favouriteModels });
           break;
 
         case "profile":
