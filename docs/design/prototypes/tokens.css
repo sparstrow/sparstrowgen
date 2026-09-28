@@ -1,7 +1,11 @@
 /* Copied from apps/web/app/globals.css (:root and .dark) and apps/web/app/themes.css. Never edit here:
-   refresh it from those two files when either changes (interactive-prototype skill). Last refreshed 2026-09-19. */
+   refresh it from those two files when either changes (interactive-prototype skill), keeping the two
+   color-scheme lines. Last refreshed 2026-09-28. */
 
 :root {
+  /* Not in globals.css: in the app, next-themes sets color-scheme on <html>. The prototypes have no
+     next-themes, so without these two lines their scrollbars and form controls stay light in dark. */
+  color-scheme: light;
   --radius: 0.625rem;
 
   --background: oklch(1 0 0);
@@ -76,6 +80,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.155 0.006 260);
   --foreground: oklch(0.95 0.003 260);
   --card: oklch(0.195 0.007 260);
@@ -176,7 +181,7 @@ html.dark[data-surface="paper"] {
   --popover: oklch(0.245 0.01 85);
   --muted: oklch(0.245 0.01 85);
   --secondary: oklch(0.245 0.01 85);
-  --accent: oklch(0.245 0.01 85);
+  --accent: oklch(0.295 0.012 85);
   --mine: oklch(0.3 0.024 85);
 }
 
@@ -195,7 +200,7 @@ html.dark[data-surface="slate"] {
   --popover: oklch(0.245 0.011 250);
   --muted: oklch(0.245 0.011 250);
   --secondary: oklch(0.245 0.011 250);
-  --accent: oklch(0.245 0.011 250);
+  --accent: oklch(0.295 0.013 250);
   --mine: oklch(0.3 0.026 250);
 }
 
@@ -215,7 +220,7 @@ html.dark[data-surface="soft"] {
   --popover: oklch(0.268 0.007 280);
   --muted: oklch(0.268 0.007 280);
   --secondary: oklch(0.268 0.007 280);
-  --accent: oklch(0.268 0.007 280);
+  --accent: oklch(0.318 0.009 280);
   --mine: oklch(0.33 0.02 280);
 }
 
@@ -234,7 +239,7 @@ html.dark[data-surface="mono"] {
   --popover: oklch(0.245 0 0);
   --muted: oklch(0.245 0 0);
   --secondary: oklch(0.245 0 0);
-  --accent: oklch(0.245 0 0);
+  --accent: oklch(0.295 0 0);
   --mine: oklch(0.3 0 0);
 }
 

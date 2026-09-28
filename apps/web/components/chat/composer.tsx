@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { ArrowUp, Check, ChevronDown, Info, Paperclip, Plus, Square, TriangleAlert, Undo2 } from "lucide-react";
+import { ArrowUp, Info, Paperclip, Plus, Square, TriangleAlert, Undo2 } from "lucide-react";
 import { cn } from "cn";
 import type { Model, PendingSwitch, Provider, ProviderId } from "@/lib/chat-types";
 import {
@@ -15,6 +15,7 @@ import {
 import { providerStyle, formatTokens } from "./provider-meta";
 import { AttachmentChip } from "./file-bits";
 import { ProviderIcon } from "./provider-icon";
+import { ModelPicker } from "./model-picker";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
 import {
@@ -96,12 +97,6 @@ export function Composer({
     ? { provider: pending.to, model: pending.toModel }
     : { provider: activeProvider, model: activeModel };
   const c = providerStyle(shown.provider);
-
-  // The list is empty until the daemon reports what is installed, and on a
-  // first load that is a couple of seconds during which this still renders.
-  // Reaching into providers[0] there threw and took the whole page down.
-  const shownProvider = providers.find((p) => p.id === shown.provider) ??
-    providers[0] ?? { id: shown.provider, label: shown.provider, models: [] };
 
   return (
     <div className="shrink-0 border-t bg-card/40">
@@ -260,97 +255,18 @@ export function Composer({
                 e.target.value = "";
               }}
             />
-            {/* Provider first, then that provider's models. One merged menu was
-                tolerable at two models each; agy alone offers fourteen. */}
-            {/* Allowed to shrink, and the model name truncates first, so a narrow
-                pane still has room for the send button (docs/Bugs.md B-51). */}
-            <div className="flex min-w-0 shrink items-center gap-0.5">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled}
-                      aria-label={`Provider: ${shown.provider}`}
-                      className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5"
-                    />
-                  }
-                >
-                  <ProviderIcon
-                    provider={shown.provider}
-                    className={`size-4 ${c.text}`}
-                  />
-                  <span className="text-sm">{shown.provider}</span>
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
-                </DropdownMenuTrigger>
-  
-                {/* Anchored to the bottom of the window, so it opens upward.
-                    Never set a max-height here — the base component already caps
-                    it at --available-height, and overriding that is what makes a
-                    long menu run off the bottom of the screen. */}
-                <DropdownMenuContent side="top" align="start" className="w-56">
-                  {providers.map((p) => {
-                    const blocked = p.availability === "blocked";
-                    const pc = providerStyle(p.id);
-                    return (
-                      <DropdownMenuItem
-                        key={p.id}
-                        disabled={blocked}
-                        onClick={() => onSelect(p.id, p.model ?? p.models[0])}
-                      >
-                        <ProviderIcon
-                          provider={p.id}
-                          className={`size-4 ${blocked ? "text-muted-foreground" : pc.text}`}
-                        />
-                        <span className="flex-1">{p.label}</span>
-                        {p.id === shown.provider ? (
-                          <Check className="size-4" />
-                        ) : blocked ? (
-                          <span className="text-xs text-muted-foreground">
-                            {p.unavailableReason}
-                          </span>
-                        ) : null}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-  
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled || shownProvider.models.length === 0}
-                      aria-label={`Model: ${shown.model.label}`}
-                      className="h-9 min-w-0 max-w-52 shrink gap-1.5 rounded-xl px-2.5 text-muted-foreground"
-                    />
-                  }
-                >
-                  <span className="truncate text-xs">{shown.model.label}</span>
-                  <ChevronDown className="size-3.5 shrink-0" />
-                </DropdownMenuTrigger>
-  
-                <DropdownMenuContent side="top" align="start" className="w-64">
-                  {shownProvider.models.map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => onSelect(shownProvider.id, m)}
-                    >
-                      {m.id === shown.model.id ? (
-                        <Check className="size-4" />
-                      ) : (
-                        <span className="size-4" aria-hidden />
-                      )}
-                      <span className="flex-1">{m.label}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-  
+            {/* One button for the agent and the model (the owner's reference,
+                2026-09-28): agents down the left of what it opens, their models
+                on the right, and one search across all of them. */}
+            <ModelPicker
+              providers={providers}
+              shown={shown}
+              conversationProvider={activeProvider}
+              conversationId={conversationId}
+              disabled={disabled}
+              onSelect={onSelect}
+            />
+
             {running ? (
               <Button
                 size="icon"

@@ -175,6 +175,24 @@ func claudeModelLabel(m claudeModelInfo, id string) string {
 	return id
 }
 
+// claudeModelDescription is the CLI's line about a row, minus whatever became
+// its label. "Fable 5.1 · Most capable for your hardest and longest-running
+// tasks · Requires usage credits" labelled "Fable 5.1" describes it as the rest;
+// "Best for everyday, complex tasks" under the name "Opus 5.5" is all
+// description.
+func claudeModelDescription(m claudeModelInfo, label string) string {
+	var parts []string
+	for _, p := range strings.Split(m.Description, "·") {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) > 0 && parts[0] == label && label != strings.TrimSpace(m.DisplayName) {
+		parts = parts[1:]
+	}
+	return strings.Join(parts, " · ")
+}
+
 // parseClaudeModels reads the list_models reply out of the CLI's stdout.
 //
 // The doubled `response` is Claude's shape, not a slip: the outer one is the
@@ -226,7 +244,8 @@ func parseClaudeModels(out []byte) (models []protocol.Model, everyday string, ok
 				continue
 			}
 			seen[id] = true
-			models = append(models, protocol.Model{ID: id, Label: claudeModelLabel(m, id)})
+			label := claudeModelLabel(m, id)
+			models = append(models, protocol.Model{ID: id, Label: label, Description: claudeModelDescription(m, label)})
 		}
 		if len(models) == 0 {
 			return nil, "", false

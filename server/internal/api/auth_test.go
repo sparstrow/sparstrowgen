@@ -61,6 +61,8 @@ func TestNothingIsReachableWithoutSigningIn(t *testing.T) {
 		{http.MethodGet, "/api/folders/recent"},
 		{http.MethodPost, "/api/conversations/" + c.ID + "/messages"},
 		{http.MethodPost, "/api/turns/whatever/stop"},
+		{http.MethodGet, "/api/favourite-models"},
+		{http.MethodPost, "/api/favourite-models"},
 	}
 	for _, route := range protected {
 		res := r.anon(route.method, route.path, map[string]any{"text": "hello"})

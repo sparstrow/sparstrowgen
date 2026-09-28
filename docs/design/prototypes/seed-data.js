@@ -56,6 +56,39 @@ window.SPG_SEED = {
     { id: "codex", label: "codex", availability: "available", headroom: "no limit data" },
     { id: "agy", label: "agy", availability: "blocked", reason: "Not installed" },
   ],
+  // What each agent offers, as the daemon reports it (server/internal/agent/detect.go).
+  // agy's fourteen are `agy models` on the owner's computer, 2026-09-28. claude's rows and their
+  // descriptions are its list_models reply for the owner's account (testdata/claude-list-models-families.jsonl).
+  // codex cannot list its models (G-8), so its three are the ones this app knows.
+  catalogue: {
+    claude: [
+      { id: "claude-sonnet-5", label: "Sonnet 5", desc: "Efficient for routine tasks" },
+      { id: "claude-fable-5-1[1m]", label: "Fable 5.1", desc: "Most capable for your hardest and longest-running tasks · Requires usage credits" },
+      { id: "claude-opus-5-5", label: "Opus 5.5", desc: "Best for everyday, complex tasks" },
+      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", desc: "Fastest for quick answers" },
+    ],
+    codex: [
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+    ],
+    agy: [
+      { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash (High)" },
+      { id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash (Medium)" },
+      { id: "gemini-3.8-flash-low", label: "Gemini 3.8 Flash (Low)" },
+      { id: "gemini-3.7-flash-high", label: "Gemini 3.7 Flash (High)" },
+      { id: "gemini-3.7-flash-medium", label: "Gemini 3.7 Flash (Medium)" },
+      { id: "gemini-3.7-flash-low", label: "Gemini 3.7 Flash (Low)" },
+      { id: "gemini-3.6-flash-high", label: "Gemini 3.6 Flash (High)" },
+      { id: "gemini-3.6-flash-medium", label: "Gemini 3.6 Flash (Medium)" },
+      { id: "gemini-3.6-flash-low", label: "Gemini 3.6 Flash (Low)" },
+      { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro (High)" },
+      { id: "gemini-3.1-pro-low", label: "Gemini 3.1 Pro (Low)" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (Thinking)" },
+      { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 (Thinking)" },
+      { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
+    ],
+  },
   machines: [
     { id: "m1", name: "SRIHARI-DESKTOP", online: true, version: "0.2.3", providers: [
       { id: "claude", label: "claude", availability: "available" },

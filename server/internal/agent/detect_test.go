@@ -94,6 +94,24 @@ func TestALabelIsTakenFromTheDescriptionOnlyWhenItNamesTheSameModel(t *testing.T
 	}
 }
 
+// The line under a model in the picker is the CLI's own, minus the part that
+// became the label, and nothing when the CLI gives none.
+func TestADescriptionIsTheCLIsLineWithoutTheLabel(t *testing.T) {
+	for _, c := range []struct{ name, desc, want string }{
+		{"Opus 5.5", "Best for everyday, complex tasks", "Best for everyday, complex tasks"},
+		{"Opus", "Opus 5.5 · Best for everyday, complex tasks", "Best for everyday, complex tasks"},
+		{"Fable", "Fable 5.1 · Most capable for your hardest and longest-running tasks · Requires usage credits",
+			"Most capable for your hardest and longest-running tasks · Requires usage credits"},
+		{"Opus", "Sonnet 5 · for comparison", "Sonnet 5 · for comparison"},
+		{"Fable 5.1", "", ""},
+	} {
+		m := claudeModelInfo{DisplayName: c.name, Description: c.desc}
+		if got := claudeModelDescription(m, claudeModelLabel(m, "claude-x")); got != c.want {
+			t.Errorf("%q / %q described %q, want %q", c.name, c.desc, got, c.want)
+		}
+	}
+}
+
 // Two tokens for one model show once. A signed-out CLI answers with its
 // built-in defaults, in which a legacy "Opus 4.1" row resolves to Opus 5.
 func TestAModelNamedTwiceIsOfferedOnce(t *testing.T) {
